@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Backend base URL. The Simulator can reach the Mac's localhost; on a device use the Mac's LAN IP. -->
+	<key>API_BASE_URL</key>
+	<string>http://localhost:8001/api/v1</string>
+	<!-- Allow plain HTTP to localhost / LAN for local development only. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

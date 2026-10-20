@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild -version)",
+      "Read(//Users/shiva/.local/bin/**)",
+      "Bash(mv alembic/versions/20261019_d7f8c9aff15e_initial_schema.py alembic/versions/20261019_0001_initial_schema.py)",
+      "Bash(sed -i '' \"s/^revision: str = 'd7f8c9aff15e'/revision: str = '0001'/; s/Revision ID: d7f8c9aff15e/Revision ID: 0001/\" alembic/versions/20261019_0001_initial_schema.py)",
+      "Bash(.venv/bin/alembic downgrade *)",
+      "Bash(.venv/bin/pytest -q tests/test_chore_api.py::test_default_chores_rotate_round_robin_and_are_staggered)",
+      "Bash(sed -i '' 's/    fake_today.today += timedelta\\(days=7\\)  # full cycle of 8 days/    fake_today.today += timedelta\\(days=8\\)  # one full cycle of 8 people later/' tests/test_chore_api.py)",
+      "Bash(.venv/bin/pytest -q -W ignore)",
+      "Bash(.venv/bin/ruff format *)",
+      "Bash(openssl rand *)",
+      "Bash(sed -i '' \"s/^JWT_SECRET=change-me$/JWT_SECRET=$\\(openssl rand -hex 32\\)/\" .env)",
+      "Bash(sed -i '' 's/^JWT_SECRET=change-me$/JWT_SECRET=change-me-to-a-long-random-string  # openssl rand -hex 32/' .env.example)",
+      "Bash(.venv/bin/uvicorn app.main:app --port 8001 --reload)",
+      "Bash(grep -E \"^\\(tsc|tsgo|vite\\)$\")",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const r=require\\('react-router'\\); console.log\\(['BrowserRouter','Routes','Route','Link','NavLink','Navigate','Outlet','useNavigate','useParams','useLocation'].map\\(k=>k+':'+typeof r[k]\\).join\\(' '\\)\\)\")",
+      "Bash(rmdir src/hooks)",
+      "Bash(npx vite *)",
+      "Bash(xcodebuild -project RoommateApp.xcodeproj -scheme RoommateApp -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath /private/tmp/claude-501/-Users-shiva-Desktop-git-hub-HouseRoomateManagement/7a3aa102-8579-4688-a5f0-44290d192511/scratchpad/DerivedData build)",
+      "Bash(mv decode_check.swift main.swift)",
+      "Bash(swiftc -o decode_check \"/Users/shiva/Desktop/git hub/HouseRoomateManagement/ios/RoommateApp/Core/Models/Models.swift\" main.swift)",
+      "Bash(./decode_check)",
+      "Bash(xcrun simctl *)",
+      "Bash(sips -Z 900 /private/tmp/claude-501/-Users-shiva-Desktop-git-hub-HouseRoomateManagement/7a3aa102-8579-4688-a5f0-44290d192511/scratchpad/ios-launch.png)"
+    ]
+  }
+}

@@ -18,10 +18,12 @@ venv/
 .ruff_cache/
 .coverage
 htmlcov/
+*.egg-info/
 
 # Node / web
 node_modules/
 dist/
+*.tsbuildinfo
 *.log
 
 # iOS / Xcode
