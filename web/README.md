@@ -8,14 +8,12 @@ REST API (`/api/v1`). No business logic or direct database access lives here.
 | Concern         | Choice                            |
 | --------------- | --------------------------------- |
 | Language        | TypeScript                        |
-| Framework       | React 18                          |
-| Build tool      | Vite                              |
-| Routing         | React Router                      |
+| Framework       | React 19                          |
+| Build tool      | Vite 8                            |
+| Routing         | React Router (declarative mode)   |
 | Server state    | TanStack Query (React Query)      |
 | HTTP            | `fetch` wrapper in `src/api/`     |
-| Styling         | Tailwind CSS                      |
-| Tests           | Vitest + React Testing Library    |
-| Lint / format   | ESLint + Prettier                 |
+| Styling         | Tailwind CSS 4                    |
 
 ## Folder structure
 
@@ -28,19 +26,20 @@ web/
 │   ├── api/                # API client layer — the ONLY place that calls the backend
 │   │   ├── client.ts       # Base fetch wrapper: base URL, auth header, error handling
 │   │   ├── auth.ts         # login, register, me
-│   │   ├── households.ts
-│   │   ├── chores.ts
-│   │   └── expenses.ts
+│   │   ├── households.ts   # households, members, invites
+│   │   └── chores.ts       # chores, rotation, schedule, tasks
 │   ├── features/           # Feature modules, each self-contained
-│   │   ├── auth/           #   components, hooks (useLogin), forms
-│   │   ├── households/
-│   │   ├── chores/
-│   │   └── expenses/
-│   ├── pages/              # Route-level screens composed from features
-│   ├── routes/             # Route definitions + protected-route guard
-│   ├── components/         # Shared, generic UI (Button, Modal, Input, Layout)
-│   ├── hooks/              # Shared hooks not tied to one feature
-│   ├── lib/                # Utilities (formatting money/dates, storage helpers)
+│   │   ├── auth/           #   AuthContext (signed-in user, sign in/out)
+│   │   ├── households/     #   React Query hooks
+│   │   └── chores/         #   React Query hooks + TaskCard
+│   ├── pages/              # Route-level screens
+│   │   ├── AuthPage.tsx    #   login / register
+│   │   ├── MyDayPage.tsx   #   "Your tasks today" — the reminder, landing page after login
+│   │   ├── HouseholdsPage.tsx   # list, create, join with invite code
+│   │   └── household/      #   tabs: Today, Schedule, People, Chores (rotation editor)
+│   ├── routes/             # Protected-route guard
+│   ├── components/         # Shared UI (Button, Input, Card, Badge, AppShell)
+│   ├── lib/                # Date formatting helpers
 │   └── types/              # TypeScript types mirroring backend schemas
 ├── index.html
 ├── vite.config.ts
@@ -59,15 +58,17 @@ page ──▶ feature hook (useChores) ──▶ React Query ──▶ src/api/
 - Auth: access token is stored client-side and attached by `client.ts` as `Authorization: Bearer <token>`.
   A 401 response clears the session and redirects to `/login`.
 
-## Planned screens
+## Screens
 
 | Route                      | Screen                              |
 | -------------------------- | ----------------------------------- |
+| `/`                        | My day: my tasks today + missed ones |
 | `/login`, `/register`      | Authentication                      |
 | `/households`              | List / create / join households     |
-| `/households/:id`          | Household dashboard (members, summary) |
-| `/households/:id/chores`   | Chore board                         |
-| `/households/:id/expenses` | Expenses and balances               |
+| `/households/:id`          | Everyone's tasks today              |
+| `/households/:id/schedule` | Who does what for the next 7–28 days |
+| `/households/:id/people`   | Add / remove roommates, admins      |
+| `/households/:id/chores`   | Chores and their rotation order     |
 
 ## Local setup
 
@@ -83,13 +84,12 @@ The backend must be running (see [backend/README.md](../backend/README.md)).
 
 | Variable            | Description                | Default                         |
 | ------------------- | -------------------------- | ------------------------------- |
-| `VITE_API_BASE_URL` | Backend API base URL       | `http://localhost:8000/api/v1`  |
+| `VITE_API_BASE_URL` | Backend API base URL (read from the repo-root `.env`) | `http://localhost:8001/api/v1`  |
 
 ## Common commands
 
 ```bash
 npm run dev       # dev server
 npm run build     # production build to dist/
-npm run test      # unit tests
-npm run lint      # lint
+npm run typecheck # TypeScript check
 ```

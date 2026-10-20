@@ -39,5 +39,5 @@ data — they render what the API returns and send user actions back to it.
 
 | Env   | Backend                     | Database                    |
 | ----- | --------------------------- | --------------------------- |
-| Local | `uvicorn` on `:8000`        | Docker `postgres:16` on `:5432` |
+| Local | `uvicorn` on `:8001`        | Docker `postgres:16` on `:5434` |
 | Prod  | TBD                         | Managed PostgreSQL (TBD)    |

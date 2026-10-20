@@ -1,0 +1,144 @@
+from datetime import timedelta
+
+from tests.conftest import register
+
+API = "/api/v1"
+ROOMMATES = ["Bea", "Cy", "Dev", "Eli", "Fay", "Gus", "Hal"]
+
+
+def _setup_house(client, headers) -> dict:
+    """Admin 'Ann' plus 7 roommates added by name -> 8 people, 3 default chores."""
+    res = client.post(
+        f"{API}/households", json={"name": "Maple St", "timezone": "UTC"}, headers=headers
+    )
+    assert res.status_code == 201, res.text
+    house = res.json()
+    for name in ROOMMATES:
+        res = client.post(
+            f"{API}/households/{house['id']}/members", json={"display_name": name}, headers=headers
+        )
+        assert res.status_code == 201, res.text
+    return house
+
+
+def _today_by_chore(client, house_id, headers) -> dict[str, str]:
+    res = client.get(f"{API}/households/{house_id}/tasks/today", headers=headers)
+    assert res.status_code == 200, res.text
+    return {t["chore"]["name"]: t["member"]["display_name"] for t in res.json()["tasks"]}
+
+
+def test_default_chores_rotate_round_robin_and_are_staggered(client, fake_today):
+    ann = register(client, "ann@example.com", "Ann")
+    house = _setup_house(client, ann)
+
+    chores = client.get(f"{API}/households/{house['id']}/chores", headers=ann).json()
+    assert [c["name"] for c in chores] == ["Cooking", "Clean hall", "Dispose garbage"]
+    assert [m["display_name"] for m in chores[0]["rotation"]] == ["Ann", *ROOMMATES]
+
+    assert _today_by_chore(client, house["id"], ann) == {
+        "Cooking": "Ann",
+        "Clean hall": "Bea",
+        "Dispose garbage": "Cy",
+    }
+
+    fake_today.today += timedelta(days=1)
+    assert _today_by_chore(client, house["id"], ann) == {
+        "Cooking": "Bea",
+        "Clean hall": "Cy",
+        "Dispose garbage": "Dev",
+    }
+
+    fake_today.today += timedelta(days=8)  # one full cycle of 8 people later
+    assert _today_by_chore(client, house["id"], ann)["Cooking"] == "Bea"
+
+
+def test_schedule_projects_future_days(client, fake_today):
+    ann = register(client, "ann@example.com", "Ann")
+    house = _setup_house(client, ann)
+    res = client.get(f"{API}/households/{house['id']}/schedule?days=9", headers=ann)
+    assert res.status_code == 200, res.text
+    cooking = [
+        next(s["member"]["display_name"] for s in day["slots"] if s["chore"]["name"] == "Cooking")
+        for day in res.json()["days"]
+    ]
+    assert cooking == ["Ann", *ROOMMATES, "Ann"]
+
+
+def test_my_tasks_today_is_the_reminder_for_the_logged_in_person(client, fake_today):
+    ann = register(client, "ann@example.com", "Ann")
+    house = _setup_house(client, ann)
+
+    # Bea signs up and claims her name via the invite code.
+    bea = register(client, "bea@example.com", "Bea")
+    preview = client.get(f"{API}/invites/{house['invite_code']}", headers=bea).json()
+    bea_member = next(m for m in preview["unclaimed_members"] if m["display_name"] == "Bea")
+    res = client.post(
+        f"{API}/invites/{house['invite_code']}/accept",
+        json={"member_id": bea_member["id"]},
+        headers=bea,
+    )
+    assert res.status_code == 200, res.text
+
+    mine = client.get(f"{API}/me/tasks/today", headers=bea).json()
+    assert [t["chore"]["name"] for t in mine["tasks"]] == ["Clean hall"]
+    task = mine["tasks"][0]
+    assert task["is_mine"] and task["next_assignee"]["display_name"] == "Cy"
+
+    res = client.post(f"{API}/tasks/{task['id']}/complete", headers=bea)
+    assert res.status_code == 200 and res.json()["status"] == "done"
+
+    # Bea can't complete Ann's task.
+    ann_task = client.get(f"{API}/me/tasks/today", headers=ann).json()["tasks"][0]
+    assert client.post(f"{API}/tasks/{ann_task['id']}/complete", headers=bea).status_code == 403
+
+
+def test_missed_task_shows_as_overdue_and_rotation_keeps_moving(client, fake_today):
+    ann = register(client, "ann@example.com", "Ann")
+    house = _setup_house(client, ann)
+    assert (
+        client.get(f"{API}/me/tasks/today", headers=ann).json()["tasks"][0]["chore"]["name"]
+        == "Cooking"
+    )
+
+    fake_today.today += timedelta(days=1)
+    mine = client.get(f"{API}/me/tasks/today", headers=ann).json()
+    assert [t["chore"]["name"] for t in mine["overdue"]] == ["Cooking"]
+    assert _today_by_chore(client, house["id"], ann)["Cooking"] == "Bea"
+
+
+def test_removing_todays_person_hands_the_task_to_the_next_person(client, fake_today):
+    ann = register(client, "ann@example.com", "Ann")
+    house = _setup_house(client, ann)
+    _today_by_chore(client, house["id"], ann)  # generates day-1 history
+
+    fake_today.today += timedelta(days=1)  # Cooking: Bea, Clean hall: Cy
+    members = client.get(f"{API}/households/{house['id']}/members", headers=ann).json()
+    bea = next(m for m in members if m["display_name"] == "Bea")
+    assert client.delete(f"{API}/members/{bea['id']}", headers=ann).status_code == 204
+
+    today = _today_by_chore(client, house["id"], ann)
+    assert today["Cooking"] == "Cy"
+    assert today["Clean hall"] == "Cy"
+
+    fake_today.today += timedelta(days=1)
+    assert _today_by_chore(client, house["id"], ann)["Cooking"] == "Dev"
+
+
+def test_only_admin_can_change_rotation(client, fake_today):
+    ann = register(client, "ann@example.com", "Ann")
+    house = _setup_house(client, ann)
+    bea = register(client, "bea@example.com", "Bea")
+    client.post(f"{API}/invites/{house['invite_code']}/accept", json={}, headers=bea)
+
+    chore = client.get(f"{API}/households/{house['id']}/chores", headers=ann).json()[0]
+    reversed_ids = [m["id"] for m in reversed(chore["rotation"])]
+    url = f"{API}/chores/{chore['id']}/rotation"
+    assert client.put(url, json={"member_ids": reversed_ids}, headers=bea).status_code == 403
+
+    res = client.put(url, json={"member_ids": reversed_ids}, headers=ann)
+    assert res.status_code == 200, res.text
+    assert res.json()["rotation"][0]["display_name"] == chore["rotation"][-1]["display_name"]
+
+
+def test_requires_auth(client):
+    assert client.get(f"{API}/me/tasks/today").status_code == 401

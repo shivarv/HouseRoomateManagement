@@ -3,7 +3,7 @@
 Base URL: `/api/v1`. The live, authoritative spec is served by the backend at `/docs` (Swagger)
 and `/openapi.json`. This file is the human-readable plan both clients build against.
 
-Status: **draft** — endpoints below are planned, not yet implemented.
+Status: **implemented** for health, auth, households, members, chores and tasks. Expenses are still planned.
 
 ## Health
 
@@ -26,19 +26,35 @@ Status: **draft** — endpoints below are planned, not yet implemented.
 | GET    | `/households`                         | Households I belong to       |
 | POST   | `/households`                         | Create household             |
 | GET    | `/households/{id}`                    | Household detail + members   |
-| POST   | `/households/{id}/invite`             | Generate invite code         |
-| POST   | `/households/join`                    | Join with invite code        |
-| DELETE | `/households/{id}/members/{user_id}`  | Remove member / leave        |
+| PATCH  | `/households/{id}`                    | Rename / change timezone (admin) |
+| GET    | `/invites/{code}`                     | Preview: household + names not yet claimed |
+| POST   | `/invites/{code}/accept`              | Join: `{ member_id }` claims a name, `{}` joins as new person |
 
-## Chores
+## Members
 
-| Method | Path                               | Description            |
-| ------ | ---------------------------------- | ---------------------- |
-| GET    | `/households/{id}/chores`          | List chores            |
-| POST   | `/households/{id}/chores`          | Create chore           |
-| PATCH  | `/chores/{chore_id}`               | Update / reassign      |
-| POST   | `/chores/{chore_id}/complete`      | Mark complete          |
-| DELETE | `/chores/{chore_id}`               | Delete chore           |
+| Method | Path                         | Description                      |
+| ------ | ---------------------------- | -------------------------------- |
+| GET    | `/households/{id}/members`   | List people in the house         |
+| POST   | `/households/{id}/members`   | Add a person `{ display_name }`  |
+| PATCH  | `/members/{member_id}`       | Rename / change role (admin)     |
+| DELETE | `/members/{member_id}`       | Remove from house + all rotations (admin) |
+
+## Chores & tasks (round-robin rotation)
+
+Full design: [features/CHORE_ROTATION.md](features/CHORE_ROTATION.md)
+
+| Method | Path                                  | Description                                   |
+| ------ | ------------------------------------- | --------------------------------------------- |
+| GET    | `/households/{id}/chores`             | List chores with rotation order               |
+| POST   | `/households/{id}/chores`             | Create chore `{ name, frequency, member_ids }`|
+| PATCH  | `/chores/{chore_id}`                  | Rename / deactivate                           |
+| PUT    | `/chores/{chore_id}/rotation`         | Replace rotation order `{ member_ids }`       |
+| DELETE | `/chores/{chore_id}`                  | Delete chore                                  |
+| GET    | `/households/{id}/schedule?from=&days=` | Who has which chore on each day (max 31 days) |
+| GET    | `/households/{id}/tasks/today`        | Everyone's tasks today                        |
+| GET    | `/me/tasks/today`                     | My tasks today (the in-app reminder)          |
+| POST   | `/tasks/{task_id}/complete`           | Mark a task done (assignee or admin)          |
+| POST   | `/tasks/{task_id}/reopen`             | Undo "done"                                   |
 
 ## Expenses
 
