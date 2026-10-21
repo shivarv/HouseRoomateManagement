@@ -61,7 +61,7 @@ def list_members(household_id: uuid.UUID, db: DbSession, user: CurrentUser):
 )
 def add_member(household_id: uuid.UUID, body: MemberCreate, db: DbSession, user: CurrentUser):
     me = svc.require_membership(db, household_id, user, admin=True)
-    return svc.member_out(svc.add_member(db, me.household, body.display_name.strip()))
+    return svc.member_out(svc.add_member(db, me.household, body.display_name.strip(), actor=me))
 
 
 @router.patch("/members/{member_id}", response_model=MemberOut)

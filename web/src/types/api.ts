@@ -45,39 +45,135 @@ export interface InvitePreview {
   unclaimed_members: MemberBrief[];
 }
 
+export type Frequency = "daily" | "weekly";
+export type AssignmentMode = "rotation" | "open";
+
+export interface ChoreBrief {
+  id: string;
+  name: string;
+  frequency: Frequency;
+  assignment_mode: AssignmentMode;
+}
+
 export interface Chore {
   id: string;
   name: string;
-  frequency: "daily";
+  frequency: Frequency;
+  assignment_mode: AssignmentMode;
+  target_per_week: number | null;
   is_active: boolean;
   rotation: MemberBrief[];
-  today_assignee: MemberBrief | null;
+  today_assignee: MemberBrief | null; // whose turn it is this period
 }
 
 export interface Task {
   id: string;
   household_id: string;
   household_name: string;
-  chore: { id: string; name: string };
-  member: MemberBrief;
-  due_date: string; // YYYY-MM-DD
+  chore: ChoreBrief;
+  member: MemberBrief; // whose turn it is
+  due_date: string; // YYYY-MM-DD, period start
+  period_end: string; // same day (daily) or Sunday (weekly)
   status: TaskStatus;
   completed_at: string | null;
+  completed_by: MemberBrief | null;
   next_assignee: MemberBrief | null;
   is_mine: boolean;
+}
+
+export interface ChoreLog {
+  id: string;
+  member: MemberBrief;
+  logged_by: MemberBrief | null;
+  done_on: string;
+  created_at: string;
+}
+
+export interface OpenChore {
+  household_id: string;
+  household_name: string;
+  chore: ChoreBrief;
+  target_per_week: number | null;
+  today_logs: ChoreLog[];
+  this_week_count: number;
+  last_done: ChoreLog | null;
+  people: OpenChoreCount[]; // everyone, fewest this year first
+  suggested: MemberBrief | null; // first in `people` — a hint, not an assignment
+  suggested_reason: string | null;
+}
+
+export interface OpenChoreCount {
+  member: MemberBrief;
+  this_year: number;
+  this_month: number;
+  last_done: string | null;
 }
 
 export interface HouseholdTasksToday {
   date: string;
   tasks: Task[];
+  open: OpenChore[];
+}
+
+export interface UpcomingTurn {
+  household_id: string;
+  household_name: string;
+  chore: ChoreBrief;
+  due_date: string;
 }
 
 export interface MyTasksToday {
-  tasks: Task[];
+  tasks: Task[]; // my turns now
+  others: Task[]; // everyone else's turns now
+  upcoming: UpcomingTurn[]; // my next turn per rotation chore, soonest first
   overdue: Task[];
+  open: OpenChore[];
 }
 
 export interface ScheduleDay {
   date: string;
-  slots: { chore: { id: string; name: string }; member: MemberBrief; status: TaskStatus | null }[];
+  slots: { chore: ChoreBrief; member: MemberBrief; status: TaskStatus | null }[];
+}
+
+export interface ActivityEvent {
+  id: string;
+  action: string;
+  created_at: string;
+  actor: MemberBrief | null;
+  subject: MemberBrief | null;
+  assignee: MemberBrief | null;
+  chore_id: string | null;
+  chore_name: string | null;
+  due_date: string | null;
+  detail: string | null;
+}
+
+export interface ReportRow {
+  member: MemberBrief;
+  is_active: boolean;
+  done: number;
+  share: number;
+  turns: number | null;
+  missed: number | null;
+  covered_by_others: number | null;
+  covered_for_others: number | null;
+  last_done: string | null;
+}
+
+export interface ChoreReport {
+  chore: ChoreBrief;
+  is_active: boolean;
+  total_done: number;
+  total_missed: number | null;
+  rows: ReportRow[];
+}
+
+export interface Report {
+  month: string;
+  start: string;
+  end: string;
+  is_current: boolean;
+  fair_share: number;
+  chores: ChoreReport[];
+  leaderboard: { member: MemberBrief; is_active: boolean; done: number; missed: number; covered_for_others: number }[];
 }

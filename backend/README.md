@@ -114,7 +114,8 @@ Read from the repo-root `.env` (see [.env.example](../.env.example)):
 
 | Variable                      | Description                          |
 | ----------------------------- | ------------------------------------ |
-| `DATABASE_URL`                | SQLAlchemy URL for PostgreSQL        |
+| `DATABASE_URL`                | PostgreSQL URL for app traffic. On Neon: the pooled (`-pooler`) URL from `neon env pull`; a plain `postgresql://` URL is fine |
+| `DATABASE_URL_UNPOOLED`       | Neon's direct URL; Alembic migrations use it automatically when `DATABASE_URL` is pooled |
 | `CORS_ORIGINS`                | Comma-separated allowed web origins  |
 | `JWT_SECRET`                  | Secret for signing access tokens     |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Access token lifetime                |

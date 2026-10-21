@@ -1,16 +1,29 @@
 import { Badge, Button } from "../../components/ui";
 import { formatDay } from "../../lib/format";
 import type { Task } from "../../types/api";
-import { useToggleTask } from "./hooks";
+import { DoneMenu } from "./DoneMenu";
+import { useCompleteTask, useReopenTask } from "./hooks";
 
-export function TaskCard({ task, canToggle, showHousehold = false, overdue = false }: {
+export function TaskCard({ task, showHousehold = false, overdue = false }: {
   task: Task;
-  canToggle: boolean;
   showHousehold?: boolean;
   overdue?: boolean;
 }) {
-  const toggle = useToggleTask();
+  const complete = useCompleteTask();
+  const reopen = useReopenTask();
+  const busy = complete.isPending || reopen.isPending;
   const done = task.status === "done";
+  const weekly = task.chore.frequency === "weekly";
+  const covered = done && task.completed_by && task.completed_by.id !== task.member.id;
+
+  const whose = task.is_mine ? "your turn" : `${task.member.display_name}'s turn`;
+  const who = whose.charAt(0).toUpperCase() + whose.slice(1);
+  const parts = [
+    done ? `Done by ${task.completed_by?.display_name ?? task.member.display_name}${covered ? ` · ${whose}` : ""}` : who,
+    weekly && !done ? `any day until ${formatDay(task.period_end)}` : null,
+    showHousehold ? task.household_name : null,
+    task.next_assignee ? `Next: ${task.next_assignee.display_name}` : null,
+  ].filter(Boolean);
 
   return (
     <div
@@ -18,38 +31,46 @@ export function TaskCard({ task, canToggle, showHousehold = false, overdue = fal
         task.is_mine && !done ? "border-indigo-300 ring-1 ring-indigo-100" : "border-slate-200"
       }`}
     >
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg ${done ? "bg-emerald-100" : "bg-indigo-50"}`}>
-        {done ? "✓" : choreIcon(task.chore.name)}
-      </div>
+      <ChoreAvatar name={task.chore.name} done={done} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`font-medium ${done ? "text-slate-400 line-through" : ""}`}>{task.chore.name}</span>
-          {overdue && <Badge tone="amber">Overdue · {formatDay(task.due_date)}</Badge>}
-          {task.is_mine && !overdue && <Badge tone="indigo">You</Badge>}
+          {weekly && <Badge>This week</Badge>}
+          {overdue && <Badge tone="amber">Missed · {formatDay(task.due_date)}</Badge>}
+          {task.is_mine && !overdue && !done && <Badge tone="indigo">You</Badge>}
+          {covered && <Badge tone="green">Covered</Badge>}
         </div>
-        <p className="truncate text-sm text-slate-500">
-          {task.is_mine ? "Assigned to you" : task.member.display_name}
-          {showHousehold && ` · ${task.household_name}`}
-          {task.next_assignee && ` · Next: ${task.next_assignee.display_name}`}
-        </p>
+        <p className="truncate text-sm text-slate-500">{parts.join(" · ")}</p>
       </div>
-      {canToggle && (
-        <Button
-          variant={done ? "secondary" : "primary"}
-          disabled={toggle.isPending}
-          onClick={() => toggle.mutate({ id: task.id, done: !done })}
-        >
-          {done ? "Undo" : "Mark done"}
+      {done ? (
+        <Button variant="secondary" disabled={busy} onClick={() => reopen.mutate(task.id)}>
+          Undo
         </Button>
+      ) : (
+        <DoneMenu
+          householdId={task.household_id}
+          label={task.is_mine ? "Mark done" : "I did it"}
+          disabled={busy}
+          onDone={(memberId) => complete.mutate({ id: task.id, completedBy: memberId })}
+        />
       )}
     </div>
   );
 }
 
-function choreIcon(name: string): string {
+export function ChoreAvatar({ name, done = false }: { name: string; done?: boolean }) {
+  return (
+    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg ${done ? "bg-emerald-100" : "bg-indigo-50"}`}>
+      {done ? "✓" : choreIcon(name)}
+    </div>
+  );
+}
+
+export function choreIcon(name: string): string {
   const n = name.toLowerCase();
   if (n.includes("cook")) return "🍳";
   if (n.includes("garbage") || n.includes("trash")) return "🗑️";
+  if (n.includes("bath")) return "🛁";
   if (n.includes("clean") || n.includes("hall")) return "🧹";
   return "📋";
 }

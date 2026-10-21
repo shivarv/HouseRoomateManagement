@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import auth, chores, health, households
+from app.api.routes import auth, chores, health, households, reports
 from app.core.config import settings
 from app.services.errors import ServiceError
 
@@ -24,5 +24,5 @@ def handle_service_error(_: Request, exc: ServiceError):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
-for router in (health.router, auth.router, households.router, chores.router):
+for router in (health.router, auth.router, households.router, chores.router, reports.router):
     app.include_router(router, prefix=API_PREFIX)

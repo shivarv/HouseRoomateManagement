@@ -34,3 +34,7 @@ xcuserdata/
 *.xcscmblueprint
 .swiftpm/
 Pods/
+.neon
+
+# Personal Claude Code settings
+.claude/settings.local.json
