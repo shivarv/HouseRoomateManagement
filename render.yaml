@@ -3,7 +3,7 @@
 # are asked for once at creation and never stored in git.
 services:
   - type: web
-    name: roommate-api
+    name: housemate-api
     runtime: python
     plan: free
     rootDir: backend
@@ -20,11 +20,11 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: CORS_ORIGINS # the web app's URL, e.g. https://roommate-web.onrender.com
+      - key: CORS_ORIGINS # the web app's URL, e.g. https://housemate-web.onrender.com
         sync: false
 
   - type: web
-    name: roommate-web
+    name: housemate-web
     runtime: static
     rootDir: web
     buildCommand: npm ci && npm run build
@@ -37,5 +37,5 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      - key: VITE_API_BASE_URL # the API's URL + /api/v1, e.g. https://roommate-api.onrender.com/api/v1
+      - key: VITE_API_BASE_URL # the API's URL + /api/v1, e.g. https://housemate-api.onrender.com/api/v1
         sync: false
