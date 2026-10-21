@@ -16,7 +16,7 @@ export function HouseholdsPage() {
       ) : households.data?.length ? (
         <div className="mb-8 grid gap-3 sm:grid-cols-2">
           {households.data.map((h) => (
-            <Link key={h.id} to={`/households/${h.id}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-indigo-300">
+            <Link key={h.id} to={`/households/${h.id}`} className="card-hover rounded-2xl border border-white/70 bg-white/90 p-5 shadow-sm ring-1 ring-slate-900/5 hover:ring-indigo-200">
               <div className="flex items-center justify-between">
                 <span className="font-medium">{h.name}</span>
                 {h.my_role === "admin" && <Badge tone="indigo">Admin</Badge>}

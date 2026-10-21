@@ -47,3 +47,10 @@ def test_rebase_after_reorder_continues_from_todays_person():
     new_start = rotation.rebased_start(PEOPLE, new, start, DAY1)
     assert rotation.assignee(new, new_start, DAY1) == "A"
     assert rotation.assignee(new, new_start, DAY1 + timedelta(days=1)) == "H"
+
+
+def test_next_turn_is_the_first_period_after_the_current_one():
+    assert rotation.next_turn(PEOPLE, DAY1, DAY1, "C") == DAY1 + timedelta(days=2)
+    assert rotation.next_turn(PEOPLE, DAY1, DAY1, "A") == DAY1 + timedelta(days=8)  # on duty now
+    assert rotation.next_turn(PEOPLE, DAY1, DAY1, "Z") is None
+    assert rotation.next_turn(list("ABCD"), DAY1, DAY1, "B", step=7) == DAY1 + timedelta(days=7)

@@ -33,20 +33,14 @@ def test_default_chores_rotate_round_robin_and_are_staggered(client, fake_today)
 
     chores = client.get(f"{API}/households/{house['id']}/chores", headers=ann).json()
     assert [c["name"] for c in chores] == ["Cooking", "Clean hall", "Dispose garbage"]
+    assert [c["assignment_mode"] for c in chores] == ["rotation", "rotation", "open"]
     assert [m["display_name"] for m in chores[0]["rotation"]] == ["Ann", *ROOMMATES]
 
-    assert _today_by_chore(client, house["id"], ann) == {
-        "Cooking": "Ann",
-        "Clean hall": "Bea",
-        "Dispose garbage": "Cy",
-    }
+    # Garbage is open to anyone, so only the two rotation chores have turns.
+    assert _today_by_chore(client, house["id"], ann) == {"Cooking": "Ann", "Clean hall": "Bea"}
 
     fake_today.today += timedelta(days=1)
-    assert _today_by_chore(client, house["id"], ann) == {
-        "Cooking": "Bea",
-        "Clean hall": "Cy",
-        "Dispose garbage": "Dev",
-    }
+    assert _today_by_chore(client, house["id"], ann) == {"Cooking": "Bea", "Clean hall": "Cy"}
 
     fake_today.today += timedelta(days=8)  # one full cycle of 8 people later
     assert _today_by_chore(client, house["id"], ann)["Cooking"] == "Bea"
@@ -84,12 +78,26 @@ def test_my_tasks_today_is_the_reminder_for_the_logged_in_person(client, fake_to
     task = mine["tasks"][0]
     assert task["is_mine"] and task["next_assignee"]["display_name"] == "Cy"
 
+    # My day also shows everyone else's turns and when my next turns are.
+    assert [(t["chore"]["name"], t["member"]["display_name"]) for t in mine["others"]] == [
+        ("Cooking", "Ann")
+    ]
+    assert [(u["chore"]["name"], u["due_date"]) for u in mine["upcoming"]] == [
+        ("Cooking", "2026-10-20"),  # tomorrow
+        ("Clean hall", "2026-10-27"),  # today is mine, so the next one is 8 days later
+    ]
+
     res = client.post(f"{API}/tasks/{task['id']}/complete", headers=bea)
     assert res.status_code == 200 and res.json()["status"] == "done"
 
-    # Bea can't complete Ann's task.
+    assert res.json()["completed_by"]["display_name"] == "Bea"
+
+    # Bea covers Ann's cooking: allowed, and recorded as done by Bea.
     ann_task = client.get(f"{API}/me/tasks/today", headers=ann).json()["tasks"][0]
-    assert client.post(f"{API}/tasks/{ann_task['id']}/complete", headers=bea).status_code == 403
+    res = client.post(f"{API}/tasks/{ann_task['id']}/complete", headers=bea)
+    assert res.status_code == 200
+    assert res.json()["member"]["display_name"] == "Ann"
+    assert res.json()["completed_by"]["display_name"] == "Bea"
 
 
 def test_missed_task_shows_as_overdue_and_rotation_keeps_moving(client, fake_today):

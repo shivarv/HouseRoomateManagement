@@ -1,20 +1,38 @@
 import Foundation
 
+/// Fields to change on a chore; nil fields are left out of the request.
+struct ChoreChanges: Encodable {
+    var name: String?
+    var isActive: Bool?
+    var frequency: Frequency?
+    var assignmentMode: AssignmentMode?
+    var targetPerWeek: Int?  // 0 clears the target
+}
+
 extension APIClient {
-    private struct ChoreBody: Encodable { let name: String }
-    private struct ActiveBody: Encodable { let isActive: Bool }
+    private struct CreateChoreBody: Encodable {
+        let name: String
+        let frequency: Frequency
+        let assignmentMode: AssignmentMode
+        let targetPerWeek: Int?
+    }
     private struct RotationBody: Encodable { let memberIds: [UUID] }
+    private struct CompleteBody: Encodable { let completedByMemberId: UUID? }
+    private struct LogBody: Encodable { let memberId: UUID? }
 
     func chores(householdId: UUID) async throws -> [Chore] {
         try await get("/households/\(householdId)/chores")
     }
 
-    func createChore(householdId: UUID, name: String) async throws -> Chore {
-        try await send("POST", "/households/\(householdId)/chores", body: ChoreBody(name: name))
+    func createChore(householdId: UUID, name: String, frequency: Frequency, mode: AssignmentMode,
+                     targetPerWeek: Int?) async throws -> Chore {
+        let body = CreateChoreBody(name: name, frequency: frequency, assignmentMode: mode,
+                                   targetPerWeek: mode == .open ? targetPerWeek : nil)
+        return try await send("POST", "/households/\(householdId)/chores", body: body)
     }
 
-    func setChoreActive(_ choreId: UUID, _ isActive: Bool) async throws -> Chore {
-        try await send("PATCH", "/chores/\(choreId)", body: ActiveBody(isActive: isActive))
+    func updateChore(_ choreId: UUID, _ changes: ChoreChanges) async throws -> Chore {
+        try await send("PATCH", "/chores/\(choreId)", body: changes)
     }
 
     func setRotation(choreId: UUID, memberIds: [UUID]) async throws -> Chore {
@@ -29,7 +47,7 @@ extension APIClient {
         try await get("/households/\(householdId)/schedule?days=\(days)")
     }
 
-    // MARK: Tasks
+    // MARK: Turns
 
     func myTasksToday() async throws -> MyTasksToday {
         try await get("/me/tasks/today")
@@ -39,7 +57,36 @@ extension APIClient {
         try await get("/households/\(householdId)/tasks/today")
     }
 
-    func setTask(_ taskId: UUID, done: Bool) async throws -> ChoreTask {
-        try await send("POST", "/tasks/\(taskId)/\(done ? "complete" : "reopen")", body: Optional<String>.none)
+    /// Anyone can mark a turn done; pass `completedBy` when someone else did it.
+    func completeTask(_ taskId: UUID, completedBy: UUID? = nil) async throws -> ChoreTask {
+        try await send("POST", "/tasks/\(taskId)/complete", body: CompleteBody(completedByMemberId: completedBy))
+    }
+
+    func reopenTask(_ taskId: UUID) async throws -> ChoreTask {
+        try await send("POST", "/tasks/\(taskId)/reopen", body: Optional<String>.none)
+    }
+
+    // MARK: Open chores
+
+    func logChore(_ choreId: UUID, memberId: UUID? = nil) async throws -> ChoreLog {
+        try await send("POST", "/chores/\(choreId)/logs", body: LogBody(memberId: memberId))
+    }
+
+    func removeLog(_ logId: UUID) async throws {
+        try await sendNoContent("DELETE", "/chore-logs/\(logId)")
+    }
+
+    // MARK: Activity & report
+
+    func activity(householdId: UUID, limit: Int = 50) async throws -> [ActivityEvent] {
+        try await get("/households/\(householdId)/activity?limit=\(limit)")
+    }
+
+    func report(householdId: UUID, month: String? = nil) async throws -> Report {
+        try await get("/households/\(householdId)/report" + (month.map { "?month=\($0)" } ?? ""))
+    }
+
+    func reportMonths(householdId: UUID) async throws -> ReportMonths {
+        try await get("/households/\(householdId)/report/months")
     }
 }

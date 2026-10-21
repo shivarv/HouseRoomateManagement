@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Household, HouseholdMember, User
 from app.schemas.household import HouseholdOut, MemberOut
-from app.services import chores, clock
+from app.services import activity, chores, clock
 from app.services.errors import BadRequest, Conflict, Forbidden, NotFound
 
 # No 0/O/1/I so codes are easy to read out loud.
@@ -34,8 +34,10 @@ def create_household(db: Session, user: User, name: str, timezone: str) -> House
     db.add(admin)
     db.flush()
     today = clock.today_in(timezone)
-    for chore_name in chores.DEFAULT_CHORES:
-        chores.create_chore(db, household, chore_name, member_ids=None, today=today)
+    for chore_name, mode in chores.DEFAULT_CHORES:
+        chores.create_chore(
+            db, household, chore_name, member_ids=None, today=today, assignment_mode=mode
+        )
     db.commit()
     return admin
 
@@ -75,7 +77,11 @@ def get_member(db: Session, member_id: uuid.UUID) -> HouseholdMember:
 
 
 def add_member(
-    db: Session, household: Household, display_name: str, user_id: uuid.UUID | None = None
+    db: Session,
+    household: Household,
+    display_name: str,
+    user_id: uuid.UUID | None = None,
+    actor: HouseholdMember | None = None,
 ) -> HouseholdMember:
     member = HouseholdMember(
         household_id=household.id,
@@ -87,6 +93,8 @@ def add_member(
     db.add(member)
     db.flush()
     chores.add_member_to_rotations(db, member, clock.today_in(household.timezone))
+    if actor is not None:
+        activity.record(db, household.id, "member_added", actor, subject_id=member.id)
     db.commit()
     return member
 
@@ -98,6 +106,7 @@ def deactivate_member(db: Session, member: HouseholdMember, acting: HouseholdMem
     member.user_id = None
     db.flush()
     chores.remove_member_from_rotations(db, member, clock.today_in(member.household.timezone))
+    activity.record(db, member.household_id, "member_removed", acting, subject_id=member.id)
     db.commit()
 
 
@@ -122,11 +131,13 @@ def accept_invite(
     if any(m.user_id == user.id and m.is_active for m in household.members):
         raise Conflict("You are already a member of this household")
     if member_id is None:
-        return add_member(db, household, display_name or user.name, user_id=user.id)
-    member = next((m for m in unclaimed_members(household) if m.id == member_id), None)
-    if member is None:
-        raise BadRequest("That person has already been claimed or does not exist")
-    member.user_id = user.id
+        member = add_member(db, household, display_name or user.name, user_id=user.id)
+    else:
+        member = next((m for m in unclaimed_members(household) if m.id == member_id), None)
+        if member is None:
+            raise BadRequest("That person has already been claimed or does not exist")
+        member.user_id = user.id
+    activity.record(db, household.id, "member_joined", member, subject_id=member.id)
     db.commit()
     return member
 

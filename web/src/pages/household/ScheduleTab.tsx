@@ -24,7 +24,7 @@ export function ScheduleTab() {
           </Button>
         ))}
       </div>
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-2xl border border-white/70 bg-white/90 shadow-sm ring-1 ring-slate-900/5 backdrop-blur">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
@@ -34,7 +34,7 @@ export function ScheduleTab() {
           </thead>
           <tbody>
             {rows.map((day, i) => (
-              <tr key={day.date} className={`border-t border-slate-100 ${i === 0 ? "bg-indigo-50/50" : ""}`}>
+              <tr key={day.date} className={`border-t border-slate-100 transition hover:bg-indigo-50/40 ${i === 0 ? "bg-linear-to-r from-indigo-50 to-fuchsia-50/40" : ""}`}>
                 <td className="whitespace-nowrap px-4 py-2.5 font-medium">
                   {formatDay(day.date)} {i === 0 && <span className="text-xs text-indigo-600">today</span>}
                 </td>

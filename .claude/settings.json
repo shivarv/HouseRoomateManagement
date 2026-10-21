@@ -24,7 +24,8 @@
       "Bash(swiftc -o decode_check \"/Users/shiva/Desktop/git hub/HouseRoomateManagement/ios/RoommateApp/Core/Models/Models.swift\" main.swift)",
       "Bash(./decode_check)",
       "Bash(xcrun simctl *)",
-      "Bash(sips -Z 900 /private/tmp/claude-501/-Users-shiva-Desktop-git-hub-HouseRoomateManagement/7a3aa102-8579-4688-a5f0-44290d192511/scratchpad/ios-launch.png)"
+      "Bash(sips -Z 900 /private/tmp/claude-501/-Users-shiva-Desktop-git-hub-HouseRoomateManagement/7a3aa102-8579-4688-a5f0-44290d192511/scratchpad/ios-launch.png)",
+      "Bash(.venv/bin/python -c \"import app.main\")"
     ]
   }
 }
