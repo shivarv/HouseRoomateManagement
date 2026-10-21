@@ -1,0 +1,41 @@
+# Render Blueprint: the FastAPI backend and the React web app. The database is Neon (not Render).
+# Deploy: Render dashboard → New → Blueprint → pick this repo. Secrets marked `sync: false`
+# are asked for once at creation and never stored in git.
+services:
+  - type: web
+    name: roommate-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    # Migrations run on every deploy (Pre-Deploy Command needs a paid plan).
+    buildCommand: pip install . && alembic upgrade head
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DATABASE_URL # Neon pooled URL (host contains -pooler.)
+        sync: false
+      - key: DATABASE_URL_UNPOOLED # Neon direct URL, used by Alembic
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS # the web app's URL, e.g. https://roommate-web.onrender.com
+        sync: false
+
+  - type: web
+    name: roommate-web
+    runtime: static
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    # Single-page app: let React Router handle every path.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: VITE_API_BASE_URL # the API's URL + /api/v1, e.g. https://roommate-api.onrender.com/api/v1
+        sync: false
