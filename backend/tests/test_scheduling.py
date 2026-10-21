@@ -1,6 +1,6 @@
 """Weekly chores, open chores, covering, back-filled missed turns, activity and the report."""
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from app.services import rotation, suggest
 from tests.conftest import register
@@ -269,3 +269,43 @@ def test_current_month_for_everyone_past_months_for_admins(client, fake_today):
     assert (
         client.get(f"{API}/households/{house['id']}/report/months", headers=bea).status_code == 403
     )
+
+
+def test_activity_for_a_month_shows_who_marked_what(client, fake_today):
+    # Events are stamped with the real clock, so run "today" in the real current month.
+    real_today = datetime.now(UTC).date()
+    fake_today.today = real_today
+    this_month = real_today.strftime("%Y-%m")
+    next_month_start = (real_today.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+    ann = register(client, "ann@example.com", "Ann")
+    house = _house(client, ann)
+    people = _members(client, house, ann)
+    bea = register(client, "bea@example.com", "Bea")
+    client.post(
+        f"{API}/invites/{house['invite_code']}/accept",
+        json={"member_id": people["Bea"]},
+        headers=bea,
+    )
+
+    task = _today(client, house, ann)["tasks"][0]
+    # Bea records that Cy did someone's turn.
+    client.post(
+        f"{API}/tasks/{task['id']}/complete",
+        json={"completed_by_member_id": people["Cy"]},
+        headers=bea,
+    )
+
+    url = f"{API}/households/{house['id']}/activity?month={this_month}"
+    events = client.get(url, headers=bea).json()
+    done = next(e for e in events if e["action"] == "completed")
+    assert (done["actor"]["display_name"], done["subject"]["display_name"]) == ("Bea", "Cy")
+    assert done["assignee"]["display_name"] == task["member"]["display_name"]
+    assert {"member_added", "member_joined"} <= {e["action"] for e in events}
+
+    # Next month: this month becomes history -> admins only; the new month starts empty.
+    fake_today.today = next_month_start + timedelta(days=1)
+    assert client.get(url, headers=bea).status_code == 403
+    assert len(client.get(url, headers=ann).json()) == len(events)
+    new_month = f"{API}/households/{house['id']}/activity?month={next_month_start:%Y-%m}"
+    assert client.get(new_month, headers=bea).json() == []

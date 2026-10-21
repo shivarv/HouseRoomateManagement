@@ -1,40 +1,77 @@
-import { formatDay } from "../../lib/format";
-import type { ActivityEvent } from "../../types/api";
+import { formatDay, localIsoDate } from "../../lib/format";
+import type { ActivityEvent, MemberBrief } from "../../types/api";
 
-/** One readable sentence per activity event. Mirrored in iOS (ActivityText.swift). */
-export function activityText(e: ActivityEvent): { icon: string; text: string } {
-  const actor = e.actor?.display_name ?? "Someone";
-  const subject = e.subject?.display_name ?? "someone";
-  const chore = e.chore_name ?? "a chore";
-  const forDay = e.due_date ? ` (${formatDay(e.due_date)})` : "";
-  const byOther = e.actor && e.subject && e.actor.id !== e.subject.id ? ` · marked by ${actor}` : "";
+/** A sentence as segments, so names and chores can be highlighted. Mirrored in iOS (ActivityText.swift). */
+export type Segment = string | { person: MemberBrief } | { chore: string };
+export type ActivityKind = "done" | "undo" | "settings" | "people";
+
+export interface ActivityLine {
+  icon: string;
+  kind: ActivityKind;
+  parts: Segment[];
+}
+
+const who = (m: MemberBrief | null): Segment => (m ? { person: m } : "Someone");
+
+export function activityText(e: ActivityEvent): ActivityLine {
+  const chore: Segment = { chore: e.chore_name ?? "a chore" };
+  const actorIsSubject = !e.actor || !e.subject || e.actor.id === e.subject.id;
+  // Only mention the day when the chore was for a different day than when it was marked.
+  const sameDay = e.due_date && e.due_date === localIsoDate(new Date(e.created_at));
+  const forDay: Segment[] = e.due_date && !sameDay ? [` for ${formatDay(e.due_date)}`] : [];
+  const turn: Segment[] =
+    e.assignee && e.subject && e.assignee.id !== e.subject.id ? [" · ", { person: e.assignee }, "'s turn"] : [];
 
   switch (e.action) {
-    case "completed": {
-      const cover = e.assignee && e.subject && e.assignee.id !== e.subject.id ? ` · ${e.assignee.display_name}'s turn` : "";
-      return { icon: "✅", text: `${subject} did ${chore}${forDay}${cover}${byOther}` };
-    }
-    case "reopened":
-      return { icon: "↩️", text: `${actor} undid ${chore}${forDay}${e.subject ? ` (was done by ${subject})` : ""}` };
+    case "completed":
     case "logged":
-      return { icon: "✅", text: `${subject} did ${chore}${byOther}` };
+      return {
+        icon: "✅",
+        kind: "done",
+        parts: actorIsSubject
+          ? [who(e.subject ?? e.actor), " did ", chore, ...forDay, ...turn]
+          : [who(e.actor), " marked that ", who(e.subject), " did ", chore, ...forDay, ...turn],
+      };
+    case "reopened":
+      return {
+        icon: "↩️",
+        kind: "undo",
+        parts: [
+          who(e.actor),
+          " undid ",
+          chore,
+          ...forDay,
+          ...(e.subject ? [" (it was marked done for ", { person: e.subject }, ")"] : []),
+        ],
+      };
     case "log_removed":
-      return { icon: "🗑", text: `${actor} removed ${subject}'s ${chore} entry${forDay}` };
+      return {
+        icon: "🗑",
+        kind: "undo",
+        parts: [who(e.actor), " removed the entry “", who(e.subject), " did ", chore, "”", ...forDay],
+      };
     case "chore_created":
-      return { icon: "➕", text: `${actor} added the chore ${chore}${e.detail ? ` (${e.detail})` : ""}` };
+      return { icon: "➕", kind: "settings", parts: [who(e.actor), " added the chore ", chore, e.detail ? ` (${e.detail})` : ""] };
     case "chore_updated":
-      return { icon: "⚙️", text: `${actor} updated ${chore}${e.detail ? `: ${e.detail}` : ""}` };
+      return { icon: "⚙️", kind: "settings", parts: [who(e.actor), " updated ", chore, e.detail ? `: ${e.detail}` : ""] };
     case "chore_deleted":
-      return { icon: "✖️", text: `${actor} deleted the chore ${chore}` };
+      return { icon: "✖️", kind: "settings", parts: [who(e.actor), " deleted the chore ", chore] };
     case "rotation_changed":
-      return { icon: "🔀", text: `${actor} changed the order of ${chore}` };
+      return { icon: "🔀", kind: "settings", parts: [who(e.actor), " changed the order of ", chore] };
     case "member_added":
-      return { icon: "👋", text: `${actor} added ${subject} to the house` };
+      return { icon: "👋", kind: "people", parts: [who(e.actor), " added ", who(e.subject), " to the house"] };
     case "member_removed":
-      return { icon: "🚪", text: `${actor} removed ${subject} from the house` };
+      return { icon: "🚪", kind: "people", parts: [who(e.actor), " removed ", who(e.subject), " from the house"] };
     case "member_joined":
-      return { icon: "🎉", text: `${subject} joined the house` };
+      return { icon: "🎉", kind: "people", parts: [who(e.subject), " joined the house"] };
     default:
-      return { icon: "•", text: `${actor}: ${e.action}` };
+      return { icon: "•", kind: "settings", parts: [who(e.actor), `: ${e.action}`] };
   }
+}
+
+/** Plain-text version (titles, accessibility). */
+export function activityPlainText(line: ActivityLine): string {
+  return line.parts
+    .map((p) => (typeof p === "string" ? p : "person" in p ? p.person.display_name : p.chore))
+    .join("");
 }

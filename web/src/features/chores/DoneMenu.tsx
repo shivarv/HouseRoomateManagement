@@ -33,7 +33,7 @@ export function DoneMenu({
         {label}
       </Button>
       <Button
-        className="rounded-l-none border-l border-indigo-500 px-2"
+        className="rounded-l-none border-l border-white/25 px-2"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
         aria-label="Someone else did it"
@@ -58,11 +58,11 @@ function MemberPicker({ householdId, onPick }: { householdId: string; onPick: (m
   const household = useHousehold(householdId);
   const members = (household.data?.members ?? []).filter((m) => m.id !== household.data?.my_member_id);
   return (
-    <div className="absolute right-0 top-full z-10 mt-1 w-52 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+    <div className="absolute right-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-2xl border border-white/70 bg-white/95 py-1.5 shadow-xl shadow-indigo-500/10 ring-1 ring-slate-900/5 backdrop-blur">
       <p className="px-3 py-1.5 text-xs font-medium text-slate-500">Someone else did it:</p>
       {household.isLoading && <p className="px-3 py-1.5 text-sm text-slate-400">Loading…</p>}
       {members.map((m) => (
-        <button key={m.id} className="block w-full px-3 py-1.5 text-left text-sm hover:bg-indigo-50" onClick={() => onPick(m.id)}>
+        <button key={m.id} className="block w-full px-3 py-2 text-left text-sm transition hover:bg-linear-to-r hover:from-indigo-50 hover:to-fuchsia-50 hover:text-indigo-700" onClick={() => onPick(m.id)}>
           {m.display_name}
         </button>
       ))}

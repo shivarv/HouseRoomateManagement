@@ -5,7 +5,8 @@ import { useChores, useCreateChore, useDeleteChore, useSetRotation, useUpdateCho
 import type { AssignmentMode, Chore, Frequency, MemberBrief } from "../../types/api";
 import { useCurrentHousehold } from "./HouseholdLayout";
 
-const selectClass = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm";
+const selectClass =
+  "rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm outline-none transition hover:border-indigo-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15";
 
 export function ChoresTab() {
   const household = useCurrentHousehold();
@@ -146,7 +147,9 @@ function ChoreCard({ chore, isAdmin }: { chore: Chore; isAdmin: boolean }) {
               <li key={m.id} className="flex items-center gap-1.5">
                 <span
                   className={`rounded-full px-2.5 py-1 ${
-                    chore.today_assignee?.id === m.id ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700"
+                    chore.today_assignee?.id === m.id
+                      ? "bg-linear-to-r from-indigo-500 to-fuchsia-500 text-white shadow-md shadow-indigo-500/30"
+                      : "bg-white text-slate-700 ring-1 ring-slate-200 transition hover:ring-indigo-300"
                   }`}
                   title={chore.today_assignee?.id === m.id ? (chore.frequency === "weekly" ? "This week" : "Today") : undefined}
                 >
@@ -215,7 +218,7 @@ function RotationEditor({ chore, everyone, onDone }: { chore: Chore; everyone: M
     <div className="mt-4 space-y-3">
       <ul className="space-y-1.5">
         {order.map((m, i) => (
-          <li key={m.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-sm">
+          <li key={m.id} className="flex items-center gap-2 rounded-xl bg-white px-3 py-1.5 text-sm ring-1 ring-slate-200 transition hover:ring-indigo-300">
             <span className="w-6 text-slate-400">{i + 1}.</span>
             <span className="flex-1 font-medium">{m.display_name}</span>
             <Button variant="ghost" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up">↑</Button>

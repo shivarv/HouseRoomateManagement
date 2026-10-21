@@ -29,9 +29,16 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-sm">
-        <h1 className="mb-1 text-xl font-semibold">🏠 Roommates</h1>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+      <div className="pointer-events-none absolute -left-24 top-10 h-80 w-80 rounded-full bg-indigo-400/30 blur-3xl" />
+      <div className="pointer-events-none absolute -right-20 bottom-0 h-96 w-96 rounded-full bg-fuchsia-400/30 blur-3xl" />
+      <Card className="relative w-full max-w-sm p-7 shadow-xl shadow-indigo-500/10">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-fuchsia-500 text-2xl shadow-lg shadow-indigo-500/30">
+          🏠
+        </div>
+        <h1 className="mb-1 text-2xl font-extrabold tracking-tight">
+          <span className="text-gradient">Roommates</span>
+        </h1>
         <p className="mb-6 text-sm text-slate-500">{mode === "login" ? "Sign in to see today's chores." : "Create your account."}</p>
         <form onSubmit={onSubmit} className="space-y-4">
           {mode === "register" && <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} required />}

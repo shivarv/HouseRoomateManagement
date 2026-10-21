@@ -27,10 +27,17 @@ export function TaskCard({ task, showHousehold = false, overdue = false }: {
 
   return (
     <div
-      className={`flex items-center gap-4 rounded-xl border bg-white p-4 shadow-sm ${
-        task.is_mine && !done ? "border-indigo-300 ring-1 ring-indigo-100" : "border-slate-200"
+      className={`card-hover group relative flex items-center gap-4 rounded-2xl border bg-white/90 p-4 shadow-sm backdrop-blur ${
+        task.is_mine && !done ? "border-indigo-200 ring-1 ring-indigo-100" : "border-white/70 ring-1 ring-slate-900/5"
       }`}
     >
+      {(task.is_mine || done || overdue) && (
+        <span
+          className={`absolute inset-y-0 left-0 w-1 rounded-l-2xl ${
+            done ? "bg-emerald-400" : overdue ? "bg-linear-to-b from-amber-400 to-orange-500" : "bg-linear-to-b from-indigo-500 to-fuchsia-500"
+          }`}
+        />
+      )}
       <ChoreAvatar name={task.chore.name} done={done} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -58,9 +65,23 @@ export function TaskCard({ task, showHousehold = false, overdue = false }: {
   );
 }
 
+/** Colour-coded gradient tile per kind of chore. */
+function choreTone(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes("cook")) return "from-amber-300 to-orange-500 shadow-orange-500/30";
+  if (n.includes("garbage") || n.includes("trash")) return "from-emerald-300 to-teal-500 shadow-teal-500/30";
+  if (n.includes("bath")) return "from-violet-300 to-purple-500 shadow-purple-500/30";
+  if (n.includes("clean") || n.includes("hall")) return "from-sky-300 to-blue-500 shadow-blue-500/30";
+  return "from-indigo-300 to-indigo-500 shadow-indigo-500/30";
+}
+
 export function ChoreAvatar({ name, done = false }: { name: string; done?: boolean }) {
   return (
-    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg ${done ? "bg-emerald-100" : "bg-indigo-50"}`}>
+    <div
+      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br text-xl text-white shadow-md transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-3 ${
+        done ? "from-emerald-400 to-green-500 shadow-emerald-500/30" : choreTone(name)
+      }`}
+    >
       {done ? "✓" : choreIcon(name)}
     </div>
   );

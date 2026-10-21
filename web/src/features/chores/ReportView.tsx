@@ -17,7 +17,7 @@ export function ReportView({ report, myMemberId }: { report: Report; myMemberId:
       </p>
 
       <Card>
-        <h2 className="mb-3 font-semibold">Leaderboard</h2>
+        <h2 className="mb-3 text-lg font-bold"><span className="text-gradient">🏆 Leaderboard</span></h2>
         {totalDone === 0 && report.leaderboard.every((r) => r.missed === 0) ? (
           <Empty>Nothing recorded this month yet.</Empty>
         ) : (
@@ -33,8 +33,8 @@ export function ReportView({ report, myMemberId }: { report: Report; myMemberId:
             </thead>
             <tbody>
               {report.leaderboard.map((r, i) => (
-                <tr key={r.member.id} className={`border-t border-slate-100 ${r.member.id === myMemberId ? "font-semibold" : ""}`}>
-                  <td className="py-2 text-slate-400">{i + 1}</td>
+                <tr key={r.member.id} className={`border-t border-slate-100 transition hover:bg-indigo-50/50 ${r.member.id === myMemberId ? "font-semibold" : ""}`}>
+                  <td className="py-2 text-slate-400">{r.done > 0 && i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</td>
                   <td className="py-2">
                     {r.member.display_name} {!r.is_active && <Badge>Left</Badge>}
                     {totalDone > 0 && r.is_active && isLow(r.done / totalDone, report.fair_share) && (
@@ -63,7 +63,7 @@ export function ReportView({ report, myMemberId }: { report: Report; myMemberId:
 function ChoreReportCard({ report, fair, myMemberId }: { report: ChoreReport; fair: number; myMemberId: string }) {
   const isOpen = report.chore.assignment_mode === "open";
   return (
-    <Card>
+    <Card className="card-hover">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h3 className="font-semibold">
           {choreIcon(report.chore.name)} {report.chore.name}
@@ -97,9 +97,9 @@ function ChoreReportCard({ report, fair, myMemberId }: { report: ChoreReport; fa
                   {r.done} · {percent(r.share)}
                 </span>
               </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
                 <div
-                  className={`h-full rounded-full ${low ? "bg-amber-400" : "bg-indigo-500"}`}
+                  className={`h-full rounded-full bg-linear-to-r transition-all duration-500 ${low ? "from-amber-300 to-orange-500" : "from-indigo-500 via-violet-500 to-fuchsia-500"}`}
                   style={{ width: `${Math.max(r.share * 100, r.done ? 3 : 0)}%` }}
                 />
               </div>

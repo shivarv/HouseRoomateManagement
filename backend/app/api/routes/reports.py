@@ -20,10 +20,25 @@ def get_activity(
     user: CurrentUser,
     limit: int = Query(default=50, ge=1, le=activity.MAX_FEED),
     before: datetime | None = None,
+    month: str | None = Query(default=None, description="YYYY-MM: every event in that month"),
 ):
-    """Everything that happened in the house, newest first. Visible to everyone."""
-    household_svc.require_membership(db, household_id, user)
-    return [activity.event_out(e) for e in activity.feed(db, household_id, limit, before)]
+    """What happened in the house, newest first.
+
+    Without `month`: the latest `limit` events (everyone). With `month`: every event in that
+    calendar month of the household's timezone; past months are admin only, like the report.
+    """
+    me = household_svc.require_membership(db, household_id, user)
+    if month is None:
+        return [activity.event_out(e) for e in activity.feed(db, household_id, limit, before)]
+    household = me.household
+    today = clock.today_in(household.timezone)
+    month_start = report.parse_month(month)
+    if month_start > today:
+        return []
+    if report.month_key(month_start) != report.month_key(today) and me.role != "admin":
+        raise Forbidden("Only admins can see past months")
+    events = activity.month_feed(db, household_id, month_start, household.timezone)
+    return [activity.event_out(e) for e in events]
 
 
 @router.get("/households/{household_id}/report", response_model=ReportOut)

@@ -24,7 +24,7 @@ export function TodayTab() {
 
       {daily.length > 0 && today.data && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="section-title">
             {formatDay(today.data.date, { weekday: "long", month: "long", day: "numeric" })}
           </h2>
           {daily.map((t) => <TaskCard key={t.id} task={t} />)}
@@ -33,14 +33,14 @@ export function TodayTab() {
 
       {weekly.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">This week</h2>
+          <h2 className="section-title">This week</h2>
           {weekly.map((t) => <TaskCard key={t.id} task={t} />)}
         </section>
       )}
 
       {open.length > 0 && today.data && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Anyone can do</h2>
+          <h2 className="section-title">Anyone can do</h2>
           {open.map((o) => <OpenChoreCard key={o.chore.id} item={o} today={today.data.date} myMemberId={household.my_member_id} />)}
         </section>
       )}

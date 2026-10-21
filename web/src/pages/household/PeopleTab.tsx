@@ -34,10 +34,10 @@ export function PeopleTab() {
       )}
 
       <ErrorText error={remove.error ?? update.error} />
-      <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white shadow-sm">
+      <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-white/70 bg-white/90 shadow-sm ring-1 ring-slate-900/5 backdrop-blur">
         {household.members.map((m) => (
-          <li key={m.id} className="flex items-center gap-3 px-4 py-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700">
+          <li key={m.id} className="flex items-center gap-3 px-4 py-3 transition hover:bg-indigo-50/40">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-indigo-400 to-fuchsia-500 text-sm font-semibold text-white shadow-sm">
               {m.display_name.slice(0, 1).toUpperCase()}
             </div>
             <div className="flex-1">

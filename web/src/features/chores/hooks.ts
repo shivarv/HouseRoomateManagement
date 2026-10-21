@@ -6,7 +6,7 @@ export const choreKeys = {
   schedule: (householdId: string, days: number) => ["schedule", householdId, days] as const,
   householdToday: (householdId: string) => ["tasks", "household", householdId] as const,
   mine: ["tasks", "mine"] as const,
-  activity: (householdId: string) => ["activity", householdId] as const,
+  activityMonth: (householdId: string, month: string) => ["activity", householdId, month] as const,
   report: (householdId: string, month?: string) => ["report", householdId, month ?? "current"] as const,
   months: (householdId: string) => ["report", householdId, "months"] as const,
 };
@@ -38,8 +38,12 @@ export function useMyTasksToday() {
   return useQuery({ queryKey: choreKeys.mine, queryFn: tasksApi.mine, ...live });
 }
 
-export function useActivity(householdId: string) {
-  return useQuery({ queryKey: choreKeys.activity(householdId), queryFn: () => reportsApi.activity(householdId), ...live });
+export function useActivityMonth(householdId: string, month: string) {
+  return useQuery({
+    queryKey: choreKeys.activityMonth(householdId, month),
+    queryFn: () => reportsApi.activityMonth(householdId, month),
+    ...live,
+  });
 }
 
 export function useReport(householdId: string, month?: string) {

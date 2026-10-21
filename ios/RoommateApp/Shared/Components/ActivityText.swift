@@ -7,20 +7,20 @@ enum ActivityText {
         let subject = e.subject?.displayName ?? "someone"
         let chore = e.choreName ?? "a chore"
         let forDay = e.dueDate.map { " (\(DayFormat.short($0)))" } ?? ""
-        let byOther = (e.actor != nil && e.subject != nil && e.actor?.id != e.subject?.id)
-            ? " · marked by \(actor)" : ""
+        let markedBySomeoneElse = e.actor != nil && e.subject != nil && e.actor?.id != e.subject?.id
+        let didIt = markedBySomeoneElse ? "\(actor) marked that \(subject) did" : "\(subject) did"
 
         switch e.action {
         case "completed":
             let cover = (e.assignee != nil && e.subject != nil && e.assignee?.id != e.subject?.id)
                 ? " · \(e.assignee!.displayName)'s turn" : ""
-            return ("✅", "\(subject) did \(chore)\(forDay)\(cover)\(byOther)")
+            return ("✅", "\(didIt) \(chore)\(forDay)\(cover)")
         case "reopened":
-            return ("↩️", "\(actor) undid \(chore)\(forDay)" + (e.subject != nil ? " (was done by \(subject))" : ""))
+            return ("↩️", "\(actor) undid \(chore)\(forDay)" + (e.subject != nil ? " (it was marked done for \(subject))" : ""))
         case "logged":
-            return ("✅", "\(subject) did \(chore)\(byOther)")
+            return ("✅", "\(didIt) \(chore)")
         case "log_removed":
-            return ("🗑", "\(actor) removed \(subject)'s \(chore) entry\(forDay)")
+            return ("🗑", "\(actor) removed the entry “\(subject) did \(chore)”\(forDay)")
         case "chore_created":
             return ("➕", "\(actor) added the chore \(chore)" + (e.detail.map { " (\($0))" } ?? ""))
         case "chore_updated":

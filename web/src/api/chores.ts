@@ -47,10 +47,8 @@ export const tasksApi = {
 };
 
 export const reportsApi = {
-  activity: (householdId: string, limit = 50, before?: string) =>
-    api<ActivityEvent[]>(
-      `/households/${householdId}/activity?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ""}`,
-    ),
+  activityMonth: (householdId: string, month: string) =>
+    api<ActivityEvent[]>(`/households/${householdId}/activity?month=${month}`),
   report: (householdId: string, month?: string) =>
     api<Report>(`/households/${householdId}/report${month ? `?month=${month}` : ""}`),
   months: (householdId: string) => api<{ months: string[] }>(`/households/${householdId}/report/months`),
