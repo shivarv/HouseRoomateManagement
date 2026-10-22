@@ -29,7 +29,6 @@ final class NotificationsViewModel {
 
     private let client = APIClient.shared
 
-    var others: [HelpRequest] { requests.filter { !$0.isMine } }
     var mine: [HelpRequest] { requests.filter(\.isMine) }
     /// The tab badge: requests other people are waiting on.
     var waitingCount: Int { requests.filter { !$0.isDone && !$0.isMine }.count }
@@ -78,7 +77,7 @@ final class NotificationsViewModel {
     }
 }
 
-/// 🔔 Notifications (`.everyone`): what other people need, anyone can mark it done.
+/// 🔔 Notifications (`.everyone`): everything asked; others' requests can be marked done, mine only withdrawn.
 /// 🙋 Help requests (`.mine`): what I asked for and its status, plus asking for something new.
 struct NotificationsView: View {
     enum Scope { case everyone, mine }
@@ -103,7 +102,8 @@ struct NotificationsView: View {
                 if model.error != nil {
                     ErrorBanner(message: model.error)
                 }
-                let shown = scope == .everyone ? model.others : model.mine
+                // Notifications shows everything, my own requests included (withdraw-only there).
+                let shown = scope == .everyone ? model.requests : model.mine
                 let open = shown.filter { !$0.isDone }
                 let done = shown.filter(\.isDone)
                 Section(scope == .everyone ? "Needs a hand" : "Waiting for help") {
@@ -140,6 +140,7 @@ struct NotificationsView: View {
     private func row(_ r: HelpRequest) -> some View {
         HelpRow(
             request: r,
+            inFeed: scope == .everyone,
             showHousehold: multiHouse,
             notice: model.notices[r.id],
             onDone: { Task { await model.markDone(r) } },
@@ -153,6 +154,8 @@ struct NotificationsView: View {
 
 private struct HelpRow: View {
     let request: HelpRequest
+    /// On Notifications: my own requests can only be withdrawn there, not edited or marked done.
+    var inFeed = false
     var showHousehold = false
     var notice: String?
     let onDone: () -> Void
@@ -177,6 +180,7 @@ private struct HelpRow: View {
                             .strikethrough(request.isDone)
                             .foregroundStyle(request.isDone ? .secondary : .primary)
                         Badge(text: request.isDone ? "Done" : "Open", color: request.isDone ? .green : .orange)
+                        if request.isMine { Badge(text: "You asked", color: .accentColor) }
                     }
                     if let details = request.details {
                         Text(details).font(.subheadline)
@@ -193,10 +197,10 @@ private struct HelpRow: View {
             HStack {
                 Spacer()
                 if !request.isDone && request.isMine {
-                    Button("Edit", action: onEdit).buttonStyle(.bordered)
+                    if !inFeed { Button("Edit", action: onEdit).buttonStyle(.bordered) }
                     Button("Withdraw", role: .destructive) { confirmWithdraw = true }.buttonStyle(.bordered)
                 }
-                if !request.isDone {
+                if !request.isDone && !(inFeed && request.isMine) {
                     Button(request.isMine ? "Mark done" : "I helped ✓", action: onDone)
                         .buttonStyle(.borderedProminent)
                 }
