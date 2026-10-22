@@ -100,6 +100,29 @@ def test_my_tasks_today_is_the_reminder_for_the_logged_in_person(client, fake_to
     assert res.json()["completed_by"]["display_name"] == "Bea"
 
 
+def test_marking_someone_elses_turn_as_done_by_them_is_in_the_history(client, fake_today):
+    ann = register(client, "ann@example.com", "Ann")
+    house = _setup_house(client, ann)
+
+    # "It's done" on Bea's turn: Ann records that Bea did it.
+    today = client.get(f"{API}/households/{house['id']}/tasks/today", headers=ann).json()
+    hall = next(t for t in today["tasks"] if t["chore"]["name"] == "Clean hall")
+    res = client.post(
+        f"{API}/tasks/{hall['id']}/complete",
+        json={"completed_by_member_id": hall["member"]["id"]},
+        headers=ann,
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["completed_by"]["display_name"] == "Bea"
+
+    feed = client.get(f"{API}/households/{house['id']}/activity", headers=ann).json()
+    event = next(e for e in feed if e["action"] == "completed")
+    assert event["chore_name"] == "Clean hall"
+    assert event["actor"]["display_name"] == "Ann"
+    assert event["subject"]["display_name"] == "Bea"
+    assert event["assignee"]["display_name"] == "Bea"
+
+
 def test_missed_task_shows_as_overdue_and_rotation_keeps_moving(client, fake_today):
     ann = register(client, "ann@example.com", "Ann")
     house = _setup_house(client, ann)
@@ -150,3 +173,22 @@ def test_only_admin_can_change_rotation(client, fake_today):
 
 def test_requires_auth(client):
     assert client.get(f"{API}/me/tasks/today").status_code == 401
+
+
+def test_unexpected_crash_is_a_readable_500_with_cors(client, fake_today, monkeypatch):
+    from app.services import tasks
+
+    ann = register(client, "ann@example.com", "Ann")
+    house = _setup_house(client, ann)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("database is missing a table")
+
+    monkeypatch.setattr(tasks, "sync", boom)
+    res = client.get(
+        f"{API}/households/{house['id']}/tasks/today",
+        headers={**ann, "Origin": "http://localhost:5173"},
+    )
+    assert res.status_code == 500
+    assert res.json() == {"detail": "Something went wrong on the server"}
+    assert res.headers["access-control-allow-origin"] == "http://localhost:5173"

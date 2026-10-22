@@ -56,6 +56,21 @@ Full design: [features/CHORE_ROTATION.md](features/CHORE_ROTATION.md)
 | POST   | `/tasks/{task_id}/complete`           | Mark a task done (assignee or admin)          |
 | POST   | `/tasks/{task_id}/reopen`             | Undo "done"                                   |
 
+## Swaps ("Ask for a swap")
+
+See [features/CHORE_TRANSFER.md](features/CHORE_TRANSFER.md). Any member can ask; the first person to accept wins.
+
+| Method | Path                               | Description                                                                 |
+| ------ | ---------------------------------- | --------------------------------------------------------------------------- |
+| POST   | `/chores/{chore_id}/swaps`         | Ask the house to take my turn. Body `{ due_date, note? }`. Asking again returns the same request |
+| GET    | `/households/{id}/swaps`           | Open requests, each with `can_accept` and `payback_preview` for the caller |
+| GET    | `/me/swaps`                        | Open requests in all my households                                          |
+| POST   | `/swaps/{swap_id}/accept`          | Take the turn. **409** if someone else already took it, or it is no longer open. Same person again → 200 |
+| POST   | `/swaps/{swap_id}/cancel`          | Requester (open), or either person (accepted, before the turn is done)      |
+
+`TaskOut` has `swap: { id, role: "given" | "payback", other, can_cancel } | null` and `swap_request_id`.
+Schedule slots have `swapped_with`.
+
 ## Expenses
 
 | Method | Path                               | Description                         |

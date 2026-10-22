@@ -6,6 +6,7 @@ final class MyDayViewModel {
     var tasks: [ChoreTask] = []
     var overdue: [ChoreTask] = []
     var open: [OpenChore] = []
+    var swaps: [Swap] = []  // open swap requests in my households
     var households: [Household] = []
     var membersByHousehold: [UUID: [MemberBrief]] = [:]
     var isLoading = false
@@ -26,10 +27,12 @@ final class MyDayViewModel {
         do {
             async let mine = client.myTasksToday()
             async let houses = client.households()
-            let (m, h) = try await (mine, houses)
+            async let openSwaps = client.mySwaps()
+            let (m, h, s) = try await (mine, houses, openSwaps)
             tasks = m.tasks
             overdue = m.overdue
             open = m.open
+            swaps = s
             households = h
             error = nil
             // Members power the "someone else did it" menu.
@@ -39,6 +42,13 @@ final class MyDayViewModel {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Reloads after any answer: a 409 means our list was stale.
+    func acceptSwap(_ swap: Swap) async -> SwapOutcome {
+        let outcome = await SwapOutcome.accept(swap)
+        await load()
+        return outcome
     }
 
     func perform(_ change: @escaping () async throws -> Void) async {
@@ -77,6 +87,9 @@ struct MyDayView: View {
                         description: Text("Create one or join with an invite code in the Households tab.")
                     )
                 } else {
+                    SwapRequestsSection(swaps: model.swaps, showHousehold: multiHouse) { swap in
+                        await model.acceptSwap(swap)
+                    }
                     Section("Your turns") {
                         if model.tasks.isEmpty && model.hasLoaded {
                             Text("Enjoy your day off 🎉").foregroundStyle(.secondary)
@@ -122,7 +135,15 @@ struct MyDayView: View {
             showHousehold: multiHouse,
             overdue: overdue,
             onDone: { who in Task { await model.perform { _ = try await APIClient.shared.completeTask(task.id, completedBy: who) } } },
-            onUndo: { Task { await model.perform { _ = try await APIClient.shared.reopenTask(task.id) } } }
+            onUndo: { Task { await model.perform { _ = try await APIClient.shared.reopenTask(task.id) } } },
+            onAskSwap: { note in
+                Task {
+                    await model.perform {
+                        _ = try await APIClient.shared.askForSwap(choreId: task.chore.id, dueDate: task.dueDate, note: note)
+                    }
+                }
+            },
+            onCancelSwap: { id in Task { await model.perform { _ = try await APIClient.shared.cancelSwap(id) } } }
         )
     }
 

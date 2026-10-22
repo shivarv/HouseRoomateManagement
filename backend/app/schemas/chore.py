@@ -50,6 +50,15 @@ class ChoreBrief(BaseModel):
     assignment_mode: AssignmentMode = "rotation"
 
 
+class TaskSwap(BaseModel):
+    """This turn changed hands through a swap."""
+
+    id: uuid.UUID
+    role: Literal["given", "payback"]  # given: took it over from `other`; payback: paying them back
+    other: MemberBrief
+    can_cancel: bool = False  # I'm one of the two people in the swap
+
+
 class TaskOut(BaseModel):
     id: uuid.UUID
     household_id: uuid.UUID
@@ -63,6 +72,8 @@ class TaskOut(BaseModel):
     completed_by: MemberBrief | None
     next_assignee: MemberBrief | None
     is_mine: bool
+    swap: TaskSwap | None = None
+    swap_request_id: uuid.UUID | None = None  # an open "Ask for a swap" on this turn
 
 
 class CompleteTask(BaseModel):
@@ -129,6 +140,7 @@ class ScheduleSlot(BaseModel):
     chore: ChoreBrief
     member: MemberBrief
     status: TaskStatus | None  # None = not yet generated (future)
+    swapped_with: MemberBrief | None = None  # set when this turn changed hands through a swap
 
 
 class ScheduleDay(BaseModel):
@@ -138,6 +150,32 @@ class ScheduleDay(BaseModel):
 
 class ScheduleOut(BaseModel):
     days: list[ScheduleDay]
+
+
+SwapStatus = Literal["open", "accepted", "cancelled", "expired"]
+
+
+class SwapCreate(BaseModel):
+    due_date: date  # period start of my turn
+    note: str | None = Field(default=None, max_length=200)
+
+
+class SwapOut(BaseModel):
+    id: uuid.UUID
+    household_id: uuid.UUID
+    household_name: str
+    chore: ChoreBrief
+    given_date: date  # the turn being given away (period start)
+    period_end: date
+    requester: MemberBrief
+    acceptor: MemberBrief | None
+    payback_date: date | None  # set once accepted: the acceptor's turn the requester now does
+    status: SwapStatus
+    note: str | None
+    created_at: datetime
+    is_mine: bool  # I asked
+    can_accept: bool  # I can take it
+    payback_preview: date | None  # the turn I'd give back if I took it
 
 
 class ActivityOut(BaseModel):

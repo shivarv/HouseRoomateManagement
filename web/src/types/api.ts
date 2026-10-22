@@ -79,6 +79,35 @@ export interface Task {
   completed_by: MemberBrief | null;
   next_assignee: MemberBrief | null;
   is_mine: boolean;
+  swap: TaskSwap | null; // this turn changed hands through a swap
+  swap_request_id: string | null; // an open "Ask for a swap" on this turn
+}
+
+export interface TaskSwap {
+  id: string;
+  role: "given" | "payback"; // given: took it over from `other`; payback: paying `other` back
+  other: MemberBrief;
+  can_cancel: boolean;
+}
+
+export type SwapStatus = "open" | "accepted" | "cancelled" | "expired";
+
+export interface Swap {
+  id: string;
+  household_id: string;
+  household_name: string;
+  chore: ChoreBrief;
+  given_date: string; // the turn being given away (period start)
+  period_end: string;
+  requester: MemberBrief;
+  acceptor: MemberBrief | null;
+  payback_date: string | null; // once accepted: the acceptor's turn the requester now does
+  status: SwapStatus;
+  note: string | null;
+  created_at: string;
+  is_mine: boolean; // I asked
+  can_accept: boolean;
+  payback_preview: string | null; // the turn I'd give back if I took it
 }
 
 export interface ChoreLog {
@@ -132,7 +161,7 @@ export interface MyTasksToday {
 
 export interface ScheduleDay {
   date: string;
-  slots: { chore: ChoreBrief; member: MemberBrief; status: TaskStatus | null }[];
+  slots: { chore: ChoreBrief; member: MemberBrief; status: TaskStatus | null; swapped_with: MemberBrief | null }[];
 }
 
 export interface ActivityEvent {

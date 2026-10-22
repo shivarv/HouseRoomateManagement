@@ -1,13 +1,15 @@
 import { Empty, ErrorText, Loading } from "../../components/ui";
 import { OpenChoreCard } from "../../features/chores/OpenChoreCard";
+import { SwapRequests } from "../../features/chores/SwapRequests";
 import { TaskCard } from "../../features/chores/TaskCard";
-import { useHouseholdToday } from "../../features/chores/hooks";
+import { useHouseholdSwaps, useHouseholdToday } from "../../features/chores/hooks";
 import { formatDay } from "../../lib/format";
 import { useCurrentHousehold } from "./HouseholdLayout";
 
 export function TodayTab() {
   const household = useCurrentHousehold();
   const today = useHouseholdToday(household.id);
+  const swaps = useHouseholdSwaps(household.id);
 
   if (today.isLoading) return <Loading />;
   const tasks = today.data?.tasks ?? [];
@@ -18,6 +20,7 @@ export function TodayTab() {
   return (
     <div className="space-y-8">
       <ErrorText error={today.error} />
+      <SwapRequests swaps={swaps.data ?? []} />
       {tasks.length === 0 && open.length === 0 && (
         <Empty>No chores yet. Add people and chores in the People and Chores tabs.</Empty>
       )}

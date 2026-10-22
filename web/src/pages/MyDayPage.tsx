@@ -2,8 +2,9 @@ import { Link } from "react-router";
 import { Card, Empty, ErrorText, Loading, PageTitle } from "../components/ui";
 import { useAuth } from "../features/auth/AuthContext";
 import { OpenChoreCard } from "../features/chores/OpenChoreCard";
+import { SwapRequests } from "../features/chores/SwapRequests";
 import { TaskCard } from "../features/chores/TaskCard";
-import { useMyTasksToday } from "../features/chores/hooks";
+import { useMySwaps, useMyTasksToday } from "../features/chores/hooks";
 import { useHouseholds } from "../features/households/hooks";
 import { formatDay, localIsoDate } from "../lib/format";
 
@@ -12,6 +13,7 @@ export function MyDayPage() {
   const { user } = useAuth();
   const households = useHouseholds();
   const mine = useMyTasksToday();
+  const swaps = useMySwaps();
 
   if (households.isLoading || mine.isLoading) return <Loading />;
   if (households.data?.length === 0) {
@@ -64,6 +66,7 @@ export function MyDayPage() {
         </div>
       </div>
       <ErrorText error={mine.error} />
+      <SwapRequests swaps={swaps.data ?? []} showHousehold={(households.data?.length ?? 0) > 1} />
 
       <section className="space-y-3">
         <h2 className="section-title">Your turns</h2>

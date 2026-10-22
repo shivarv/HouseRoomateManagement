@@ -6,6 +6,8 @@ export const householdsApi = {
   get: (id: string) => api<HouseholdDetail>(`/households/${id}`),
   create: (name: string, timezone: string) =>
     api<Household>("/households", { method: "POST", body: { name, timezone } }),
+  update: (id: string, changes: { name?: string; timezone?: string }) =>
+    api<Household>(`/households/${id}`, { method: "PATCH", body: changes }),
 
   addMember: (householdId: string, displayName: string) =>
     api<Member>(`/households/${householdId}/members`, {

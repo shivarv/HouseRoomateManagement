@@ -5,7 +5,7 @@ from sqlalchemy import delete, exists, func, select
 from sqlalchemy.orm import Session
 
 from app.models import Chore, ChoreRotationMember, ChoreTask, Household, HouseholdMember
-from app.services import rotation
+from app.services import rotation, swaps
 from app.services.errors import BadRequest, NotFound
 
 # (name, assignment mode). Garbage isn't turn-based: whoever does it logs it.
@@ -82,6 +82,7 @@ def active_members(db: Session, household_id: uuid.UUID) -> list[HouseholdMember
 
 
 def _drop_pending_current(db: Session, chore: Chore, today: date) -> None:
+    swaps.cancel_for_chore(db, chore, today)  # pausing or reshaping a chore withdraws its swaps
     db.execute(
         delete(ChoreTask).where(
             ChoreTask.chore_id == chore.id,
@@ -152,6 +153,10 @@ def set_rotation(db: Session, chore: Chore, member_ids: list[uuid.UUID], today: 
     current = rotation.period_start(today, chore.frequency)
     # Record past turns with the old order before it changes.
     tasks.ensure_chore(db, chore, today, include_current=False)
+    # Swaps survive a reorder (their dates stay pinned), but not losing one of their people.
+    removed = set(old) - set(member_ids)
+    if removed:
+        swaps.cancel_for_chore(db, chore, today, member_ids=removed)
     has_history = db.scalar(
         select(exists().where(ChoreTask.chore_id == chore.id, ChoreTask.due_date < current))
     )

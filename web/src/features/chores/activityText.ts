@@ -3,7 +3,7 @@ import type { ActivityEvent, MemberBrief } from "../../types/api";
 
 /** A sentence as segments, so names and chores can be highlighted. Mirrored in iOS (ActivityText.swift). */
 export type Segment = string | { person: MemberBrief } | { chore: string };
-export type ActivityKind = "done" | "undo" | "settings" | "people";
+export type ActivityKind = "done" | "undo" | "swap" | "settings" | "people";
 
 export interface ActivityLine {
   icon: string;
@@ -19,6 +19,8 @@ export function activityText(e: ActivityEvent): ActivityLine {
   // Only mention the day when the chore was for a different day than when it was marked.
   const sameDay = e.due_date && e.due_date === localIsoDate(new Date(e.created_at));
   const forDay: Segment[] = e.due_date && !sameDay ? [` for ${formatDay(e.due_date)}`] : [];
+  // Swaps are asked ahead of time, so always name the turn's day.
+  const turnDay: Segment[] = e.due_date ? [` (${formatDay(e.due_date)})`] : [];
   const turn: Segment[] =
     e.assignee && e.subject && e.assignee.id !== e.subject.id ? [" · ", { person: e.assignee }, "'s turn"] : [];
 
@@ -50,6 +52,38 @@ export function activityText(e: ActivityEvent): ActivityLine {
         kind: "undo",
         parts: [who(e.actor), " removed the entry “", who(e.subject), " did ", chore, "”", ...forDay],
       };
+    case "swap_requested":
+      return {
+        icon: "🔁",
+        kind: "swap",
+        parts: [who(e.actor), " asked for someone to take ", chore, ...turnDay, e.detail ? ` — “${e.detail}”` : ""],
+      };
+    case "swap_accepted":
+      return {
+        icon: "🤝",
+        kind: "swap",
+        parts: [
+          who(e.actor),
+          " took ",
+          who(e.subject),
+          "'s ",
+          chore,
+          ...turnDay,
+          ...(e.detail ? [". ", who(e.subject), ` does ${formatDay(e.detail)} in return`] : []),
+        ],
+      };
+    case "swap_cancelled":
+      return {
+        icon: "↩️",
+        kind: "swap",
+        parts: !e.actor
+          ? [who(e.assignee), "'s swap for ", chore, ...turnDay, " was withdrawn"]
+          : e.subject
+            ? [who(e.actor), " cancelled the swap with ", who(e.subject), " for ", chore, ...turnDay]
+            : [who(e.actor), " cancelled their swap request for ", chore, ...turnDay],
+      };
+    case "swap_expired":
+      return { icon: "⌛", kind: "swap", parts: ["Nobody took ", who(e.subject), "'s ", chore, ...turnDay] };
     case "chore_created":
       return { icon: "➕", kind: "settings", parts: [who(e.actor), " added the chore ", chore, e.detail ? ` (${e.detail})` : ""] };
     case "chore_updated":

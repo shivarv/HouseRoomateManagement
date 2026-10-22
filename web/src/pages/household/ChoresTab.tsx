@@ -8,10 +8,11 @@ import { useCurrentHousehold } from "./HouseholdLayout";
 const selectClass =
   "rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm outline-none transition hover:border-indigo-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15";
 
-export function ChoresTab() {
+/** Every chore and its rotation. With `manage` (Household settings, admins only): add and edit. */
+export function ChoresTab({ manage = false }: { manage?: boolean }) {
   const household = useCurrentHousehold();
   const chores = useChores(household.id);
-  const isAdmin = household.my_role === "admin";
+  const isAdmin = manage && household.my_role === "admin";
 
   if (chores.isLoading) return <Loading />;
 
