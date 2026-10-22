@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import { Card, Empty, ErrorText, Loading, PageTitle } from "../components/ui";
 import { useAuth } from "../features/auth/AuthContext";
@@ -5,7 +6,8 @@ import { OpenChoreCard } from "../features/chores/OpenChoreCard";
 import { SwapRequests } from "../features/chores/SwapRequests";
 import { TaskCard } from "../features/chores/TaskCard";
 import { useMySwaps, useMyTasksToday } from "../features/chores/hooks";
-import { useHouseholds } from "../features/households/hooks";
+import { useDefaultHousehold, useHouseholds } from "../features/households/hooks";
+import { lastHousehold } from "../lib/lastHousehold";
 import { formatDay, localIsoDate } from "../lib/format";
 
 /** Landing page after login: the in-app reminder of what *I* need to do today / this week. */
@@ -58,10 +60,13 @@ export function MyDayPage() {
                 ? "All your turns are done. Nice!"
                 : `You have ${pending} chore${pending > 1 ? "s" : ""} to do.`}
           </p>
-          <div className="mt-5 grid grid-cols-3 gap-2 sm:max-w-md">
-            <Stat label="Your turns" value={pending} />
-            <Stat label="Everyone today" value={others.length + tasks.length} />
-            <Stat label="Anyone can do" value={open.length} />
+          <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
+            <div className="grid grid-cols-3 gap-2 sm:w-96">
+              <Stat label="Your turns" value={pending} />
+              <Stat label="Everyone today" value={others.length + tasks.length} />
+              <Stat label="Anyone can do" value={open.length} />
+            </div>
+            <HouseCard />
           </div>
         </div>
       </div>
@@ -126,20 +131,6 @@ export function MyDayPage() {
         </section>
       )}
 
-      <section className="mt-8">
-        <h2 className="mb-3 section-title">Households</h2>
-        <div className="flex flex-wrap gap-2">
-          {households.data?.map((h) => (
-            <Link
-              key={h.id}
-              to={`/households/${h.id}`}
-              className="card-hover rounded-xl border border-white/70 bg-white/90 px-4 py-2 text-sm font-semibold shadow-sm ring-1 ring-slate-900/5 hover:text-indigo-700"
-            >
-              {h.name} →
-            </Link>
-          ))}
-        </div>
-      </section>
     </>
   );
 }
@@ -149,6 +140,50 @@ function dayWord(isoDate: string): string {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   return isoDate === localIsoDate(tomorrow) ? "tomorrow" : formatDay(isoDate);
+}
+
+/** The house the tabs act on: name, switcher (if I'm in several), invite code, add another. */
+function HouseCard() {
+  const { households, house } = useDefaultHousehold();
+  const [copied, setCopied] = useState(false);
+  if (!house) return null;
+  const list = households.data ?? [];
+
+  const copyCode = async () => {
+    await navigator.clipboard?.writeText(house.invite_code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25 backdrop-blur">
+      <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-widest text-white/70">
+        🏠 Household
+        <Link to="/households/new" className="rounded-md px-1.5 py-0.5 normal-case tracking-normal text-white/80 transition hover:bg-white/15 hover:text-white">
+          + New or join
+        </Link>
+      </div>
+      {list.length > 1 ? (
+        <select
+          aria-label="Switch household"
+          value={house.id}
+          onChange={(e) => lastHousehold.set(e.target.value)}
+          className="mt-0.5 cursor-pointer rounded-lg bg-white/10 py-0.5 pr-1 text-lg font-bold text-white outline-none ring-1 ring-white/30 transition hover:bg-white/20 [&>option]:text-slate-900"
+        >
+          {list.map((h) => (
+            <option key={h.id} value={h.id}>
+              {h.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <p className="text-lg font-bold">{house.name}</p>
+      )}
+      <button onClick={copyCode} title="Copy invite code" className="mt-0.5 text-xs text-white/80 transition hover:text-white">
+        {copied ? "Copied!" : <>Invite code <span className="font-mono font-semibold tracking-wider">{house.invite_code}</span></>}
+      </button>
+    </div>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: number }) {

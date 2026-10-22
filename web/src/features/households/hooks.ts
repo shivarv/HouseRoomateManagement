@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { householdsApi } from "../../api/households";
+import { useLastHousehold } from "../../lib/lastHousehold";
 
 export const householdKeys = {
   all: ["households"] as const,
@@ -66,4 +67,12 @@ export function useUpdateMember() {
       householdsApi.updateMember(id, { display_name, role }),
     onSuccess: invalidate,
   });
+}
+
+/** My default house (last picked or visited, else the first) and all my houses. */
+export function useDefaultHousehold() {
+  const households = useHouseholds();
+  const last = useLastHousehold();
+  const list = households.data ?? [];
+  return { households, house: list.find((h) => h.id === last) ?? list[0] };
 }

@@ -15,14 +15,27 @@ struct RootView: View {
 }
 
 struct MainTabView: View {
+    // Owned here so the tab badge stays current even when another tab is showing.
+    @State private var notifications = NotificationsViewModel()
+
     var body: some View {
         TabView {
             MyDayView()
                 .tabItem { Label("Today", systemImage: "checklist") }
             HouseholdsView()
                 .tabItem { Label("Households", systemImage: "house") }
+            NotificationsView(model: notifications)
+                .tabItem { Label("Notifications", systemImage: "bell") }
+                .badge(notifications.waitingCount)
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person.crop.circle") }
+        }
+        // New requests show up in the badge without visiting the tab.
+        .task {
+            while !Task.isCancelled {
+                await notifications.load()
+                try? await Task.sleep(for: .seconds(60))
+            }
         }
     }
 }

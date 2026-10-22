@@ -1,25 +1,25 @@
-import { useState } from "react";
-import { NavLink, Outlet, useOutletContext, useParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, Outlet, useNavigate, useOutletContext, useParams } from "react-router";
 import { ErrorText, Loading } from "../../components/ui";
-import { useHousehold } from "../../features/households/hooks";
+import { useHousehold, useHouseholds } from "../../features/households/hooks";
+import { lastHousehold } from "../../lib/lastHousehold";
 import type { HouseholdDetail } from "../../types/api";
-
-const tab = ({ isActive }: { isActive: boolean }) =>
-  `whitespace-nowrap rounded-xl px-3.5 py-1.5 text-sm font-medium transition-all duration-200 ${
-    isActive
-      ? "bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-100"
-      : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
-  }`;
 
 export function HouseholdLayout() {
   const { householdId = "" } = useParams();
   const household = useHousehold(householdId);
+  const households = useHouseholds();
+  const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
+
+  // Remember this house so the Households tab opens it next time.
+  useEffect(() => {
+    if (household.data) lastHousehold.set(household.data.id);
+  }, [household.data]);
 
   if (household.isLoading) return <Loading />;
   if (!household.data) return <ErrorText error={household.error ?? "Household not found"} />;
   const h = household.data;
-  const isAdmin = h.my_role === "admin";
 
   const copyCode = async () => {
     await navigator.clipboard?.writeText(h.invite_code);
@@ -34,7 +34,27 @@ export function HouseholdLayout() {
         <div className="pointer-events-none absolute -bottom-20 left-1/3 h-40 w-40 rounded-full bg-fuchsia-300/30 blur-2xl" />
         <div className="relative flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/70">Household</p>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-widest text-white/70">
+              {(households.data?.length ?? 0) > 1 ? (
+                <select
+                  aria-label="Switch household"
+                  value={h.id}
+                  onChange={(e) => navigate(`/households/${e.target.value}`)}
+                  className="cursor-pointer rounded-lg bg-white/15 px-2 py-1 font-semibold uppercase tracking-widest text-white outline-none ring-1 ring-white/30 transition hover:bg-white/25 [&>option]:text-slate-900"
+                >
+                  {households.data!.map((other) => (
+                    <option key={other.id} value={other.id}>
+                      {other.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span>Household</span>
+              )}
+              <Link to="/households/new" className="rounded-lg px-2 py-1 normal-case tracking-normal text-white/80 transition hover:bg-white/15 hover:text-white">
+                + New or join
+              </Link>
+            </div>
             <h1 className="mt-1 text-3xl font-extrabold tracking-tight">{h.name}</h1>
             <div className="mt-3 flex -space-x-2">
               {h.members.slice(0, 8).map((m) => (
@@ -63,20 +83,6 @@ export function HouseholdLayout() {
           </button>
         </div>
       </div>
-      <nav className="mb-6 flex gap-1 overflow-x-auto rounded-2xl bg-white/60 p-1 ring-1 ring-slate-900/5 backdrop-blur">
-        <NavLink to="" end className={tab}>Today</NavLink>
-        <NavLink to="activity" className={tab}>Activity</NavLink>
-        <NavLink to="report" className={tab}>Report</NavLink>
-        <NavLink to="schedule" className={tab}>Schedule</NavLink>
-        <NavLink to="people" className={tab}>People</NavLink>
-        <NavLink to="chores" className={tab}>Chores</NavLink>
-        {/* Admin-only configuration lives in its own tab, at the end. */}
-        {isAdmin && (
-          <NavLink to="settings" className={(state) => `ml-auto ${tab(state)}`}>
-            ⚙ Settings
-          </NavLink>
-        )}
-      </nav>
       <Outlet context={h} />
     </>
   );

@@ -147,6 +147,28 @@ class ChoreSwap(UUIDPrimaryKey, Base):
     )
 
 
+class HelpRequest(UUIDPrimaryKey, Timestamps, Base):
+    """Someone asks the house for a hand. Anyone in the house can mark it done."""
+
+    __tablename__ = "help_requests"
+    __table_args__ = (Index("ix_help_requests_household_status", "household_id", "status"),)
+
+    household_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"))
+    requester_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("household_members.id", ondelete="CASCADE")
+    )
+    title: Mapped[str] = mapped_column(String(120))  # a preset ("Buy groceries") or custom text
+    details: Mapped[str | None] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(16), default="open")  # open | done
+    done_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("household_members.id", ondelete="SET NULL")
+    )
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    requester: Mapped[HouseholdMember] = relationship(foreign_keys=[requester_id], lazy="joined")
+    done_by: Mapped[HouseholdMember | None] = relationship(foreign_keys=[done_by_id], lazy="joined")
+
+
 class ActivityEvent(UUIDPrimaryKey, Base):
     """Append-only record of every change in a household, shown in the activity feed."""
 

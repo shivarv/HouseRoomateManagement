@@ -5,6 +5,7 @@ from app.models.chore import (
     ChoreRotationMember,
     ChoreSwap,
     ChoreTask,
+    HelpRequest,
 )
 from app.models.household import Household, HouseholdMember
 from app.models.user import User
@@ -16,6 +17,7 @@ __all__ = [
     "ChoreRotationMember",
     "ChoreSwap",
     "ChoreTask",
+    "HelpRequest",
     "Household",
     "HouseholdMember",
     "User",

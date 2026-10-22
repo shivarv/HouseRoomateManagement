@@ -6,12 +6,13 @@ import { formatMonth, formatTime, localIsoDate } from "../../lib/format";
 import type { ActivityEvent } from "../../types/api";
 import { useCurrentHousehold } from "./HouseholdLayout";
 
-type KindFilter = "all" | "done" | "swaps" | "changes";
+type KindFilter = "all" | "done" | "swaps" | "help" | "changes";
 
 const kindStyle: Record<ActivityKind, string> = {
   done: "from-emerald-300 to-teal-500 shadow-teal-500/30",
   undo: "from-amber-300 to-orange-500 shadow-orange-500/30",
   swap: "from-fuchsia-300 to-pink-500 shadow-pink-500/30",
+  help: "from-amber-200 to-orange-400 shadow-orange-500/30",
   settings: "from-indigo-300 to-violet-500 shadow-violet-500/30",
   people: "from-sky-300 to-blue-500 shadow-blue-500/30",
 };
@@ -39,13 +40,15 @@ export function ActivityTab() {
   const visible = lines.filter(({ event, line }) => {
     if (kind === "done" && line.kind !== "done" && line.kind !== "undo") return false;
     if (kind === "swaps" && line.kind !== "swap") return false;
-    if (kind === "changes" && (line.kind === "done" || line.kind === "undo" || line.kind === "swap")) return false;
+    if (kind === "help" && line.kind !== "help") return false;
+    if (kind === "changes" && ["done", "undo", "swap", "help"].includes(line.kind)) return false;
     if (person !== "all" && ![event.actor, event.subject, event.assignee].some((m) => m?.id === person)) return false;
     return true;
   });
   const choreCount = lines.filter((l) => l.line.kind === "done" || l.line.kind === "undo").length;
   const swapCount = lines.filter((l) => l.line.kind === "swap").length;
-  const changeCount = lines.length - choreCount - swapCount;
+  const helpCount = lines.filter((l) => l.line.kind === "help").length;
+  const changeCount = lines.length - choreCount - swapCount - helpCount;
 
   const groups = new Map<string, { event: ActivityEvent; line: ActivityLine }[]>();
   for (const item of visible) {
@@ -81,6 +84,7 @@ export function ActivityTab() {
               ["all", `All · ${lines.length}`],
               ["done", `Chores · ${choreCount}`],
               ["swaps", `Swaps · ${swapCount}`],
+              ["help", `Help · ${helpCount}`],
               ["changes", `Changes · ${changeCount}`],
             ] as const
           ).map(([value, label]) => (

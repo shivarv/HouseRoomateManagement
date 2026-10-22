@@ -35,6 +35,16 @@ enum ActivityText {
                 : "\(actor) cancelled their swap request for \(chore)\(forDay)")
         case "swap_expired":
             return ("⌛", "Nobody took \(subject)'s \(chore)\(forDay)")
+        case "help_requested":
+            return ("🙋", "\(actor) asked for help: “\(e.detail ?? "something")”")
+        case "help_updated":
+            return ("✏️", "\(actor) edited their help request: “\(e.detail ?? "")”")
+        case "help_done":
+            return ("💪", "\(actor) helped \(subject): “\(e.detail ?? "a request")” is done")
+        case "help_reopened":
+            return ("↩️", "\(actor) reopened the help request “\(e.detail ?? "")”")
+        case "help_withdrawn":
+            return ("🗑", "\(actor) withdrew their help request “\(e.detail ?? "")”")
         case "chore_created":
             return ("➕", "\(actor) added the chore \(chore)" + (e.detail.map { " (\($0))" } ?? ""))
         case "chore_updated":

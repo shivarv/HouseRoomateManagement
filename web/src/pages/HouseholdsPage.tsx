@@ -1,35 +1,31 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Navigate, useNavigate } from "react-router";
 import { householdsApi } from "../api/households";
-import { Badge, Button, Card, Empty, ErrorText, Input, Loading, PageTitle } from "../components/ui";
+import { Button, Card, ErrorText, Input, Loading, PageTitle } from "../components/ui";
 import { useAcceptInvite, useCreateHousehold, useHouseholds } from "../features/households/hooks";
 import { browserTimezone } from "../lib/format";
+import { lastHousehold } from "../lib/lastHousehold";
 
+/** /households: with a house, My day is home; with none, set one up. */
 export function HouseholdsPage() {
   const households = useHouseholds();
+  if (households.isLoading) return <Loading />;
+  if ((households.data?.length ?? 0) > 0) return <Navigate to="/" replace />;
+  return <AddHouseholdPage />;
+}
+
+/** Create a new house or join one with an invite code (/households/new, or when I have none). */
+export function AddHouseholdPage() {
+  const households = useHouseholds();
+  const hasHouses = (households.data?.length ?? 0) > 0;
   return (
     <>
-      <PageTitle title="Households" subtitle="The houses you share. Create one, or join with an invite code." />
-      {households.isLoading ? (
-        <Loading />
-      ) : households.data?.length ? (
-        <div className="mb-8 grid gap-3 sm:grid-cols-2">
-          {households.data.map((h) => (
-            <Link key={h.id} to={`/households/${h.id}`} className="card-hover rounded-2xl border border-white/70 bg-white/90 p-5 shadow-sm ring-1 ring-slate-900/5 hover:ring-indigo-200">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{h.name}</span>
-                {h.my_role === "admin" && <Badge tone="indigo">Admin</Badge>}
-              </div>
-              <p className="mt-1 text-xs text-slate-500">{h.timezone}</p>
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <div className="mb-8">
-          <Empty>No households yet.</Empty>
-        </div>
-      )}
+      <PageTitle
+        title={hasHouses ? "Add a household" : "Households"}
+        subtitle={hasHouses ? "Start another house, or join one with an invite code." : "You're not in a household yet. Create one, or join with an invite code."}
+      />
+      <ErrorText error={households.error} />
       <div className="grid gap-4 sm:grid-cols-2">
         <CreateHousehold />
         <JoinHousehold />
@@ -46,7 +42,7 @@ function CreateHousehold() {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    create.mutate({ name, timezone }, { onSuccess: (h) => navigate(`/households/${h.id}/settings/people`) });
+    create.mutate({ name, timezone }, { onSuccess: (h) => (lastHousehold.set(h.id), navigate("/")) });
   };
 
   return (
@@ -70,7 +66,7 @@ function JoinHousehold() {
   const accept = useAcceptInvite();
 
   const join = (memberId: string | null) =>
-    accept.mutate({ code: code.trim(), memberId }, { onSuccess: (h) => navigate(`/households/${h.id}`) });
+    accept.mutate({ code: code.trim(), memberId }, { onSuccess: (h) => (lastHousehold.set(h.id), navigate("/")) });
 
   return (
     <Card>
