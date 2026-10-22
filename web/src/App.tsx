@@ -9,6 +9,7 @@ import { HouseholdLayout } from "./pages/household/HouseholdLayout";
 import { PeopleTab } from "./pages/household/PeopleTab";
 import { HistoryTab, ReportTab } from "./pages/household/ReportTab";
 import { ScheduleTab } from "./pages/household/ScheduleTab";
+import { HouseDetailsSettings, SettingsLayout } from "./pages/household/SettingsPages";
 import { TodayTab } from "./pages/household/TodayTab";
 import { RequireAuth } from "./routes/RequireAuth";
 
@@ -30,10 +31,17 @@ export default function App() {
           <Route index element={<TodayTab />} />
           <Route path="activity" element={<ActivityTab />} />
           <Route path="report" element={<ReportTab />} />
-          <Route path="history" element={<HistoryTab />} />
           <Route path="schedule" element={<ScheduleTab />} />
           <Route path="people" element={<PeopleTab />} />
           <Route path="chores" element={<ChoresTab />} />
+          {/* Admin-only configuration, kept apart from the everyday tabs. */}
+          <Route path="settings" element={<SettingsLayout />}>
+            <Route index element={<HouseDetailsSettings />} />
+            <Route path="people" element={<PeopleTab manage />} />
+            <Route path="chores" element={<ChoresTab manage />} />
+            <Route path="history" element={<HistoryTab />} />
+          </Route>
+          <Route path="history" element={<Navigate to="../settings/history" replace />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

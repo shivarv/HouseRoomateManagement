@@ -46,7 +46,7 @@ function CreateHousehold() {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    create.mutate({ name, timezone }, { onSuccess: (h) => navigate(`/households/${h.id}/people`) });
+    create.mutate({ name, timezone }, { onSuccess: (h) => navigate(`/households/${h.id}/settings/people`) });
   };
 
   return (

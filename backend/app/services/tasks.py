@@ -6,7 +6,7 @@ from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.models import Chore, ChoreLog, ChoreTask, Household, HouseholdMember
+from app.models import Chore, ChoreLog, ChoreSwap, ChoreTask, Household, HouseholdMember
 from app.schemas.chore import (
     ChoreBrief,
     LogOut,
@@ -15,10 +15,11 @@ from app.schemas.chore import (
     ScheduleDay,
     ScheduleSlot,
     TaskOut,
+    TaskSwap,
     UpcomingTurn,
 )
 from app.schemas.household import MemberBrief
-from app.services import activity, chores, rotation, suggest
+from app.services import activity, chores, rotation, suggest, swaps
 from app.services.errors import BadRequest, NotFound
 
 OVERDUE_LOOKBACK_DAYS = 7
@@ -44,7 +45,8 @@ def ensure_chore(db: Session, chore: Chore, today: date, include_current: bool =
 
     Past periods nobody opened the app for are filled in (so they show up as missed), but never
     before `tracked_from` or more than a month back. The current period's pending turn follows
-    the current rotation; completed turns are never changed. Idempotent and concurrency-safe.
+    the current rotation and any accepted swap; completed turns are never changed. Idempotent
+    and concurrency-safe.
     """
     current = rotation.period_start(today, chore.frequency)
     order = [r.member_id for r in chore.rotation]
@@ -73,12 +75,13 @@ def ensure_chore(db: Session, chore: Chore, today: date, include_current: bool =
         if last
         else floor
     )
+    duty = swaps.load_duty(db, chore, since=min(day, current))
     while day < current:
-        _upsert_turn(db, chore, rotation.assignee(order, chore.rotation_start_date, day, step), day)
+        _upsert_turn(db, chore, duty.on_duty(day), day)
         day += timedelta(days=step)
 
     if include_current:
-        member_id = rotation.assignee(order, chore.rotation_start_date, current, step)
+        member_id = duty.on_duty(current)
         _upsert_turn(db, chore, member_id, current)
         db.execute(
             update(ChoreTask)
@@ -93,8 +96,9 @@ def ensure_chore(db: Session, chore: Chore, today: date, include_current: bool =
 
 
 def sync(db: Session, household: Household, today: date) -> None:
-    """Bring every chore's turns up to date, then commit."""
+    """Bring every chore's turns up to date (closing stale swap requests first), then commit."""
     for chore in chores.list_chores(db, household.id, include_inactive=False):
+        swaps.expire_stale(db, chore, today)
         ensure_chore(db, chore, today)
     db.commit()
 
@@ -342,13 +346,8 @@ def upcoming_for(db: Session, me: HouseholdMember, today: date) -> list[Upcoming
     for chore in chores.list_chores(db, household.id, include_inactive=False):
         if chore.is_open:
             continue
-        when = rotation.next_turn(
-            [r.member_id for r in chore.rotation],
-            chore.rotation_start_date,
-            rotation.period_start(today, chore.frequency),
-            me.id,
-            rotation.step_days(chore.frequency),
-        )
+        current = rotation.period_start(today, chore.frequency)
+        when = swaps.load_duty(db, chore, since=current).next_turn(me.id, current)
         if when is not None:
             result.append(
                 UpcomingTurn(
@@ -377,12 +376,32 @@ def _chore_brief(chore: Chore) -> ChoreBrief:
     )
 
 
+def _task_swap(
+    swap: ChoreSwap | None, day: date, me: HouseholdMember | None = None
+) -> TaskSwap | None:
+    if swap is None or swap.acceptor is None:
+        return None
+    given = swap.given_date == day
+    return TaskSwap(
+        id=swap.id,
+        role="given" if given else "payback",
+        other=_brief(swap.requester if given else swap.acceptor),
+        can_cancel=me is not None and me.id in (swap.requester_id, swap.acceptor_id),
+    )
+
+
 def task_out(task: ChoreTask, household: Household, me: HouseholdMember | None) -> TaskOut:
     chore = task.chore
-    step = rotation.step_days(chore.frequency)
-    order = [r.member for r in chore.rotation]
-    nxt = rotation.assignee(
-        order, chore.rotation_start_date, task.due_date + timedelta(days=step), step
+    db = Session.object_session(task)
+    duty = swaps.load_duty(db, chore, since=task.due_date)
+    nxt_id = duty.on_duty(task.due_date + timedelta(days=duty.step))
+    nxt = db.get(HouseholdMember, nxt_id) if nxt_id else None
+    swap_request_id = db.scalar(
+        select(ChoreSwap.id).where(
+            ChoreSwap.chore_id == chore.id,
+            ChoreSwap.given_date == task.due_date,
+            ChoreSwap.status == "open",
+        )
     )
     return TaskOut(
         id=task.id,
@@ -397,6 +416,8 @@ def task_out(task: ChoreTask, household: Household, me: HouseholdMember | None) 
         completed_by=_brief(task.completed_by) if task.completed_by else None,
         next_assignee=_brief(nxt) if nxt else None,
         is_mine=me is not None and task.member_id == me.id,
+        swap=_task_swap(duty.swap_on(task.due_date), task.due_date, me),
+        swap_request_id=swap_request_id,
     )
 
 
@@ -421,29 +442,43 @@ def schedule(
         ).unique()
     }
 
+    duties = {
+        c.id: swaps.load_duty(db, c, since=rotation.period_start(start, c.frequency))
+        for c in active
+    }
+    members = {m.id: m for m in chores.active_members(db, household.id)}
+
     result = []
     for offset in range(days):
         day = start + timedelta(days=offset)
         slots = []
         for chore in active:
             period = rotation.period_start(day, chore.frequency)
+            swap = _task_swap(duties[chore.id].swap_on(period), period)
+            swapped_with = swap.other if swap else None
             task = stored.get((chore.id, period))
             if task is not None:
                 slots.append(
                     ScheduleSlot(
-                        chore=_chore_brief(chore), member=_brief(task.member), status=task.status
+                        chore=_chore_brief(chore),
+                        member=_brief(task.member),
+                        status=task.status,
+                        swapped_with=swapped_with,
                     )
                 )
             elif period >= rotation.period_start(today, chore.frequency):
-                member = rotation.assignee(
-                    [r.member for r in chore.rotation],
-                    chore.rotation_start_date,
-                    period,
-                    rotation.step_days(chore.frequency),
+                member_id = duties[chore.id].on_duty(period)
+                member = members.get(member_id) or (
+                    db.get(HouseholdMember, member_id) if member_id else None
                 )
                 if member is not None:
                     slots.append(
-                        ScheduleSlot(chore=_chore_brief(chore), member=_brief(member), status=None)
+                        ScheduleSlot(
+                            chore=_chore_brief(chore),
+                            member=_brief(member),
+                            status=None,
+                            swapped_with=swapped_with,
+                        )
                     )
         result.append(ScheduleDay(date=day, slots=slots))
     return result

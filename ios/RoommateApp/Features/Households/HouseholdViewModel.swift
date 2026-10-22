@@ -10,6 +10,7 @@ final class HouseholdViewModel {
     var todayDate: String?
     var today: [ChoreTask] = []
     var open: [OpenChore] = []
+    var swaps: [Swap] = []  // open swap requests
     var chores: [Chore] = []
     var schedule: [ScheduleDay] = []
     var activity: [ActivityEvent] = []
@@ -41,7 +42,9 @@ final class HouseholdViewModel {
             async let s = client.schedule(householdId: householdId, days: 14)
             async let a = client.activity(householdId: householdId)
             async let r = client.report(householdId: householdId)
+            async let w = client.householdSwaps(householdId: householdId)
             let (detail, today, chores, schedule, activity, report) = try await (d, t, c, s, a, r)
+            self.swaps = try await w
             self.detail = detail
             self.todayDate = today.date
             self.today = today.tasks
@@ -85,6 +88,23 @@ final class HouseholdViewModel {
 
     func reopen(_ task: ChoreTask) async {
         await perform { _ = try await self.client.reopenTask(task.id) }
+    }
+
+    func askForSwap(_ task: ChoreTask, note: String?) async {
+        await perform {
+            _ = try await self.client.askForSwap(choreId: task.chore.id, dueDate: task.dueDate, note: note)
+        }
+    }
+
+    func cancelSwap(_ id: UUID) async {
+        await perform { _ = try await self.client.cancelSwap(id) }
+    }
+
+    /// Reloads after any answer: a 409 means our list was stale.
+    func acceptSwap(_ swap: Swap) async -> SwapOutcome {
+        let outcome = await SwapOutcome.accept(swap)
+        await load()
+        return outcome
     }
 
     func log(_ item: OpenChore, by member: UUID?) async {

@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { choresApi, reportsApi, tasksApi, type ChoreSettings } from "../../api/chores";
+import { choresApi, reportsApi, swapsApi, tasksApi, type ChoreSettings } from "../../api/chores";
 
 export const choreKeys = {
   list: (householdId: string) => ["chores", householdId] as const,
   schedule: (householdId: string, days: number) => ["schedule", householdId, days] as const,
   householdToday: (householdId: string) => ["tasks", "household", householdId] as const,
   mine: ["tasks", "mine"] as const,
+  householdSwaps: (householdId: string) => ["swaps", householdId] as const,
+  mySwaps: ["swaps", "mine"] as const,
   activityMonth: (householdId: string, month: string) => ["activity", householdId, month] as const,
   report: (householdId: string, month?: string) => ["report", householdId, month ?? "current"] as const,
   months: (householdId: string) => ["report", householdId, "months"] as const,
@@ -38,6 +40,18 @@ export function useMyTasksToday() {
   return useQuery({ queryKey: choreKeys.mine, queryFn: tasksApi.mine, ...live });
 }
 
+export function useHouseholdSwaps(householdId: string) {
+  return useQuery({
+    queryKey: choreKeys.householdSwaps(householdId),
+    queryFn: () => swapsApi.householdOpen(householdId),
+    ...live,
+  });
+}
+
+export function useMySwaps() {
+  return useQuery({ queryKey: choreKeys.mySwaps, queryFn: swapsApi.mine, ...live });
+}
+
 export function useActivityMonth(householdId: string, month: string) {
   return useQuery({
     queryKey: choreKeys.activityMonth(householdId, month),
@@ -59,7 +73,7 @@ function useInvalidateChoreData() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all(
-      ["chores", "schedule", "tasks", "activity", "report"].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+      ["chores", "schedule", "tasks", "swaps", "activity", "report"].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
     );
 }
 
@@ -74,6 +88,26 @@ export function useCompleteTask() {
 export function useReopenTask() {
   const invalidate = useInvalidateChoreData();
   return useMutation({ mutationFn: (id: string) => tasksApi.reopen(id), onSuccess: invalidate });
+}
+
+export function useAskSwap() {
+  const invalidate = useInvalidateChoreData();
+  return useMutation({
+    mutationFn: ({ choreId, dueDate, note }: { choreId: string; dueDate: string; note?: string }) =>
+      swapsApi.ask(choreId, dueDate, note),
+    onSuccess: invalidate,
+  });
+}
+
+/** Accepting refreshes everything on success *and* on failure: a 409 means the list is stale. */
+export function useAcceptSwap() {
+  const invalidate = useInvalidateChoreData();
+  return useMutation({ mutationFn: swapsApi.accept, onSettled: invalidate });
+}
+
+export function useCancelSwap() {
+  const invalidate = useInvalidateChoreData();
+  return useMutation({ mutationFn: swapsApi.cancel, onSettled: invalidate });
 }
 
 export function useLogChore() {

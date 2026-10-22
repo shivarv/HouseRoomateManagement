@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// One rotation turn. Anyone can mark it done, for themselves or for someone else.
+/// On my own turn the menu also offers "Ask for a swap".
 struct TaskRow: View {
     let task: ChoreTask
     var members: [MemberBrief] = []  // for "someone else did it"
@@ -9,6 +10,11 @@ struct TaskRow: View {
     var overdue = false
     var onDone: (UUID?) -> Void = { _ in }
     var onUndo: () -> Void = {}
+    var onAskSwap: ((String?) -> Void)?  // note
+    var onCancelSwap: ((UUID) -> Void)?  // swap or request id
+
+    @State private var askingSwap = false
+    @State private var note = ""
 
     var body: some View {
         HStack(spacing: 12) {
@@ -28,6 +34,14 @@ struct TaskRow: View {
                     }
                     if task.wasCovered { Badge(text: "Covered", color: .green) }
                 }
+                if let swap = task.swap {
+                    Badge(text: swap.role == .given ? "⇄ from \(swap.other.displayName)"
+                                                     : "⇄ paying back \(swap.other.displayName)",
+                          color: .indigo)
+                }
+                if task.swapRequestId != nil && !task.isDone {
+                    Badge(text: "Swap requested · waiting", color: .orange)
+                }
                 Text(subtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -43,10 +57,48 @@ struct TaskRow: View {
             } else {
                 DoneButton(title: task.isMine ? "Done" : "I did it",
                            others: members.filter { $0.id != myMemberId },
+                           actions: menuActions,
                            onDone: onDone)
             }
         }
         .padding(.vertical, 4)
+        .alert("Swap \(task.chore.name) · \(turnLabel)?", isPresented: $askingSwap) {
+            TextField("Optional note, e.g. travelling", text: $note)
+            Button("Send to the house") {
+                let trimmed = note.trimmingCharacters(in: .whitespaces)
+                onAskSwap?(trimmed.isEmpty ? nil : trimmed)
+                note = ""
+            }
+            Button("Never mind", role: .cancel) { note = "" }
+        } message: {
+            Text("Everyone in the house sees this. Whoever accepts first takes this turn, and you'll do their next \(task.chore.name) turn in return.")
+        }
+    }
+
+    private var turnLabel: String {
+        task.isWeekly ? "week of \(DayFormat.short(task.dueDate))" : DayFormat.short(task.dueDate)
+    }
+
+    private var menuActions: [DoneButton.Action] {
+        var actions: [DoneButton.Action] = []
+        if !task.isMine {
+            // "It's done": the person whose turn it is did it.
+            actions.append(.init(title: "It's done (\(task.member.displayName) did it)", systemImage: "checkmark.circle") {
+                onDone(task.member.id)
+            })
+        }
+        if task.isMine && !overdue && task.swapRequestId == nil, onAskSwap != nil {
+            actions.append(.init(title: "Ask for a swap", systemImage: "arrow.left.arrow.right") { askingSwap = true })
+        }
+        if task.isMine, let id = task.swapRequestId, let onCancelSwap {
+            actions.append(.init(title: "Cancel swap request", systemImage: "xmark", role: .destructive) { onCancelSwap(id) })
+        }
+        if let swap = task.swap, swap.canCancel, let onCancelSwap {
+            actions.append(.init(title: "Cancel swap", systemImage: "arrow.uturn.backward", role: .destructive) {
+                onCancelSwap(swap.id)
+            })
+        }
+        return actions
     }
 
     private var subtitle: String {
@@ -66,22 +118,48 @@ struct TaskRow: View {
     }
 }
 
-/// Tap: done by me. Long-press (or the menu): pick who actually did it.
+/// Tap: done by me. Long-press (or the menu): pick who actually did it, or another action.
 struct DoneButton: View {
+    struct Action: Identifiable {
+        let title: String
+        let systemImage: String
+        var role: ButtonRole?
+        let run: () -> Void
+
+        var id: String { title }
+
+        init(title: String, systemImage: String, role: ButtonRole? = nil, run: @escaping () -> Void) {
+            self.title = title
+            self.systemImage = systemImage
+            self.role = role
+            self.run = run
+        }
+    }
+
     let title: String
     let others: [MemberBrief]
+    var actions: [Action] = []
     let onDone: (UUID?) -> Void
 
     var body: some View {
-        if others.isEmpty {
+        if others.isEmpty && actions.isEmpty {
             Button(title) { onDone(nil) }
                 .buttonStyle(.borderedProminent)
         } else {
             Menu {
                 Button("I did it", systemImage: "checkmark") { onDone(nil) }
-                Section("Someone else did it") {
-                    ForEach(others) { m in
-                        Button(m.displayName) { onDone(m.id) }
+                if !others.isEmpty {
+                    Section("Someone else did it") {
+                        ForEach(others) { m in
+                            Button(m.displayName) { onDone(m.id) }
+                        }
+                    }
+                }
+                if !actions.isEmpty {
+                    Section {
+                        ForEach(actions) { a in
+                            Button(a.title, systemImage: a.systemImage, role: a.role, action: a.run)
+                        }
                     }
                 }
             } label: {

@@ -3,9 +3,10 @@ import { Badge, Button, Card, ErrorText, Input } from "../../components/ui";
 import { useAddMember, useRemoveMember, useUpdateMember } from "../../features/households/hooks";
 import { useCurrentHousehold } from "./HouseholdLayout";
 
-export function PeopleTab() {
+/** Everyone in the house. With `manage` (Household settings, admins only): add, promote, remove. */
+export function PeopleTab({ manage = false }: { manage?: boolean }) {
   const household = useCurrentHousehold();
-  const isAdmin = household.my_role === "admin";
+  const isAdmin = manage && household.my_role === "admin";
   const add = useAddMember(household.id);
   const remove = useRemoveMember();
   const update = useUpdateMember();

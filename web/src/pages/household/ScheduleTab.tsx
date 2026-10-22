@@ -44,6 +44,11 @@ export function ScheduleTab() {
                   return (
                     <td key={c.id} className={`whitespace-nowrap px-4 py-2.5 ${mine ? "font-semibold text-indigo-700" : ""}`}>
                       {slot ? slot.member.display_name : "—"} {slot?.status === "done" && "✓"}
+                      {slot?.swapped_with && (
+                        <span className="ml-1 cursor-help text-xs text-fuchsia-600" title={`Swapped with ${slot.swapped_with.display_name}`}>
+                          ⇄
+                        </span>
+                      )}
                     </td>
                   );
                 })}

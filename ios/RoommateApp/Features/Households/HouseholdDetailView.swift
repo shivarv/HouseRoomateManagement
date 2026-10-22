@@ -74,6 +74,7 @@ private struct TodaySection: View {
         if model.today.isEmpty && model.open.isEmpty {
             Text("No chores yet. Add people and chores first.").foregroundStyle(.secondary)
         }
+        SwapRequestsSection(swaps: model.swaps) { swap in await model.acceptSwap(swap) }
         if !daily.isEmpty {
             Section(model.todayDate.map(DayFormat.long) ?? "Today") {
                 ForEach(daily) { row($0) }
@@ -102,7 +103,9 @@ private struct TodaySection: View {
         TaskRow(
             task: task, members: model.members, myMemberId: model.detail?.myMemberId,
             onDone: { who in Task { await model.complete(task, by: who) } },
-            onUndo: { Task { await model.reopen(task) } }
+            onUndo: { Task { await model.reopen(task) } },
+            onAskSwap: { note in Task { await model.askForSwap(task, note: note) } },
+            onCancelSwap: { id in Task { await model.cancelSwap(id) } }
         )
     }
 }
@@ -197,6 +200,12 @@ private struct ScheduleSection: View {
                             .fontWeight(slot.member.id == model.detail?.myMemberId ? .bold : .regular)
                             .foregroundStyle(slot.member.id == model.detail?.myMemberId ? Color.accentColor : .secondary)
                         if slot.status == .done { Image(systemName: "checkmark").foregroundStyle(.green) }
+                        if let other = slot.swappedWith {
+                            Image(systemName: "arrow.left.arrow.right")
+                                .font(.caption)
+                                .foregroundStyle(.pink)
+                                .accessibilityLabel("Swapped with \(other.displayName)")
+                        }
                     }
                 }
             }

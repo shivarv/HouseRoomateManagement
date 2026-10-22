@@ -19,6 +19,7 @@ export function HouseholdLayout() {
   if (household.isLoading) return <Loading />;
   if (!household.data) return <ErrorText error={household.error ?? "Household not found"} />;
   const h = household.data;
+  const isAdmin = h.my_role === "admin";
 
   const copyCode = async () => {
     await navigator.clipboard?.writeText(h.invite_code);
@@ -69,7 +70,12 @@ export function HouseholdLayout() {
         <NavLink to="schedule" className={tab}>Schedule</NavLink>
         <NavLink to="people" className={tab}>People</NavLink>
         <NavLink to="chores" className={tab}>Chores</NavLink>
-        {h.my_role === "admin" && <NavLink to="history" className={tab}>History</NavLink>}
+        {/* Admin-only configuration lives in its own tab, at the end. */}
+        {isAdmin && (
+          <NavLink to="settings" className={(state) => `ml-auto ${tab(state)}`}>
+            ⚙ Settings
+          </NavLink>
+        )}
       </nav>
       <Outlet context={h} />
     </>

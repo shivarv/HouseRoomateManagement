@@ -25,7 +25,13 @@
       "Bash(./decode_check)",
       "Bash(xcrun simctl *)",
       "Bash(sips -Z 900 /private/tmp/claude-501/-Users-shiva-Desktop-git-hub-HouseRoomateManagement/7a3aa102-8579-4688-a5f0-44290d192511/scratchpad/ios-launch.png)",
-      "Bash(.venv/bin/python -c \"import app.main\")"
+      "Bash(.venv/bin/python -c \"import app.main\")",
+      "Bash(lsof -nP -iTCP:8001 -iTCP:5173 -iTCP:5174 -sTCP:LISTEN)",
+      "Bash(env -u DATABASE_URL -u DATABASE_URL_UNPOOLED TEST_DATABASE_URL=postgresql+psycopg://roommate:roommate@localhost:5434/roommate_test .venv/bin/pytest -q)",
+      "Bash(env -u DATABASE_URL -u DATABASE_URL_UNPOOLED TEST_DATABASE_URL=postgresql+psycopg://roommate:roommate@localhost:5434/roommate_test .venv/bin/pytest -q tests/test_swaps.py)",
+      "Bash(export TEST_DATABASE_URL=postgresql+psycopg://roommate:roommate@localhost:5434/roommate_test)",
+      "Bash(env -u DATABASE_URL -u DATABASE_URL_UNPOOLED .venv/bin/pytest -q -p no:warnings \"tests/test_swaps.py::test_many_people_accepting_at_once_only_the_first_wins\")",
+      "Bash(env -u DATABASE_URL -u DATABASE_URL_UNPOOLED .venv/bin/pytest -q -p no:warnings)"
     ]
   }
 }

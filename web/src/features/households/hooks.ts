@@ -29,6 +29,14 @@ export function useCreateHousehold() {
   });
 }
 
+export function useUpdateHousehold(id: string) {
+  const invalidate = useInvalidateEverything();
+  return useMutation({
+    mutationFn: (changes: { name?: string; timezone?: string }) => householdsApi.update(id, changes),
+    onSuccess: invalidate,
+  });
+}
+
 export function useAcceptInvite() {
   const invalidate = useInvalidateEverything();
   return useMutation({

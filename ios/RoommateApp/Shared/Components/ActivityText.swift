@@ -21,6 +21,20 @@ enum ActivityText {
             return ("✅", "\(didIt) \(chore)")
         case "log_removed":
             return ("🗑", "\(actor) removed the entry “\(subject) did \(chore)”\(forDay)")
+        case "swap_requested":
+            return ("🔁", "\(actor) asked for someone to take \(chore)\(forDay)" + (e.detail.map { " — “\($0)”" } ?? ""))
+        case "swap_accepted":
+            let payback = e.detail.map { ". \(subject) does \(DayFormat.short($0)) in return" } ?? ""
+            return ("🤝", "\(actor) took \(subject)'s \(chore)\(forDay)\(payback)")
+        case "swap_cancelled":
+            if e.actor == nil {
+                return ("↩️", "\(e.assignee?.displayName ?? "Someone")'s swap for \(chore)\(forDay) was withdrawn")
+            }
+            return ("↩️", e.subject != nil
+                ? "\(actor) cancelled the swap with \(subject) for \(chore)\(forDay)"
+                : "\(actor) cancelled their swap request for \(chore)\(forDay)")
+        case "swap_expired":
+            return ("⌛", "Nobody took \(subject)'s \(chore)\(forDay)")
         case "chore_created":
             return ("➕", "\(actor) added the chore \(chore)" + (e.detail.map { " (\($0))" } ?? ""))
         case "chore_updated":

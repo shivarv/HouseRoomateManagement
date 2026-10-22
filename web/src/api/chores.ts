@@ -8,6 +8,7 @@ import type {
   MyTasksToday,
   Report,
   ScheduleDay,
+  Swap,
   Task,
 } from "../types/api";
 import { api } from "./client";
@@ -44,6 +45,15 @@ export const tasksApi = {
   complete: (taskId: string, completedBy?: string) =>
     api<Task>(`/tasks/${taskId}/complete`, { method: "POST", body: { completed_by_member_id: completedBy ?? null } }),
   reopen: (taskId: string) => api<Task>(`/tasks/${taskId}/reopen`, { method: "POST" }),
+};
+
+export const swapsApi = {
+  ask: (choreId: string, dueDate: string, note?: string) =>
+    api<Swap>(`/chores/${choreId}/swaps`, { method: "POST", body: { due_date: dueDate, note: note || null } }),
+  householdOpen: (householdId: string) => api<Swap[]>(`/households/${householdId}/swaps`),
+  mine: () => api<Swap[]>("/me/swaps"),
+  accept: (swapId: string) => api<Swap>(`/swaps/${swapId}/accept`, { method: "POST" }),
+  cancel: (swapId: string) => api<Swap>(`/swaps/${swapId}/cancel`, { method: "POST" }),
 };
 
 export const reportsApi = {

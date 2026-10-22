@@ -110,6 +110,43 @@ class ChoreLog(UUIDPrimaryKey, Base):
     )
 
 
+class ChoreSwap(UUIDPrimaryKey, Base):
+    """A request to hand one rotation turn to someone else, paid back with their next turn.
+
+    Only these two dates change; the rotation itself is untouched. A turn can be swapped again
+    later: the most recently accepted swap on a date wins.
+    """
+
+    __tablename__ = "chore_swaps"
+    __table_args__ = (
+        Index("ix_chore_swaps_household_status", "household_id", "status"),
+        Index("ix_chore_swaps_chore_given", "chore_id", "given_date"),
+        Index("ix_chore_swaps_chore_payback", "chore_id", "payback_date"),
+    )
+
+    household_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"))
+    chore_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("chores.id", ondelete="CASCADE"))
+    given_date: Mapped[date] = mapped_column(Date)  # period start of the turn being given away
+    requester_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("household_members.id", ondelete="CASCADE")
+    )
+    acceptor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("household_members.id", ondelete="CASCADE")
+    )
+    # The acceptor's next turn after given_date, which becomes the requester's.
+    payback_date: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(16), default="open")  # see SwapStatus
+    note: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    chore: Mapped[Chore] = relationship(lazy="joined")
+    requester: Mapped[HouseholdMember] = relationship(foreign_keys=[requester_id], lazy="joined")
+    acceptor: Mapped[HouseholdMember | None] = relationship(
+        foreign_keys=[acceptor_id], lazy="joined"
+    )
+
+
 class ActivityEvent(UUIDPrimaryKey, Base):
     """Append-only record of every change in a household, shown in the activity feed."""
 

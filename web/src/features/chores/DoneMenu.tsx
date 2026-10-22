@@ -2,20 +2,28 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "../../components/ui";
 import { useHousehold } from "../households/hooks";
 
+export interface MenuAction {
+  label: string;
+  title?: string;
+  onClick: () => void;
+}
+
 /**
- * "I did it" button with a ▾ menu to record that someone else did it.
- * The member list is only fetched when the menu is opened.
+ * "I did it" button with a ▾ menu to record that someone else did it, plus any extra
+ * `actions` (e.g. "Ask for a swap"). The member list is only fetched when the menu is opened.
  */
 export function DoneMenu({
   householdId,
   label,
   disabled,
   onDone,
+  actions = [],
 }: {
   householdId: string;
   label: string;
   disabled?: boolean;
   onDone: (memberId?: string) => void;
+  actions?: MenuAction[];
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -28,7 +36,7 @@ export function DoneMenu({
   }, [open]);
 
   return (
-    <div ref={ref} className="relative flex shrink-0">
+    <div ref={ref} className="relative flex shrink-0" data-open={open || undefined}>
       <Button className="rounded-r-none" disabled={disabled} onClick={() => onDone()}>
         {label}
       </Button>
@@ -36,17 +44,22 @@ export function DoneMenu({
         className="rounded-l-none border-l border-white/25 px-2"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        aria-label="Someone else did it"
-        title="Someone else did it"
+        aria-label="More options"
+        title="Someone else did it, or ask for a swap"
       >
         ▾
       </Button>
       {open && (
         <MemberPicker
           householdId={householdId}
+          actions={actions}
           onPick={(id) => {
             setOpen(false);
             onDone(id);
+          }}
+          onAction={(action) => {
+            setOpen(false);
+            action.onClick();
           }}
         />
       )}
@@ -54,7 +67,20 @@ export function DoneMenu({
   );
 }
 
-function MemberPicker({ householdId, onPick }: { householdId: string; onPick: (memberId: string) => void }) {
+const itemClass =
+  "block w-full px-3 py-2 text-left text-sm transition hover:bg-linear-to-r hover:from-indigo-50 hover:to-fuchsia-50 hover:text-indigo-700";
+
+function MemberPicker({
+  householdId,
+  actions,
+  onPick,
+  onAction,
+}: {
+  householdId: string;
+  actions: MenuAction[];
+  onPick: (memberId: string) => void;
+  onAction: (action: MenuAction) => void;
+}) {
   const household = useHousehold(householdId);
   const members = (household.data?.members ?? []).filter((m) => m.id !== household.data?.my_member_id);
   return (
@@ -62,10 +88,19 @@ function MemberPicker({ householdId, onPick }: { householdId: string; onPick: (m
       <p className="px-3 py-1.5 text-xs font-medium text-slate-500">Someone else did it:</p>
       {household.isLoading && <p className="px-3 py-1.5 text-sm text-slate-400">Loading…</p>}
       {members.map((m) => (
-        <button key={m.id} className="block w-full px-3 py-2 text-left text-sm transition hover:bg-linear-to-r hover:from-indigo-50 hover:to-fuchsia-50 hover:text-indigo-700" onClick={() => onPick(m.id)}>
+        <button key={m.id} className={itemClass} onClick={() => onPick(m.id)}>
           {m.display_name}
         </button>
       ))}
+      {actions.length > 0 && (
+        <div className="mt-1.5 border-t border-slate-100 pt-1.5">
+          {actions.map((a) => (
+            <button key={a.label} className={`${itemClass} font-medium text-indigo-700`} title={a.title} onClick={() => onAction(a)}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

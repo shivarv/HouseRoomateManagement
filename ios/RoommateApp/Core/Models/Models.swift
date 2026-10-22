@@ -108,10 +108,46 @@ struct ChoreTask: Decodable, Identifiable, Hashable {
     let completedBy: MemberBrief?
     let nextAssignee: MemberBrief?
     let isMine: Bool
+    let swap: TaskSwap?  // this turn changed hands through a swap
+    let swapRequestId: UUID?  // an open "Ask for a swap" on this turn
 
     var isDone: Bool { status == .done }
     var isWeekly: Bool { chore.frequency == .weekly }
     var wasCovered: Bool { isDone && completedBy != nil && completedBy?.id != member.id }
+}
+
+/// How a turn changed hands through a swap.
+struct TaskSwap: Decodable, Hashable {
+    enum Role: String, Decodable { case given, payback }
+
+    let id: UUID
+    let role: Role  // given: took it over from `other`; payback: paying `other` back
+    let other: MemberBrief
+    let canCancel: Bool
+}
+
+enum SwapStatus: String, Decodable {
+    case open, accepted, cancelled, expired
+}
+
+/// "Ask for a swap": someone offers one of their turns; the first person to accept takes it
+/// and gives back their own next turn of the same chore.
+struct Swap: Decodable, Identifiable, Hashable {
+    let id: UUID
+    let householdId: UUID
+    let householdName: String
+    let chore: ChoreBrief
+    let givenDate: String  // the turn being given away (period start)
+    let periodEnd: String
+    let requester: MemberBrief
+    let acceptor: MemberBrief?
+    let paybackDate: String?  // once accepted: the acceptor's turn the requester now does
+    let status: SwapStatus
+    let note: String?
+    let createdAt: String
+    let isMine: Bool  // I asked
+    let canAccept: Bool
+    let paybackPreview: String?  // the turn I'd give back if I took it
 }
 
 struct ChoreLog: Decodable, Identifiable, Hashable {
@@ -163,6 +199,7 @@ struct ScheduleSlot: Decodable, Hashable {
     let chore: ChoreBrief
     let member: MemberBrief
     let status: TaskStatus?
+    let swappedWith: MemberBrief?  // set when this turn changed hands through a swap
 }
 
 struct ScheduleDay: Decodable, Identifiable {
