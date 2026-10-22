@@ -6,8 +6,7 @@ import { OpenChoreCard } from "../features/chores/OpenChoreCard";
 import { SwapRequests } from "../features/chores/SwapRequests";
 import { TaskCard } from "../features/chores/TaskCard";
 import { useMySwaps, useMyTasksToday } from "../features/chores/hooks";
-import { useDefaultHousehold, useHouseholds } from "../features/households/hooks";
-import { lastHousehold } from "../lib/lastHousehold";
+import { useDefaultHousehold, useHouseholds, useSwitchHousehold } from "../features/households/hooks";
 import { formatDay, localIsoDate } from "../lib/format";
 
 /** Landing page after login: the in-app reminder of what *I* need to do today / this week. */
@@ -145,6 +144,7 @@ function dayWord(isoDate: string): string {
 /** The house the tabs act on: name, switcher (if I'm in several), invite code, add another. */
 function HouseCard() {
   const { households, house } = useDefaultHousehold();
+  const switchTo = useSwitchHousehold();
   const [copied, setCopied] = useState(false);
   if (!house) return null;
   const list = households.data ?? [];
@@ -167,7 +167,7 @@ function HouseCard() {
         <select
           aria-label="Switch household"
           value={house.id}
-          onChange={(e) => lastHousehold.set(e.target.value)}
+          onChange={(e) => switchTo(e.target.value)}
           className="mt-0.5 cursor-pointer rounded-lg bg-white/10 py-0.5 pr-1 text-lg font-bold text-white outline-none ring-1 ring-white/30 transition hover:bg-white/20 [&>option]:text-slate-900"
         >
           {list.map((h) => (

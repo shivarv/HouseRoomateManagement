@@ -17,6 +17,7 @@ ADMIN = ("Ann", "ann@example.com")
 WITH_ACCOUNTS = [("Bea", "bea@example.com"), ("Cy", "cy@example.com")]
 NAME_ONLY = ["Dev", "Eli", "Fay", "Gus", "Hal"]
 HOUSE_NAME = "Demo House"
+ADDRESS = "12 Demo Street"
 
 
 def _user(db, name: str, email: str) -> User:
@@ -34,7 +35,7 @@ def main() -> None:
         if any(m.household.name == HOUSE_NAME for m in households.memberships(db, admin)):
             print("Demo house already exists.")
             return
-        me = households.create_household(db, admin, HOUSE_NAME, "America/New_York")
+        me = households.create_household(db, admin, HOUSE_NAME, ADDRESS, "America/New_York")
         house = db.get(Household, me.household_id)
         for name, email in WITH_ACCOUNTS:
             households.add_member(db, house, name, user_id=_user(db, name, email).id)

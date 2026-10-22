@@ -28,6 +28,18 @@ final class Session {
         user = response.user
     }
 
+    /// Of these houses, the one to open on: the one picked last (on any device), else the first.
+    func preferredHousehold(in households: [Household]) -> UUID? {
+        households.first { $0.id == user?.lastHouseholdId }?.id ?? households.first?.id
+    }
+
+    /// Remember a house picked, created or joined, so every device opens on it next time.
+    func rememberHousehold(_ id: UUID) {
+        guard user != nil, user?.lastHouseholdId != id else { return }
+        user?.lastHouseholdId = id
+        Task { _ = try? await client.setLastHousehold(id) }
+    }
+
     func signOut() {
         client.token = nil
         user = nil

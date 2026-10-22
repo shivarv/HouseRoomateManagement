@@ -1,7 +1,7 @@
 import secrets
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Household, HouseholdMember, User
@@ -20,8 +20,35 @@ def _new_invite_code(db: Session) -> str:
             return code
 
 
-def create_household(db: Session, user: User, name: str, timezone: str) -> HouseholdMember:
-    household = Household(name=name, timezone=timezone, invite_code=_new_invite_code(db))
+def _ensure_name_free(
+    db: Session, creator_id: uuid.UUID | None, name: str, exclude: uuid.UUID | None = None
+) -> None:
+    """Names are unique per creator (backed by uq_households_creator_name)."""
+    if creator_id is None:
+        return
+    query = select(Household.id).where(
+        Household.created_by_id == creator_id, func.lower(Household.name) == name.lower()
+    )
+    if exclude is not None:
+        query = query.where(Household.id != exclude)
+    if db.scalar(query) is not None:
+        raise Conflict(f"You already have a house called “{name}”")
+
+
+def create_household(
+    db: Session, user: User, name: str, address: str, timezone: str
+) -> HouseholdMember:
+    name, address = name.strip(), address.strip()
+    if not name or not address:
+        raise BadRequest("A house needs a name and an address")
+    _ensure_name_free(db, user.id, name)
+    household = Household(
+        name=name,
+        address=address,
+        timezone=timezone,
+        invite_code=_new_invite_code(db),
+        created_by_id=user.id,
+    )
     db.add(household)
     db.flush()
     admin = HouseholdMember(
@@ -38,8 +65,27 @@ def create_household(db: Session, user: User, name: str, timezone: str) -> House
         chores.create_chore(
             db, household, chore_name, member_ids=None, today=today, assignment_mode=mode
         )
+    user.last_household_id = household.id  # a new house opens on every device
     db.commit()
     return admin
+
+
+def update_household(
+    db: Session, household: Household, name: str | None, address: str | None, timezone: str | None
+) -> None:
+    if name is not None:
+        name = name.strip()
+        if not name:
+            raise BadRequest("A house needs a name")
+        _ensure_name_free(db, household.created_by_id, name, exclude=household.id)
+        household.name = name
+    if address is not None:
+        if not address.strip():
+            raise BadRequest("A house needs an address")
+        household.address = address.strip()
+    if timezone is not None:
+        household.timezone = timezone
+    db.commit()
 
 
 def memberships(db: Session, user: User) -> list[HouseholdMember]:
@@ -138,6 +184,7 @@ def accept_invite(
             raise BadRequest("That person has already been claimed or does not exist")
         member.user_id = user.id
     activity.record(db, household.id, "member_joined", member, subject_id=member.id)
+    user.last_household_id = household.id
     db.commit()
     return member
 
@@ -157,8 +204,10 @@ def household_out(me: HouseholdMember) -> HouseholdOut:
     return HouseholdOut(
         id=h.id,
         name=h.name,
+        address=h.address,
         timezone=h.timezone,
         invite_code=h.invite_code,
+        created_by_me=h.created_by_id is not None and h.created_by_id == me.user_id,
         my_member_id=me.id,
         my_role=me.role,
     )

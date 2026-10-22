@@ -37,6 +37,7 @@ class MemberUpdate(BaseModel):
 
 class HouseholdCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+    address: str = Field(min_length=1, max_length=300)
     timezone: str = "UTC"
 
     @field_validator("timezone")
@@ -47,6 +48,7 @@ class HouseholdCreate(BaseModel):
 
 class HouseholdUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
+    address: str | None = Field(default=None, min_length=1, max_length=300)
     timezone: str | None = None
 
     @field_validator("timezone")
@@ -58,8 +60,10 @@ class HouseholdUpdate(BaseModel):
 class HouseholdOut(BaseModel):
     id: uuid.UUID
     name: str
+    address: str | None
     timezone: str
     invite_code: str
+    created_by_me: bool
     my_member_id: uuid.UUID
     my_role: Literal["admin", "member"]
 

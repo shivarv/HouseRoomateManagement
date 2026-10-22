@@ -1,4 +1,6 @@
-from sqlalchemy import String
+import uuid
+
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, Timestamps, UUIDPrimaryKey
@@ -10,3 +12,13 @@ class User(UUIDPrimaryKey, Timestamps, Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(100))
     password_hash: Mapped[str] = mapped_column(String(255))
+    # The house the apps open on: the one picked or joined last, on any device.
+    last_household_id: Mapped[uuid.UUID | None] = mapped_column(
+        # households.created_by_id points back here; use_alter breaks the cycle for create/drop.
+        ForeignKey(
+            "households.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_users_last_household_id",
+        )
+    )

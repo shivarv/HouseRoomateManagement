@@ -7,6 +7,8 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  /** May be a house I've since left; the UI then falls back to my first house. */
+  last_household_id: string | null;
 }
 
 export interface TokenResponse {
@@ -29,10 +31,14 @@ export interface Member extends MemberBrief {
 export interface Household {
   id: string;
   name: string;
+  /** null only on houses created before addresses were required. */
+  address: string | null;
   timezone: string;
   invite_code: string;
   my_member_id: string;
   my_role: Role;
+  /** Names are unique per creator: I can't have two houses with the same name. */
+  created_by_me: boolean;
 }
 
 export interface HouseholdDetail extends Household {

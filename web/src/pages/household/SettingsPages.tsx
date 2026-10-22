@@ -34,12 +34,16 @@ export function HouseDetailsSettings() {
   const household = useCurrentHousehold();
   const update = useUpdateHousehold(household.id);
   const [name, setName] = useState(household.name);
+  const [address, setAddress] = useState(household.address ?? "");
   const [timezone, setTimezone] = useState(household.timezone);
-  const changed = name.trim() !== household.name || timezone.trim() !== household.timezone;
+  const changed =
+    name.trim() !== household.name ||
+    address.trim() !== (household.address ?? "") ||
+    timezone.trim() !== household.timezone;
 
   const onSave = (e: FormEvent) => {
     e.preventDefault();
-    update.mutate({ name: name.trim(), timezone: timezone.trim() });
+    update.mutate({ name: name.trim(), address: address.trim(), timezone: timezone.trim() });
   };
 
   return (
@@ -50,6 +54,14 @@ export function HouseDetailsSettings() {
       </p>
       <form onSubmit={onSave} className="space-y-3">
         <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} />
+        <Input
+          label="Address"
+          placeholder="e.g. 12 Maple Street, Boston, MA"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          required
+          maxLength={300}
+        />
         <Input
           label="Timezone"
           placeholder="e.g. America/New_York"

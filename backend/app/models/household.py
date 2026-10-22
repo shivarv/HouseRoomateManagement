@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Index, String, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, Timestamps, UUIDPrimaryKey
@@ -8,8 +8,18 @@ from app.db.base import Base, Timestamps, UUIDPrimaryKey
 
 class Household(UUIDPrimaryKey, Timestamps, Base):
     __tablename__ = "households"
+    # A house belongs to whoever created it: one person can't have two with the same name
+    # (case-insensitive), but different people can.
+    __table_args__ = (
+        Index("uq_households_creator_name", "created_by_id", func.lower(text("name")), unique=True),
+    )
 
     name: Mapped[str] = mapped_column(String(100))
+    # Required for new houses; NULL only on houses created before addresses existed.
+    address: Mapped[str | None] = mapped_column(String(300))
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
     invite_code: Mapped[str] = mapped_column(String(12), unique=True, index=True)
 

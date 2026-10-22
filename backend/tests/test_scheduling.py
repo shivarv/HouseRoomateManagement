@@ -11,7 +11,7 @@ MONDAY = date(2026, 10, 19)
 
 
 def _house(client, headers) -> dict:
-    house = client.post(f"{API}/households", json={"name": "Elm St"}, headers=headers).json()
+    house = client.post(f"{API}/households", json={"name": "Elm St", "address": "2 Elm St"}, headers=headers).json()
     for name in ROOMMATES:
         client.post(
             f"{API}/households/{house['id']}/members", json={"display_name": name}, headers=headers

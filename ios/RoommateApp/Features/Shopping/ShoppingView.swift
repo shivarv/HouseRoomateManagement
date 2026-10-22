@@ -35,12 +35,13 @@ final class ShoppingViewModel {
         }
     }
 
-    func load() async {
+    /// `preferred` is the house to show when none is picked yet (or the picked one is gone).
+    func load(preferred: ([Household]) -> UUID? = { $0.first?.id }) async {
         defer { hasLoaded = true }
         do {
             households = try await client.households()
             if householdId == nil || !households.contains(where: { $0.id == householdId }) {
-                householdId = households.first?.id
+                householdId = preferred(households)
             }
             if let householdId {
                 list = try await client.shoppingList(householdId: householdId)
@@ -105,6 +106,7 @@ struct ShoppingView: View {
     @State private var quantity = ""
     @State private var editing: ShoppingItem?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(Session.self) private var session
 
     var body: some View {
         NavigationStack {
@@ -113,7 +115,10 @@ struct ShoppingView: View {
                     Picker("House", selection: $model.householdId) {
                         ForEach(model.households) { Text($0.name).tag(Optional($0.id)) }
                     }
-                    .onChange(of: model.householdId) { _, _ in Task { await model.load() } }
+                    .onChange(of: model.householdId) { _, id in
+                        if let id { session.rememberHousehold(id) }
+                        Task { await model.load() }
+                    }
                 }
                 addSection
                 ErrorBanner(message: model.error)
@@ -154,7 +159,7 @@ struct ShoppingView: View {
                 }
             }
             .refreshable { await model.load() }
-            .task { await model.load() }
+            .task { await model.load(preferred: session.preferredHousehold) }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { Task { await model.load() } }
             }

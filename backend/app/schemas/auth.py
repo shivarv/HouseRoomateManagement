@@ -20,6 +20,12 @@ class UserOut(BaseModel):
     id: uuid.UUID
     email: str
     name: str
+    # May point at a house I've since left; clients fall back to my first house.
+    last_household_id: uuid.UUID | None = None
+
+
+class LastHouseholdIn(BaseModel):
+    household_id: uuid.UUID
 
 
 class TokenOut(BaseModel):

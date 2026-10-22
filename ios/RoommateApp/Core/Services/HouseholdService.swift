@@ -1,7 +1,7 @@
 import Foundation
 
 extension APIClient {
-    private struct CreateHouseholdBody: Encodable { let name: String; let timezone: String }
+    private struct CreateHouseholdBody: Encodable { let name: String; let address: String; let timezone: String }
     private struct MemberBody: Encodable { let displayName: String }
     private struct RoleBody: Encodable { let role: Role }
     private struct AcceptBody: Encodable { let memberId: UUID? }
@@ -14,8 +14,8 @@ extension APIClient {
         try await get("/households/\(id)")
     }
 
-    func createHousehold(name: String, timezone: String) async throws -> Household {
-        try await send("POST", "/households", body: CreateHouseholdBody(name: name, timezone: timezone))
+    func createHousehold(name: String, address: String, timezone: String) async throws -> Household {
+        try await send("POST", "/households", body: CreateHouseholdBody(name: name, address: address, timezone: timezone))
     }
 
     func addMember(householdId: UUID, displayName: String) async throws -> Member {

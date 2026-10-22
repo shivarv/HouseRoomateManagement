@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { authApi } from "../../api/auth";
 import { setUnauthorizedHandler, tokenStore } from "../../api/client";
+import { lastHousehold } from "../../lib/lastHousehold";
 import type { TokenResponse, User } from "../../types/api";
 
 interface AuthState {
@@ -20,12 +21,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => {
     tokenStore.clear();
+    lastHousehold.load(null);
     setUser(null);
     queryClient.clear();
   }, [queryClient]);
 
   const signIn = useCallback((response: TokenResponse) => {
     tokenStore.set(response.access_token);
+    lastHousehold.load(response.user);
     setUser(response.user);
   }, []);
 
@@ -34,7 +37,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!tokenStore.get()) return;
     authApi
       .me()
-      .then(setUser)
+      .then((me) => {
+        lastHousehold.load(me);
+        setUser(me);
+      })
       .catch(signOut)
       .finally(() => setLoading(false));
   }, [signOut]);

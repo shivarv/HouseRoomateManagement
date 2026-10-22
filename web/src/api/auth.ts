@@ -7,4 +7,6 @@ export const authApi = {
   register: (name: string, email: string, password: string) =>
     api<TokenResponse>("/auth/register", { method: "POST", body: { name, email, password } }),
   me: () => api<User>("/auth/me"),
+  setLastHousehold: (householdId: string) =>
+    api<User>("/auth/me/last-household", { method: "PUT", body: { household_id: householdId } }),
 };

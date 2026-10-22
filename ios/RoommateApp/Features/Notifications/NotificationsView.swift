@@ -241,6 +241,7 @@ private struct HelpFormView: View {
     let editing: HelpRequest?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(Session.self) private var session
     @State private var choice: String = ""  // a preset title, or "custom"
     @State private var custom = ""
     @State private var details = ""
@@ -306,7 +307,7 @@ private struct HelpFormView: View {
     }
 
     private func fill() {
-        householdId = editing?.householdId ?? model.households.first?.id
+        householdId = editing?.householdId ?? session.preferredHousehold(in: model.households)
         guard let editing else { return }
         if HelpPresets.all.contains(where: { $0.title == editing.title }) {
             choice = editing.title

@@ -1,7 +1,8 @@
 import { NavLink, Outlet, useMatch } from "react-router";
 import { useAuth } from "../features/auth/AuthContext";
 import { useHelpRequests } from "../features/help/hooks";
-import { useDefaultHousehold } from "../features/households/hooks";
+import { useDefaultHousehold, useSwitchHousehold } from "../features/households/hooks";
+import type { Household } from "../types/api";
 import { Button } from "./ui";
 
 const link = ({ isActive }: { isActive: boolean }) =>
@@ -20,10 +21,17 @@ const HOUSE_TABS = [
   { path: "groceries", label: "🛒 Groceries" },
 ] as const;
 
+/** Two of my houses can share a name (mine and one I joined): tell them apart by address. */
+function houseLabel(h: Household, all: Household[]): string {
+  const clash = all.some((o) => o.id !== h.id && o.name.toLowerCase() === h.name.toLowerCase());
+  return clash && h.address ? `${h.name} · ${h.address}` : h.name;
+}
+
 export function AppShell() {
   const { user, signOut } = useAuth();
   const help = useHelpRequests();
   const { households, house: defaultHouse } = useDefaultHousehold();
+  const switchTo = useSwitchHousehold();
   // The house tabs act on the house I'm looking at; elsewhere, my default house.
   const viewing = useMatch("/households/:householdId/*")?.params.householdId;
   const house = households.data?.find((h) => h.id === viewing) ?? defaultHouse;
@@ -43,6 +51,26 @@ export function AppShell() {
               <span className="text-gradient">Roommates</span>
             </span>
           </span>
+          {/* Which house the tabs act on, from any page. With one house it's just shown. */}
+          {house &&
+            ((households.data?.length ?? 0) > 1 ? (
+              <select
+                aria-label="Switch household"
+                value={house.id}
+                onChange={(e) => switchTo(e.target.value)}
+                className="min-w-0 max-w-48 cursor-pointer truncate rounded-xl bg-white/80 px-2.5 py-1.5 text-sm font-medium text-slate-700 outline-none ring-1 ring-slate-200 transition hover:ring-indigo-300 focus:ring-indigo-400"
+              >
+                {households.data!.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    🏠 {houseLabel(h, households.data!)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="min-w-0 truncate rounded-xl px-2.5 py-1.5 text-sm font-medium text-slate-600">
+                🏠 {house.name}
+              </span>
+            ))}
           <div className="ml-auto flex items-center gap-2">
             {user && (
               <span
