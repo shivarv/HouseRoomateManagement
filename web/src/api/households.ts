@@ -4,9 +4,9 @@ import { api } from "./client";
 export const householdsApi = {
   list: () => api<Household[]>("/households"),
   get: (id: string) => api<HouseholdDetail>(`/households/${id}`),
-  create: (name: string, timezone: string) =>
-    api<Household>("/households", { method: "POST", body: { name, timezone } }),
-  update: (id: string, changes: { name?: string; timezone?: string }) =>
+  create: (name: string, address: string, timezone: string) =>
+    api<Household>("/households", { method: "POST", body: { name, address, timezone } }),
+  update: (id: string, changes: { name?: string; address?: string; timezone?: string }) =>
     api<Household>(`/households/${id}`, { method: "PATCH", body: changes }),
 
   addMember: (householdId: string, displayName: string) =>

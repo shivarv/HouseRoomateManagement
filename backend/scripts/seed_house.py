@@ -18,6 +18,8 @@ from app.services import chores, clock, households
 ROOMMATES = ["Jai Vicky", "Sakthivel", "Krishna", "Suraj", "Shiva", "Sameer", "Raghu", "Lauhitya"]
 ADMIN = "Shiva"
 HOUSE_NAME = "Home"
+# The real address isn't in the repo; the admin sets it in Settings → House details.
+ADDRESS = "Not set yet: edit in Settings"
 TIMEZONE = "America/New_York"
 PASSWORD = "password123"
 RENAME = {"Clean hall": "Cleaning Hall and Other"}
@@ -44,7 +46,7 @@ def main() -> None:
             print(f"'{HOUSE_NAME}' already exists for {ADMIN}; nothing to do.")
             return
 
-        me = households.create_household(db, admin, HOUSE_NAME, TIMEZONE)
+        me = households.create_household(db, admin, HOUSE_NAME, ADDRESS, TIMEZONE)
         house = db.get(Household, me.household_id)
         member_ids = {ADMIN: me.id}
         for name in ROOMMATES:

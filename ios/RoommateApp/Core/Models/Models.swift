@@ -6,6 +6,8 @@ struct User: Codable, Identifiable, Hashable {
     let id: UUID
     let email: String
     let name: String
+    /// The house the app opens on. May be one I've since left; then fall back to my first.
+    var lastHouseholdId: UUID?
 }
 
 struct TokenResponse: Decodable {
@@ -35,10 +37,14 @@ struct Member: Codable, Identifiable, Hashable {
 struct Household: Codable, Identifiable, Hashable {
     let id: UUID
     let name: String
+    /// nil only on houses created before addresses were required.
+    let address: String?
     let timezone: String
     let inviteCode: String
     let myMemberId: UUID
     let myRole: Role
+    /// Names are unique per creator: I can't have two houses with the same name.
+    let createdByMe: Bool?
 }
 
 struct HouseholdDetail: Decodable {

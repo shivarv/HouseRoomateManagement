@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, Outlet, useNavigate, useOutletContext, useParams } from "react-router";
+import { Link, Outlet, useOutletContext, useParams } from "react-router";
 import { ErrorText, Loading } from "../../components/ui";
-import { useHousehold, useHouseholds } from "../../features/households/hooks";
+import { useHousehold, useHouseholds, useSwitchHousehold } from "../../features/households/hooks";
 import { lastHousehold } from "../../lib/lastHousehold";
 import type { HouseholdDetail } from "../../types/api";
 
@@ -9,10 +9,10 @@ export function HouseholdLayout() {
   const { householdId = "" } = useParams();
   const household = useHousehold(householdId);
   const households = useHouseholds();
-  const navigate = useNavigate();
+  const switchTo = useSwitchHousehold();
   const [copied, setCopied] = useState(false);
 
-  // Remember this house so the Households tab opens it next time.
+  // Remember this house (e.g. opened from a link) so the tabs open it next time.
   useEffect(() => {
     if (household.data) lastHousehold.set(household.data.id);
   }, [household.data]);
@@ -39,7 +39,7 @@ export function HouseholdLayout() {
                 <select
                   aria-label="Switch household"
                   value={h.id}
-                  onChange={(e) => navigate(`/households/${e.target.value}`)}
+                  onChange={(e) => switchTo(e.target.value)}
                   className="cursor-pointer rounded-lg bg-white/15 px-2 py-1 font-semibold uppercase tracking-widest text-white outline-none ring-1 ring-white/30 transition hover:bg-white/25 [&>option]:text-slate-900"
                 >
                   {households.data!.map((other) => (
@@ -56,6 +56,7 @@ export function HouseholdLayout() {
               </Link>
             </div>
             <h1 className="mt-1 text-3xl font-extrabold tracking-tight">{h.name}</h1>
+            {h.address && <p className="mt-0.5 text-sm text-white/80">📍 {h.address}</p>}
             <div className="mt-3 flex -space-x-2">
               {h.members.slice(0, 8).map((m) => (
                 <span

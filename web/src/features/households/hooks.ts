@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMatch, useNavigate } from "react-router";
 import { householdsApi } from "../../api/households";
-import { useLastHousehold } from "../../lib/lastHousehold";
+import { lastHousehold, useLastHousehold } from "../../lib/lastHousehold";
 
 export const householdKeys = {
   all: ["households"] as const,
@@ -24,8 +25,8 @@ function useInvalidateEverything() {
 export function useCreateHousehold() {
   const invalidate = useInvalidateEverything();
   return useMutation({
-    mutationFn: ({ name, timezone }: { name: string; timezone: string }) =>
-      householdsApi.create(name, timezone),
+    mutationFn: ({ name, address, timezone }: { name: string; address: string; timezone: string }) =>
+      householdsApi.create(name, address, timezone),
     onSuccess: invalidate,
   });
 }
@@ -33,7 +34,8 @@ export function useCreateHousehold() {
 export function useUpdateHousehold(id: string) {
   const invalidate = useInvalidateEverything();
   return useMutation({
-    mutationFn: (changes: { name?: string; timezone?: string }) => householdsApi.update(id, changes),
+    mutationFn: (changes: { name?: string; address?: string; timezone?: string }) =>
+      householdsApi.update(id, changes),
     onSuccess: invalidate,
   });
 }
@@ -75,4 +77,15 @@ export function useDefaultHousehold() {
   const last = useLastHousehold();
   const list = households.data ?? [];
   return { households, house: list.find((h) => h.id === last) ?? list[0] };
+}
+
+/** Switch the house the tabs act on. On a house page, stay on the same tab of the new house. */
+export function useSwitchHousehold() {
+  const navigate = useNavigate();
+  const match = useMatch("/households/:householdId/*");
+  const onHousePage = match && match.params.householdId !== "new";
+  return (id: string) => {
+    lastHousehold.set(id);
+    if (onHousePage) navigate(`/households/${id}/${match.params["*"] ?? ""}`);
+  };
 }

@@ -4,7 +4,8 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models import User
-from app.schemas.auth import LoginIn, RegisterIn, TokenOut, UserOut
+from app.schemas.auth import LastHouseholdIn, LoginIn, RegisterIn, TokenOut, UserOut
+from app.services import households
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -34,4 +35,13 @@ def login(body: LoginIn, db: DbSession):
 
 @router.get("/me", response_model=UserOut)
 def me(user: CurrentUser):
+    return user
+
+
+@router.put("/me/last-household", response_model=UserOut)
+def set_last_household(body: LastHouseholdIn, db: DbSession, user: CurrentUser):
+    """Remember the house I switched to, so every device opens on it next time."""
+    households.require_membership(db, body.household_id, user)
+    user.last_household_id = body.household_id
+    db.commit()
     return user

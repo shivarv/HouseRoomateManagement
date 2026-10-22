@@ -17,16 +17,17 @@ Status: **implemented** for health, auth, households, members, chores and tasks.
 | ------ | ---------------- | ---- | ----------------------------------- |
 | POST   | `/auth/register` | No   | Create account                      |
 | POST   | `/auth/login`    | No   | Returns `{ access_token, token_type }` |
-| GET    | `/auth/me`       | Yes  | Current user                        |
+| GET    | `/auth/me`       | Yes  | Current user, incl. `last_household_id` (house the apps open on) |
+| PUT    | `/auth/me/last-household` | Yes | `{ household_id }` — remember the house I switched to (404 if not a member). Also set automatically on create / join |
 
 ## Households
 
 | Method | Path                                  | Description                  |
 | ------ | ------------------------------------- | ---------------------------- |
 | GET    | `/households`                         | Households I belong to       |
-| POST   | `/households`                         | Create household             |
+| POST   | `/households`                         | Create household: `{ name, address, timezone? }`. `address` required. 409 if I already created a house with that name (case-insensitive; other people's houses don't count) |
 | GET    | `/households/{id}`                    | Household detail + members   |
-| PATCH  | `/households/{id}`                    | Rename / change timezone (admin) |
+| PATCH  | `/households/{id}`                    | Change name / address / timezone (admin). Renaming follows the same per-creator uniqueness |
 | GET    | `/invites/{code}`                     | Preview: household + names not yet claimed |
 | POST   | `/invites/{code}/accept`              | Join: `{ member_id }` claims a name, `{}` joins as new person |
 

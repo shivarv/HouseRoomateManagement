@@ -18,7 +18,8 @@ struct HouseholdsView: View {
                                 Text(h.name).font(.headline)
                                 if h.myRole == .admin { Badge(text: "Admin", color: .accentColor) }
                             }
-                            Text(h.timezone).font(.caption).foregroundStyle(.secondary)
+                            Text([h.address, h.timezone].compactMap { $0 }.joined(separator: " · "))
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -66,7 +67,9 @@ struct HouseholdsView: View {
 struct CreateHouseholdSheet: View {
     var onCreated: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(Session.self) private var session
     @State private var name = ""
+    @State private var address = ""
     @State private var timezone = TimeZone.current.identifier
     @State private var error: String?
     @State private var isSaving = false
@@ -76,12 +79,14 @@ struct CreateHouseholdSheet: View {
             Form {
                 Section {
                     TextField("Name, e.g. Maple Street House", text: $name)
+                    TextField("Address, e.g. 12 Maple St, Boston, MA", text: $address)
+                        .textContentType(.fullStreetAddress)
                     TextField("Timezone", text: $timezone)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } footer: {
                     VStack(alignment: .leading) {
-                        Text("Comes with Cooking, Clean hall and Dispose garbage. Add your roommates next.")
+                        Text("Comes with Cooking, Clean hall and Dispose garbage. Add your roommates next. You can't have two houses with the same name.")
                         ErrorBanner(message: error)
                     }
                 }
@@ -96,7 +101,8 @@ struct CreateHouseholdSheet: View {
                             isSaving = true
                             defer { isSaving = false }
                             do {
-                                _ = try await APIClient.shared.createHousehold(name: name, timezone: timezone)
+                                let house = try await APIClient.shared.createHousehold(name: name, address: address, timezone: timezone)
+                                session.rememberHousehold(house.id)
                                 onCreated()
                                 dismiss()
                             } catch {
@@ -104,7 +110,8 @@ struct CreateHouseholdSheet: View {
                             }
                         }
                     }
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty
+                              || address.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
         }
@@ -114,6 +121,7 @@ struct CreateHouseholdSheet: View {
 struct JoinHouseholdSheet: View {
     var onJoined: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(Session.self) private var session
     @State private var code = ""
     @State private var preview: InvitePreview?
     @State private var error: String?
@@ -172,7 +180,8 @@ struct JoinHouseholdSheet: View {
         isBusy = true
         defer { isBusy = false }
         do {
-            _ = try await APIClient.shared.acceptInvite(code: code.trimmingCharacters(in: .whitespaces).uppercased(), memberId: memberId)
+            let house = try await APIClient.shared.acceptInvite(code: code.trimmingCharacters(in: .whitespaces).uppercased(), memberId: memberId)
+            session.rememberHousehold(house.id)
             onJoined()
             dismiss()
         } catch {

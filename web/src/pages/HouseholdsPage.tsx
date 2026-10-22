@@ -38,11 +38,12 @@ function CreateHousehold() {
   const navigate = useNavigate();
   const create = useCreateHousehold();
   const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
   const [timezone, setTimezone] = useState(browserTimezone());
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    create.mutate({ name, timezone }, { onSuccess: (h) => (lastHousehold.set(h.id), navigate("/")) });
+    create.mutate({ name, address, timezone }, { onSuccess: (h) => (lastHousehold.set(h.id), navigate("/")) });
   };
 
   return (
@@ -51,7 +52,16 @@ function CreateHousehold() {
       <p className="mb-4 text-sm text-slate-500">Comes with Cooking, Clean hall and Dispose garbage.</p>
       <form onSubmit={onSubmit} className="space-y-3">
         <Input label="Name" placeholder="e.g. Maple Street House" value={name} onChange={(e) => setName(e.target.value)} required />
+        <Input
+          label="Address"
+          placeholder="e.g. 12 Maple Street, Boston, MA"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          required
+          maxLength={300}
+        />
         <Input label="Timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} required />
+        <p className="text-xs text-slate-500">You can't have two houses with the same name.</p>
         <ErrorText error={create.error} />
         <Button type="submit" disabled={create.isPending}>Create</Button>
       </form>

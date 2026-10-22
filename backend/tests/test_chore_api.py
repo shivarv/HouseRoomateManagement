@@ -9,7 +9,7 @@ ROOMMATES = ["Bea", "Cy", "Dev", "Eli", "Fay", "Gus", "Hal"]
 def _setup_house(client, headers) -> dict:
     """Admin 'Ann' plus 7 roommates added by name -> 8 people, 3 default chores."""
     res = client.post(
-        f"{API}/households", json={"name": "Maple St", "timezone": "UTC"}, headers=headers
+        f"{API}/households", json={"name": "Maple St", "address": "1 Maple St", "timezone": "UTC"}, headers=headers
     )
     assert res.status_code == 201, res.text
     house = res.json()

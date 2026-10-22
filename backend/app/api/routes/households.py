@@ -27,7 +27,9 @@ def list_households(db: DbSession, user: CurrentUser):
 
 @router.post("/households", response_model=HouseholdOut, status_code=status.HTTP_201_CREATED)
 def create_household(body: HouseholdCreate, db: DbSession, user: CurrentUser):
-    return svc.household_out(svc.create_household(db, user, body.name.strip(), body.timezone))
+    return svc.household_out(
+        svc.create_household(db, user, body.name, body.address, body.timezone)
+    )
 
 
 @router.get("/households/{household_id}", response_model=HouseholdDetail)
@@ -42,9 +44,7 @@ def update_household(
     household_id: uuid.UUID, body: HouseholdUpdate, db: DbSession, user: CurrentUser
 ):
     me = svc.require_membership(db, household_id, user, admin=True)
-    for field, value in body.model_dump(exclude_none=True).items():
-        setattr(me.household, field, value)
-    db.commit()
+    svc.update_household(db, me.household, body.name, body.address, body.timezone)
     return svc.household_out(me)
 
 
