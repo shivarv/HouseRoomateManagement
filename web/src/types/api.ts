@@ -164,6 +164,28 @@ export interface ScheduleDay {
   slots: { chore: ChoreBrief; member: MemberBrief; status: TaskStatus | null; swapped_with: MemberBrief | null }[];
 }
 
+export type ShoppingCategory = "groceries" | "toiletries" | "cleaning" | "household" | "other";
+
+export interface ShoppingItem {
+  id: string;
+  name: string;
+  quantity: string | null; // free text: "2 dozen", "1 L"
+  category: ShoppingCategory;
+  note: string | null;
+  status: "needed" | "bought";
+  added_by: MemberBrief | null;
+  bought_by: MemberBrief | null;
+  bought_at: string | null;
+  created_at: string;
+  can_undo: boolean; // bought, and I bought it or added it
+}
+
+export interface ShoppingList {
+  needed: ShoppingItem[]; // oldest first
+  recently_bought: ShoppingItem[]; // last 14 days, newest first
+  suggestions: string[]; // bought before, not on the list now
+}
+
 export type HelpStatus = "open" | "done";
 
 export interface HelpRequest {

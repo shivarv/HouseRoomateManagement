@@ -3,6 +3,7 @@ import SwiftUI
 /// Quick picks for "Ask for help". Mirrors web/src/features/help/presets.ts.
 enum HelpPresets {
     static let all: [(icon: String, title: String)] = [
+        ("🚪", "Open the door"),
         ("🛒", "Buy groceries"),
         ("📦", "Pick up a package"),
         ("🗑️", "Take out the trash"),
@@ -28,8 +29,7 @@ final class NotificationsViewModel {
 
     private let client = APIClient.shared
 
-    var open: [HelpRequest] { requests.filter { !$0.isDone } }
-    var recentlyDone: [HelpRequest] { requests.filter(\.isDone) }
+    var others: [HelpRequest] { requests.filter { !$0.isMine } }
     var mine: [HelpRequest] { requests.filter(\.isMine) }
     /// The tab badge: requests other people are waiting on.
     var waitingCount: Int { requests.filter { !$0.isDone && !$0.isMine }.count }
@@ -78,17 +78,15 @@ final class NotificationsViewModel {
     }
 }
 
-/// Help requests from everyone in my houses, and my own with their status.
+/// 🔔 Notifications (`.everyone`): what other people need, anyone can mark it done.
+/// 🙋 Help requests (`.mine`): what I asked for and its status, plus asking for something new.
 struct NotificationsView: View {
-    let model: NotificationsViewModel
+    enum Scope { case everyone, mine }
 
-    enum Scope: String, CaseIterable, Identifiable {
-        case everyone = "Everyone", mine = "My requests"
-        var id: Self { self }
-    }
+    let model: NotificationsViewModel
+    var scope: Scope = .everyone
 
     @Environment(\.scenePhase) private var scenePhase
-    @State private var scope: Scope = .everyone
     @State private var form: FormTarget?
 
     /// What the form sheet is for: a new request, or editing one of mine.
@@ -102,41 +100,29 @@ struct NotificationsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    Picker("Show", selection: $scope) {
-                        ForEach(Scope.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
+                if model.error != nil {
                     ErrorBanner(message: model.error)
                 }
-                .listRowBackground(Color.clear)
-
-                switch scope {
-                case .everyone:
-                    Section("Needs a hand") {
-                        if model.open.isEmpty && model.hasLoaded {
-                            Text("Nobody needs help right now 🎉").foregroundStyle(.secondary)
-                        }
-                        ForEach(model.open) { row($0) }
+                let shown = scope == .everyone ? model.others : model.mine
+                let open = shown.filter { !$0.isDone }
+                let done = shown.filter(\.isDone)
+                Section(scope == .everyone ? "Needs a hand" : "Waiting for help") {
+                    if open.isEmpty && model.hasLoaded {
+                        Text(scope == .everyone ? "Nobody needs help right now 🎉"
+                                                : "Nothing open. Tap + when you need a hand.")
+                            .foregroundStyle(.secondary)
                     }
-                    if !model.recentlyDone.isEmpty {
-                        Section("Recently done") {
-                            ForEach(model.recentlyDone) { row($0) }
-                        }
-                    }
-                case .mine:
-                    Section {
-                        if model.mine.isEmpty && model.hasLoaded {
-                            Text("You haven't asked for help yet. Tap + when you need a hand.")
-                                .foregroundStyle(.secondary)
-                        }
-                        ForEach(model.mine) { row($0) }
+                    ForEach(open) { row($0) }
+                }
+                if !done.isEmpty {
+                    Section(scope == .everyone ? "Recently done" : "Done") {
+                        ForEach(done) { row($0) }
                     }
                 }
             }
-            .navigationTitle("Notifications")
+            .navigationTitle(scope == .everyone ? "Notifications" : "Help requests")
             .toolbar {
-                if !model.households.isEmpty {
+                if scope == .mine && !model.households.isEmpty {
                     Button("Ask for help", systemImage: "plus") { form = FormTarget(editing: nil) }
                 }
             }

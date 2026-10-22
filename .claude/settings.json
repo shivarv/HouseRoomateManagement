@@ -43,7 +43,9 @@
       "Bash(break)",
       "Bash(perl -e 'select\\(undef,undef,undef,0.5\\)')",
       "Bash(node help.mjs)",
-      "Bash(grep -rn \"lastHousehold\\\\|TodayTab\\\\|households/\\\\\\\\\\\\${\" .)"
+      "Bash(grep -rn \"lastHousehold\\\\|TodayTab\\\\|households/\\\\\\\\\\\\${\" .)",
+      "Bash(.venv/bin/python -c \"from app.core.config import settings; u=settings.migration_url; assert 'localhost' in u; print\\('migrating:', u.split\\('@'\\)[1]\\)\")",
+      "Bash(xcodebuild -project RoommateApp.xcodeproj -scheme RoommateApp -destination 'platform=iOS Simulator,id=997517DE-2BC9-4886-9328-678A112E5757' -derivedDataPath /private/tmp/claude-501/-Users-shiva-Desktop-git-hub-HouseRoomateManagement/b1a5820b-7578-4ec6-ad7c-a7f3f1ee77c3/scratchpad/dd build)"
     ]
   }
 }

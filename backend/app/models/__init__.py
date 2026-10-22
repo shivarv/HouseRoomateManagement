@@ -8,6 +8,7 @@ from app.models.chore import (
     HelpRequest,
 )
 from app.models.household import Household, HouseholdMember
+from app.models.shopping import ShoppingItem
 from app.models.user import User
 
 __all__ = [
@@ -20,5 +21,6 @@ __all__ = [
     "HelpRequest",
     "Household",
     "HouseholdMember",
+    "ShoppingItem",
     "User",
 ]

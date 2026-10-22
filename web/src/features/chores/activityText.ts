@@ -3,7 +3,7 @@ import type { ActivityEvent, MemberBrief } from "../../types/api";
 
 /** A sentence as segments, so names and chores can be highlighted. Mirrored in iOS (ActivityText.swift). */
 export type Segment = string | { person: MemberBrief } | { chore: string };
-export type ActivityKind = "done" | "undo" | "swap" | "help" | "settings" | "people";
+export type ActivityKind = "done" | "undo" | "swap" | "help" | "shopping" | "settings" | "people";
 
 export interface ActivityLine {
   icon: string;
@@ -98,6 +98,14 @@ export function activityText(e: ActivityEvent): ActivityLine {
       return { icon: "↩️", kind: "help", parts: [who(e.actor), ` reopened the help request “${e.detail ?? ""}”`] };
     case "help_withdrawn":
       return { icon: "🗑", kind: "help", parts: [who(e.actor), ` withdrew their help request “${e.detail ?? ""}”`] };
+    case "shopping_added":
+      return { icon: "🛒", kind: "shopping", parts: [who(e.actor), ` added “${e.detail ?? "something"}” to the shopping list`] };
+    case "shopping_bought":
+      return { icon: "🛍️", kind: "shopping", parts: [who(e.actor), ` bought ${e.detail ?? "something"}`] };
+    case "shopping_unbought":
+      return { icon: "↩️", kind: "shopping", parts: [who(e.actor), ` put “${e.detail ?? ""}” back on the shopping list`] };
+    case "shopping_removed":
+      return { icon: "🗑", kind: "shopping", parts: [who(e.actor), ` took “${e.detail ?? ""}” off the shopping list`] };
     case "chore_created":
       return { icon: "➕", kind: "settings", parts: [who(e.actor), " added the chore ", chore, e.detail ? ` (${e.detail})` : ""] };
     case "chore_updated":
