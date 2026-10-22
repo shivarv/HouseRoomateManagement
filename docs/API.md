@@ -71,6 +71,21 @@ See [features/CHORE_TRANSFER.md](features/CHORE_TRANSFER.md). Any member can ask
 `TaskOut` has `swap: { id, role: "given" | "payback", other, can_cancel } | null` and `swap_request_id`.
 Schedule slots have `swapped_with`.
 
+## Help requests (🔔 Notifications)
+
+Anyone can ask their house for a hand; anyone in the house can mark it done. The first person to mark it done wins (**409** "Bea already marked it done" for everyone after; the same person again → 200).
+
+| Method | Path                                   | Description                                                                 |
+| ------ | -------------------------------------- | --------------------------------------------------------------------------- |
+| GET    | `/me/help-requests`                    | Open requests in all my households, ones done in the last 14 days, and all of mine. Each has `is_mine`, `can_reopen` |
+| POST   | `/households/{id}/help-requests`       | Ask for help. Body `{ title, details? }` (`title`: a preset or free text, ≤120) |
+| PATCH  | `/help-requests/{id}`                  | Edit `{ title?, details? }`. Requester only (403), open only (409)          |
+| POST   | `/help-requests/{id}/done`             | Mark done — anyone in the house                                             |
+| POST   | `/help-requests/{id}/reopen`           | Undo "done" — the requester or whoever marked it done                       |
+| DELETE | `/help-requests/{id}`                  | Withdraw — requester only, open only                                        |
+
+Activity feed actions: `help_requested`, `help_updated`, `help_done`, `help_reopened`, `help_withdrawn`.
+
 ## Expenses
 
 | Method | Path                               | Description                         |

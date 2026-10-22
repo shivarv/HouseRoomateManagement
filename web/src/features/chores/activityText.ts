@@ -3,7 +3,7 @@ import type { ActivityEvent, MemberBrief } from "../../types/api";
 
 /** A sentence as segments, so names and chores can be highlighted. Mirrored in iOS (ActivityText.swift). */
 export type Segment = string | { person: MemberBrief } | { chore: string };
-export type ActivityKind = "done" | "undo" | "swap" | "settings" | "people";
+export type ActivityKind = "done" | "undo" | "swap" | "help" | "settings" | "people";
 
 export interface ActivityLine {
   icon: string;
@@ -84,6 +84,20 @@ export function activityText(e: ActivityEvent): ActivityLine {
       };
     case "swap_expired":
       return { icon: "⌛", kind: "swap", parts: ["Nobody took ", who(e.subject), "'s ", chore, ...turnDay] };
+    case "help_requested":
+      return { icon: "🙋", kind: "help", parts: [who(e.actor), ` asked for help: “${e.detail ?? "something"}”`] };
+    case "help_updated":
+      return { icon: "✏️", kind: "help", parts: [who(e.actor), ` edited their help request: “${e.detail ?? ""}”`] };
+    case "help_done":
+      return {
+        icon: "💪",
+        kind: "help",
+        parts: [who(e.actor), " helped ", who(e.subject), `: “${e.detail ?? "a request"}” is done`],
+      };
+    case "help_reopened":
+      return { icon: "↩️", kind: "help", parts: [who(e.actor), ` reopened the help request “${e.detail ?? ""}”`] };
+    case "help_withdrawn":
+      return { icon: "🗑", kind: "help", parts: [who(e.actor), ` withdrew their help request “${e.detail ?? ""}”`] };
     case "chore_created":
       return { icon: "➕", kind: "settings", parts: [who(e.actor), " added the chore ", chore, e.detail ? ` (${e.detail})` : ""] };
     case "chore_updated":

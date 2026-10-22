@@ -213,6 +213,29 @@ struct ScheduleResponse: Decodable {
     let days: [ScheduleDay]
 }
 
+enum HelpStatus: String, Decodable {
+    case open, done
+}
+
+/// Someone asks the house for a hand; anyone in the house can mark it done.
+struct HelpRequest: Decodable, Identifiable, Hashable {
+    let id: UUID
+    let householdId: UUID
+    let householdName: String
+    let requester: MemberBrief
+    let title: String  // a preset or the person's own words
+    let details: String?
+    let status: HelpStatus
+    let doneBy: MemberBrief?
+    let doneAt: String?
+    let createdAt: String
+    let updatedAt: String
+    let isMine: Bool  // I asked: I can edit or withdraw it while it's open
+    let canReopen: Bool  // I asked, or I marked it done
+
+    var isDone: Bool { status == .done }
+}
+
 struct ActivityEvent: Decodable, Identifiable, Hashable {
     let id: UUID
     let action: String

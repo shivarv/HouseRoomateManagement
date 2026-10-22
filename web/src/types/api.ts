@@ -164,6 +164,24 @@ export interface ScheduleDay {
   slots: { chore: ChoreBrief; member: MemberBrief; status: TaskStatus | null; swapped_with: MemberBrief | null }[];
 }
 
+export type HelpStatus = "open" | "done";
+
+export interface HelpRequest {
+  id: string;
+  household_id: string;
+  household_name: string;
+  requester: MemberBrief;
+  title: string; // a preset or the person's own words
+  details: string | null;
+  status: HelpStatus;
+  done_by: MemberBrief | null;
+  done_at: string | null;
+  created_at: string;
+  updated_at: string;
+  is_mine: boolean; // I asked: I can edit or withdraw it while it's open
+  can_reopen: boolean; // I asked, or I marked it done
+}
+
 export interface ActivityEvent {
   id: string;
   action: string;
