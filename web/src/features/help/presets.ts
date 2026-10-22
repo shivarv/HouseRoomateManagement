@@ -1,5 +1,6 @@
 /** Quick picks for "Ask for help". Mirrored in iOS (HelpPresets.swift). */
 export const HELP_PRESETS = [
+  { icon: "🚪", title: "Open the door" },
   { icon: "🛒", title: "Buy groceries" },
   { icon: "📦", title: "Pick up a package" },
   { icon: "🗑️", title: "Take out the trash" },

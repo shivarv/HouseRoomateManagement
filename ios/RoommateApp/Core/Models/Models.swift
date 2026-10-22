@@ -213,6 +213,43 @@ struct ScheduleResponse: Decodable {
     let days: [ScheduleDay]
 }
 
+enum ShoppingCategory: String, Codable, CaseIterable, Identifiable {
+    case groceries, toiletries, cleaning, household, other
+    var id: Self { self }
+
+    var label: String { rawValue.capitalized }
+    var icon: String {
+        switch self {
+        case .groceries: "🥚"
+        case .toiletries: "🧴"
+        case .cleaning: "🧼"
+        case .household: "🧻"
+        case .other: "🛍️"
+        }
+    }
+}
+
+/// Something the house needs to buy. Anyone can mark it bought.
+struct ShoppingItem: Decodable, Identifiable, Hashable {
+    let id: UUID
+    let name: String
+    let quantity: String?  // free text: "2 dozen", "1 L"
+    let category: ShoppingCategory
+    let note: String?
+    let status: String  // needed | bought
+    let addedBy: MemberBrief?
+    let boughtBy: MemberBrief?
+    let boughtAt: String?
+    let createdAt: String
+    let canUndo: Bool  // bought, and I bought it or added it
+}
+
+struct ShoppingList: Decodable {
+    let needed: [ShoppingItem]  // oldest first
+    let recentlyBought: [ShoppingItem]  // last 14 days, newest first
+    let suggestions: [String]  // bought before, not on the list now
+}
+
 enum HelpStatus: String, Decodable {
     case open, done
 }

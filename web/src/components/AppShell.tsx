@@ -5,7 +5,7 @@ import { useDefaultHousehold } from "../features/households/hooks";
 import { Button } from "./ui";
 
 const link = ({ isActive }: { isActive: boolean }) =>
-  `whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-medium transition-all duration-200 ${
+  `whitespace-nowrap rounded-xl px-2.5 py-1.5 text-sm font-medium transition-all duration-200 ${
     isActive
       ? "bg-linear-to-r from-indigo-500/10 to-fuchsia-500/10 text-indigo-700 ring-1 ring-indigo-200"
       : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
@@ -17,6 +17,7 @@ const HOUSE_TABS = [
   { path: "schedule", label: "Schedule" },
   { path: "people", label: "People" },
   { path: "chores", label: "Chores" },
+  { path: "groceries", label: "🛒 Groceries" },
 ] as const;
 
 export function AppShell() {
@@ -80,6 +81,9 @@ export function AppShell() {
                 </span>
               )}
             </span>
+          </NavLink>
+          <NavLink to="/help" className={link}>
+            🙋 Help
           </NavLink>
           {house?.my_role === "admin" && (
             <NavLink to={`${base}/settings`} className={(state) => `ml-auto ${link(state)}`}>

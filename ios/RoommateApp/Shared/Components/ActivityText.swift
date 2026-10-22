@@ -45,6 +45,14 @@ enum ActivityText {
             return ("↩️", "\(actor) reopened the help request “\(e.detail ?? "")”")
         case "help_withdrawn":
             return ("🗑", "\(actor) withdrew their help request “\(e.detail ?? "")”")
+        case "shopping_added":
+            return ("🛒", "\(actor) added “\(e.detail ?? "something")” to the shopping list")
+        case "shopping_bought":
+            return ("🛍️", "\(actor) bought \(e.detail ?? "something")")
+        case "shopping_unbought":
+            return ("↩️", "\(actor) put “\(e.detail ?? "")” back on the shopping list")
+        case "shopping_removed":
+            return ("🗑", "\(actor) took “\(e.detail ?? "")” off the shopping list")
         case "chore_created":
             return ("➕", "\(actor) added the chore \(chore)" + (e.detail.map { " (\($0))" } ?? ""))
         case "chore_updated":

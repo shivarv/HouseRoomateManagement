@@ -86,6 +86,22 @@ Anyone can ask their house for a hand; anyone in the house can mark it done. The
 
 Activity feed actions: `help_requested`, `help_updated`, `help_done`, `help_reopened`, `help_withdrawn`.
 
+## Shopping list (🛒 Groceries)
+
+Things the house needs to buy. No prices. Categories (`groceries`, `toiletries`, `cleaning`, `household`, `other`) are guessed from the name when not given. A name already on the list (any capitalisation) is never added twice. The first person to mark an item bought wins (**409** "Bea already bought it").
+
+| Method | Path                                   | Description                                                                 |
+| ------ | -------------------------------------- | --------------------------------------------------------------------------- |
+| GET    | `/households/{id}/shopping`            | `{ needed, recently_bought (14 days), suggestions (bought before, not on the list) }` |
+| POST   | `/households/{id}/shopping`            | Add `{ name, quantity?, category?, note? }` → 201, or 200 with the existing item if it's already on the list |
+| POST   | `/households/{id}/shopping/bought`     | One trip: `{ item_ids }`. Items someone else already bought keep their buyer |
+| PATCH  | `/shopping/{id}`                       | Edit `{ name?, quantity?, category?, note? }` — still-needed items only (409) |
+| POST   | `/shopping/{id}/bought`                | Mark one item bought                                                        |
+| POST   | `/shopping/{id}/undo`                  | Back on the list — the buyer or whoever added it                            |
+| DELETE | `/shopping/{id}`                       | Take a still-needed item off the list — anyone                              |
+
+Activity feed actions: `shopping_added`, `shopping_bought`, `shopping_unbought`, `shopping_removed`.
+
 ## Expenses
 
 | Method | Path                               | Description                         |

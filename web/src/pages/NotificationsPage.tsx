@@ -8,24 +8,69 @@ import { useHouseholds } from "../features/households/hooks";
 import { formatTime, localIsoDate, relativeDay } from "../lib/format";
 import type { HelpRequest } from "../types/api";
 
-type View = "everyone" | "mine";
 type Notice = { message: string; lost: boolean }; // lost: someone else got there first (409)
 
 function when(iso: string): string {
   return `${relativeDay(localIsoDate(new Date(iso)), localIsoDate())}, ${formatTime(iso)}`;
 }
 
-/** Help requests: everyone's open ones (the notifications), and my own with their status. */
-export function NotificationsPage() {
-  const households = useHouseholds();
-  const help = useHelpRequests();
-  const [view, setView] = useState<View>("everyone");
-  const [asking, setAsking] = useState(false);
-  const [editing, setEditing] = useState<HelpRequest | null>(null);
-  // Kept here, not in each card: a card moves between sections when its status changes.
+/** Per-card messages, kept above the cards: a card moves between sections when its status changes. */
+function useNotices() {
   const [notices, setNotices] = useState<Record<string, Notice>>({});
   const setNotice = (id: string, notice: Notice | null) =>
     setNotices(({ [id]: _, ...rest }) => (notice ? { ...rest, [id]: notice } : rest));
+  return { notices, setNotice };
+}
+
+/** 🔔 Notifications: what other people in my houses need. Anyone can help and mark it done. */
+export function NotificationsPage() {
+  const households = useHouseholds();
+  const help = useHelpRequests();
+  const { notices, setNotice } = useNotices();
+
+  if (households.isLoading || help.isLoading) return <Loading />;
+  const others = (help.data ?? []).filter((r) => !r.is_mine);
+  const open = others.filter((r) => r.status === "open");
+  const recentlyDone = others.filter((r) => r.status === "done");
+  const multiHouse = (households.data?.length ?? 0) > 1;
+  const card = (r: HelpRequest) => (
+    <HelpCard key={r.id} req={r} showHousehold={multiHouse} notice={notices[r.id]} setNotice={(n) => setNotice(r.id, n)} />
+  );
+
+  return (
+    <>
+      <PageTitle title="Notifications" subtitle="What your roommates need. Help out, then mark it done." />
+      <ErrorText error={help.error} />
+      <div className="space-y-8">
+        <section className="space-y-3">
+          <h2 className="section-title">Needs a hand · {open.length}</h2>
+          {open.length === 0 ? <Empty>Nobody needs help right now 🎉</Empty> : open.map(card)}
+        </section>
+        {recentlyDone.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="section-title">Recently done</h2>
+            {recentlyDone.map(card)}
+          </section>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** 🙋 Help requests: what I asked for and where each one stands, plus asking for something new. */
+export function HelpRequestsPage() {
+  const households = useHouseholds();
+  const help = useHelpRequests();
+  const { notices, setNotice } = useNotices();
+  const [asking, setAsking] = useState(false);
+  const [editing, setEditing] = useState<HelpRequest | null>(null);
+
+  if (households.isLoading || help.isLoading) return <Loading />;
+  const mine = (help.data ?? []).filter((r) => r.is_mine);
+  const open = mine.filter((r) => r.status === "open");
+  const done = mine.filter((r) => r.status === "done");
+  const multiHouse = (households.data?.length ?? 0) > 1;
+  const noHouse = households.data?.length === 0;
   const card = (r: HelpRequest) => (
     <HelpCard
       key={r.id}
@@ -37,43 +82,17 @@ export function NotificationsPage() {
     />
   );
 
-  if (households.isLoading || help.isLoading) return <Loading />;
-  const all = help.data ?? [];
-  const open = all.filter((r) => r.status === "open");
-  const recentlyDone = all.filter((r) => r.status === "done");
-  const mine = all.filter((r) => r.is_mine);
-  const multiHouse = (households.data?.length ?? 0) > 1;
-  const noHouse = households.data?.length === 0;
-
-  const tabClass = (v: View) =>
-    `rounded-xl px-3.5 py-1.5 text-sm font-medium transition ${
-      view === v ? "bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-100" : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
-    }`;
-
   return (
     <>
-      <PageTitle title="Notifications" subtitle="Help requests from everyone in your houses. Anyone can help and mark it done." />
-      <ErrorText error={help.error} />
-
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 rounded-2xl bg-white/60 p-1 ring-1 ring-slate-900/5 backdrop-blur">
-          <button className={tabClass("everyone")} onClick={() => setView("everyone")}>
-            Everyone · {open.length} open
-          </button>
-          <button className={tabClass("mine")} onClick={() => setView("mine")}>
-            My requests · {mine.length}
-          </button>
-        </div>
-        {!noHouse && !asking && !editing && (
-          <Button className="ml-auto" onClick={() => setAsking(true)}>
-            + Ask for help
-          </Button>
-        )}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageTitle title="Help requests" subtitle="What you asked for, and whether someone has done it." />
+        {!noHouse && !asking && !editing && <Button onClick={() => setAsking(true)}>+ Ask for help</Button>}
       </div>
+      <ErrorText error={help.error} />
 
       {noHouse && <Empty>Join a household first, then you can ask your roommates for help.</Empty>}
       {(asking || editing) && households.data && (
-        <div className="mb-6">
+        <div className="mb-8">
           <HelpForm
             key={editing?.id ?? "new"}
             households={households.data}
@@ -86,31 +105,23 @@ export function NotificationsPage() {
         </div>
       )}
 
-      {view === "everyone" ? (
+      {!noHouse && (
         <div className="space-y-8">
           <section className="space-y-3">
-            <h2 className="section-title">Needs a hand</h2>
+            <h2 className="section-title">Waiting for help · {open.length}</h2>
             {open.length === 0 ? (
-              <Empty>Nobody needs help right now 🎉</Empty>
+              <Empty>Nothing open. Use “+ Ask for help” when you need a hand.</Empty>
             ) : (
               open.map(card)
             )}
           </section>
-          {recentlyDone.length > 0 && (
+          {done.length > 0 && (
             <section className="space-y-3">
-              <h2 className="section-title">Recently done</h2>
-              {recentlyDone.map(card)}
+              <h2 className="section-title">Done · {done.length}</h2>
+              {done.map(card)}
             </section>
           )}
         </div>
-      ) : (
-        <section className="space-y-3">
-          {mine.length === 0 ? (
-            <Empty>You haven't asked for help yet. Use “+ Ask for help” when you need a hand.</Empty>
-          ) : (
-            mine.map(card)
-          )}
-        </section>
       )}
     </>
   );
@@ -125,7 +136,7 @@ function HelpCard({
 }: {
   req: HelpRequest;
   showHousehold: boolean;
-  onEdit: (r: HelpRequest) => void;
+  onEdit?: (r: HelpRequest) => void;
   notice?: Notice;
   setNotice: (n: Notice | null) => void;
 }) {
@@ -173,7 +184,7 @@ function HelpCard({
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          {!isDone && req.is_mine && (
+          {!isDone && req.is_mine && onEdit && (
             <>
               <Button variant="ghost" disabled={busy} onClick={() => onEdit(req)}>
                 Edit
