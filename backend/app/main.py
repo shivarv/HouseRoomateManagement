@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import auth, chores, health, help, households, reports, shopping, swaps
+from app.api.routes import auth, bills, chores, health, help, households, reports, shopping, swaps
 from app.core.config import settings
 from app.services.errors import ServiceError
 
@@ -49,6 +49,7 @@ for router in (
     swaps.router,
     help.router,
     shopping.router,
+    bills.router,
     reports.router,
 ):
     app.include_router(router, prefix=API_PREFIX)

@@ -3,7 +3,7 @@ import type { ActivityEvent, MemberBrief } from "../../types/api";
 
 /** A sentence as segments, so names and chores can be highlighted. Mirrored in iOS (ActivityText.swift). */
 export type Segment = string | { person: MemberBrief } | { chore: string };
-export type ActivityKind = "done" | "undo" | "swap" | "help" | "shopping" | "settings" | "people";
+export type ActivityKind = "done" | "undo" | "swap" | "help" | "shopping" | "bills" | "settings" | "people";
 
 export interface ActivityLine {
   icon: string;
@@ -106,6 +106,24 @@ export function activityText(e: ActivityEvent): ActivityLine {
       return { icon: "↩️", kind: "shopping", parts: [who(e.actor), ` put “${e.detail ?? ""}” back on the shopping list`] };
     case "shopping_removed":
       return { icon: "🗑", kind: "shopping", parts: [who(e.actor), ` took “${e.detail ?? ""}” off the shopping list`] };
+    case "bill_paid":
+      return {
+        icon: "💸",
+        kind: "bills",
+        parts: actorIsSubject
+          ? [who(e.actor), ` paid ${e.detail ?? "a bill"}`]
+          : [who(e.actor), " marked ", who(e.subject), ` as paid for ${e.detail ?? "a bill"}`],
+      };
+    case "bill_amount_set":
+      return { icon: "🧮", kind: "bills", parts: [who(e.actor), ` set the amount for ${e.detail ?? "a bill"}`] };
+    case "bill_unpaid":
+      return { icon: "↩️", kind: "bills", parts: [who(e.actor), " undid a payment for ", e.detail ?? "a bill"] };
+    case "bill_created":
+      return { icon: "🧾", kind: "settings", parts: [who(e.actor), ` added the bill “${e.detail ?? ""}”`] };
+    case "bill_updated":
+      return { icon: "⚙️", kind: "settings", parts: [who(e.actor), ` updated the bill “${e.detail ?? ""}”`] };
+    case "bill_deleted":
+      return { icon: "✖️", kind: "settings", parts: [who(e.actor), ` deleted the bill “${e.detail ?? ""}”`] };
     case "chore_created":
       return { icon: "➕", kind: "settings", parts: [who(e.actor), " added the chore ", chore, e.detail ? ` (${e.detail})` : ""] };
     case "chore_updated":

@@ -23,6 +23,8 @@ export function SettingsLayout() {
         <NavLink to="" end className={section}>House details</NavLink>
         <NavLink to="people" className={section}>Roommates</NavLink>
         <NavLink to="chores" className={section}>Chores</NavLink>
+        <NavLink to="groceries" className={section}>Groceries</NavLink>
+        <NavLink to="reminders" className={section}>Reminders</NavLink>
         <NavLink to="history" className={section}>Past months</NavLink>
       </nav>
       <Outlet context={household} />

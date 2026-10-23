@@ -4,6 +4,7 @@ extension APIClient {
     private struct AddBody: Encodable {
         let name: String
         let quantity: String?
+        let category: String?  // a category key; left out, the backend picks one
     }
     private struct EditBody: Encodable {
         let name: String?
@@ -17,8 +18,9 @@ extension APIClient {
     }
 
     /// Already on the list (any capitalisation)? The existing item comes back instead of a copy.
-    func addShoppingItem(householdId: UUID, name: String, quantity: String?) async throws -> ShoppingItem {
-        try await send("POST", "/households/\(householdId)/shopping", body: AddBody(name: name, quantity: quantity))
+    func addShoppingItem(householdId: UUID, name: String, quantity: String?, category: String? = nil) async throws -> ShoppingItem {
+        try await send("POST", "/households/\(householdId)/shopping",
+                       body: AddBody(name: name, quantity: quantity, category: category))
     }
 
     func editShoppingItem(_ id: UUID, name: String?, quantity: String?, note: String?) async throws -> ShoppingItem {

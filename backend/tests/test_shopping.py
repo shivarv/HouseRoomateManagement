@@ -115,19 +115,15 @@ def test_one_trip_marks_several_items_bought(client):
     assert ("shopping_bought", "Oil, Washing soap") in _feed(client, house, ann)
 
 
-def test_undo_edit_remove_and_suggestions(client):
+def test_undo_edit_and_remove(client):
     house, ann, bea, cy = _house(client)
     rice = _add(client, house, ann, "Rice").json()
     client.post(f"{API}/shopping/{rice['id']}/bought", headers=bea)
-
-    # Bought before, not on the list now → suggested.
-    assert _list(client, house, ann)["suggestions"] == ["Rice"]
 
     # Undo: the buyer or whoever added it.
     assert client.post(f"{API}/shopping/{rice['id']}/undo", headers=cy).status_code == 403
     res = client.post(f"{API}/shopping/{rice['id']}/undo", headers=ann)
     assert res.status_code == 200 and res.json()["status"] == "needed"
-    assert _list(client, house, ann)["suggestions"] == []  # on the list again
 
     res = client.patch(f"{API}/shopping/{rice['id']}", json={"quantity": "5 kg"}, headers=cy)
     assert res.status_code == 200 and res.json()["quantity"] == "5 kg"

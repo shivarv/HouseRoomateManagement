@@ -219,20 +219,37 @@ struct ScheduleResponse: Decodable {
     let days: [ScheduleDay]
 }
 
-enum ShoppingCategory: String, Codable, CaseIterable, Identifiable {
-    case groceries, toiletries, cleaning, household, other
-    var id: Self { self }
+/// A section of the house's shopping list. The house admin configures them; "other" always exists.
+struct GroceryCategory: Decodable, Identifiable, Hashable {
+    let id: UUID
+    let key: String  // what items store; never changes
+    let label: String
+    let icon: String
+    let position: Int
+    let canDelete: Bool  // false only for "other", the fallback
+}
 
-    var label: String { rawValue.capitalized }
-    var icon: String {
-        switch self {
-        case .groceries: "🥚"
-        case .toiletries: "🧴"
-        case .cleaning: "🧼"
-        case .household: "🧻"
-        case .other: "🛍️"
-        }
-    }
+/// A quick-add item chosen by the house admin.
+struct GroceryPreset: Decodable, Identifiable, Hashable {
+    let id: UUID
+    let name: String
+    let categoryKey: String
+    let position: Int
+}
+
+/// Something people added that isn't a quick-add item yet (admin only).
+struct GrocerySuggestion: Decodable, Identifiable, Hashable {
+    let name: String
+    let timesAdded: Int
+    let categoryKey: String
+    var id: String { name.lowercased() }
+}
+
+/// The house's grocery set-up, for the admin's Groceries tab.
+struct GrocerySettings: Decodable {
+    let categories: [GroceryCategory]
+    let presets: [GroceryPreset]
+    let suggestions: [GrocerySuggestion]  // most added first
 }
 
 /// Something the house needs to buy. Anyone can mark it bought.
@@ -240,7 +257,7 @@ struct ShoppingItem: Decodable, Identifiable, Hashable {
     let id: UUID
     let name: String
     let quantity: String?  // free text: "2 dozen", "1 L"
-    let category: ShoppingCategory
+    let category: String  // a GroceryCategory.key
     let note: String?
     let status: String  // needed | bought
     let addedBy: MemberBrief?
@@ -253,7 +270,8 @@ struct ShoppingItem: Decodable, Identifiable, Hashable {
 struct ShoppingList: Decodable {
     let needed: [ShoppingItem]  // oldest first
     let recentlyBought: [ShoppingItem]  // last 14 days, newest first
-    let suggestions: [String]  // bought before, not on the list now
+    let categories: [GroceryCategory]  // display order
+    let quickAdd: [GroceryPreset]  // chosen by the admin, in order
 }
 
 enum HelpStatus: String, Decodable {
@@ -338,4 +356,137 @@ struct Report: Decodable {
 
 struct ReportMonths: Decodable {
     let months: [String]
+}
+
+// MARK: - Reminders (bills)
+
+/// one: a named person pays · anyone: the first to pay settles it · everyone: each pays a share
+enum PayerMode: String, Codable, CaseIterable, Identifiable {
+    case one, anyone, everyone
+    var id: Self { self }
+    var label: String {
+        switch self {
+        case .one: "One person pays"
+        case .anyone: "Anyone can pay"
+        case .everyone: "Everyone pays their share"
+        }
+    }
+}
+
+enum BillFrequency: String, Codable, CaseIterable, Identifiable {
+    case monthly, weekly, daily
+    var id: Self { self }
+    var label: String {
+        switch self {
+        case .monthly: "Every month"
+        case .weekly: "Every week"
+        case .daily: "Every day"
+        }
+    }
+    var current: String {
+        switch self {
+        case .monthly: "This month"
+        case .weekly: "This week"
+        case .daily: "Today"
+        }
+    }
+}
+
+/// fixed: the amount repeats · variable: an admin enters each period's amount (gas, electricity)
+enum AmountType: String, Codable, CaseIterable, Identifiable {
+    case fixed, variable
+    var id: Self { self }
+}
+
+enum BillStatus: String, Decodable {
+    case paid, due, overdue, upcoming
+    var label: String {
+        switch self {
+        case .paid: "Paid"
+        case .due: "Due soon"
+        case .overdue: "Overdue"
+        case .upcoming: "Upcoming"
+        }
+    }
+    /// Bills lead with the most urgent.
+    var urgency: Int {
+        switch self {
+        case .overdue: 0
+        case .due: 1
+        case .upcoming: 2
+        case .paid: 3
+        }
+    }
+}
+
+struct BillPayment: Decodable, Identifiable, Hashable {
+    let id: UUID
+    let member: MemberBrief  // who paid
+    let recordedBy: MemberBrief?
+    let paidAt: String
+    let canUndo: Bool
+}
+
+/// One occurrence of a bill: this month's rent, this week's cleaner, today's milk money.
+struct BillPeriod: Decodable, Hashable {
+    let period: String  // start: month start, Monday, or the day
+    let periodEnd: String
+    let label: String  // "Oct 2026", "Week of Oct 19", "Mon, Oct 19"
+    let dueDate: String
+    let status: BillStatus
+    let amountCents: Int?  // fixed: the bill's; variable: this period's, once set
+    let shareCents: Int?  // everyone mode: each person's part
+    let payments: [BillPayment]
+    let paidCount: Int
+    let expectedCount: Int
+    let iPaid: Bool
+    let isCurrent: Bool  // not a future period, so it can be paid
+}
+
+struct Bill: Decodable, Identifiable, Hashable {
+    let id: UUID
+    let name: String
+    let icon: String
+    let payerMode: PayerMode
+    let payer: MemberBrief?
+    let frequency: BillFrequency
+    let dueDay: Int  // monthly: day of the month · weekly: 1 = Mon … 7 = Sun · daily: unused
+    let amountType: AmountType
+    let amountCents: Int?  // fixed bills
+    let lastAmountCents: Int?  // variable bills: the latest amount before this period
+    let currency: String
+    let note: String?
+    let position: Int
+    let isActive: Bool
+    let current: BillPeriod
+
+    static let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    var dueText: String {
+        switch frequency {
+        case .daily: "Every day"
+        case .weekly: "Every \(Self.weekdays[max(0, min(6, dueDay - 1))])"
+        case .monthly: "Monthly on day \(dueDay)"
+        }
+    }
+}
+
+struct BillList: Decodable {
+    let today: String
+    let bills: [Bill]
+}
+
+enum Money {
+    /// 125050 + "USD" → "$1,250.50". Money is always integer cents.
+    static func format(_ cents: Int, _ currency: String) -> String {
+        (Decimal(cents) / 100).formatted(.currency(code: currency))
+    }
+
+    /// "1,250.50" → 125050. Empty → nil. Not a number → -1.
+    static func cents(_ text: String) -> Int? {
+        let cleaned = text.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
+        guard !cleaned.isEmpty else { return nil }
+        guard let value = Double(cleaned), value >= 0 else { return -1 }
+        return Int((value * 100).rounded())
+    }
 }

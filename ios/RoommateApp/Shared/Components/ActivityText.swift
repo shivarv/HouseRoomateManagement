@@ -53,6 +53,20 @@ enum ActivityText {
             return ("↩️", "\(actor) put “\(e.detail ?? "")” back on the shopping list")
         case "shopping_removed":
             return ("🗑", "\(actor) took “\(e.detail ?? "")” off the shopping list")
+        case "bill_paid":
+            let mine = e.subject == nil || e.subject?.id == e.actor?.id
+            return ("💸", mine ? "\(actor) paid \(e.detail ?? "a bill")"
+                              : "\(actor) marked \(subject) as paid for \(e.detail ?? "a bill")")
+        case "bill_amount_set":
+            return ("🧮", "\(actor) set the amount for \(e.detail ?? "a bill")")
+        case "bill_unpaid":
+            return ("↩️", "\(actor) undid a payment for \(e.detail ?? "a bill")")
+        case "bill_created":
+            return ("🧾", "\(actor) added the bill “\(e.detail ?? "")”")
+        case "bill_updated":
+            return ("⚙️", "\(actor) updated the bill “\(e.detail ?? "")”")
+        case "bill_deleted":
+            return ("✖️", "\(actor) deleted the bill “\(e.detail ?? "")”")
         case "chore_created":
             return ("➕", "\(actor) added the chore \(chore)" + (e.detail.map { " (\($0))" } ?? ""))
         case "chore_updated":

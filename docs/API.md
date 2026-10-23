@@ -93,8 +93,8 @@ Things the house needs to buy. No prices. Categories (`groceries`, `toiletries`,
 
 | Method | Path                                   | Description                                                                 |
 | ------ | -------------------------------------- | --------------------------------------------------------------------------- |
-| GET    | `/households/{id}/shopping`            | `{ needed, recently_bought (14 days), suggestions (bought before, not on the list) }` |
-| POST   | `/households/{id}/shopping`            | Add `{ name, quantity?, category?, note? }` → 201, or 200 with the existing item if it's already on the list |
+| GET    | `/households/{id}/shopping`            | `{ needed, recently_bought (14 days), categories (the house's sections, in order), quick_add (the admin's quick-add items: name + type, alphabetical) }` |
+| POST   | `/households/{id}/shopping`            | Add `{ name, quantity?, category?, note? }` → 201, or 200 with the existing item if it's already on the list. `category` is a category `key` of the house (400 if unknown); left out, it comes from the matching quick-add item, else a guess from the name, else `other` |
 | POST   | `/households/{id}/shopping/bought`     | One trip: `{ item_ids }`. Items someone else already bought keep their buyer |
 | PATCH  | `/shopping/{id}`                       | Edit `{ name?, quantity?, category?, note? }` — still-needed items only (409) |
 | POST   | `/shopping/{id}/bought`                | Mark one item bought                                                        |
@@ -102,6 +102,23 @@ Things the house needs to buy. No prices. Categories (`groceries`, `toiletries`,
 | DELETE | `/shopping/{id}`                       | Take a still-needed item off the list — anyone                              |
 
 Activity feed actions: `shopping_added`, `shopping_bought`, `shopping_unbought`, `shopping_removed`.
+
+### Grocery settings (admin only)
+
+Every house starts with the standard categories (groceries, toiletries, cleaning, household, other) and 15 quick-add items. `other` is the fallback and can't be deleted.
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET    | `/households/{id}/grocery-settings`          | `{ categories, presets, suggestions }`. Suggestions: names added in the last 120 days that aren't quick-add items or dismissed, `{ name, times_added, category_key }`, most added first |
+| POST   | `/households/{id}/grocery-settings/restore`  | Bring back removed standard categories and quick-add items; custom ones are untouched |
+| POST   | `/households/{id}/grocery-categories`        | `{ label, icon? }` → 201. Labels are unique per house (409) |
+| PATCH  | `/grocery-categories/{id}`                   | `{ label?, icon? }`. The `key` never changes |
+| DELETE | `/grocery-categories/{id}`                   | Its items and quick-add items move to `other` (400 for `other` itself) |
+| PUT    | `/households/{id}/grocery-categories/order`  | `{ ids }`: every category of the house, in the new order |
+| POST   | `/households/{id}/grocery-presets`           | `{ name, category_key? }` → 201. Also how a suggestion is accepted. 409 if already a quick-add item |
+| PATCH  | `/grocery-presets/{id}`                      | `{ name?, category_key? }` |
+| DELETE | `/grocery-presets/{id}`                      | Removes it from quick add (kept as dismissed, so it isn't suggested again) |
+| POST   | `/households/{id}/grocery-suggestions/dismiss` | `{ name }`: stop suggesting it |
 
 ## Expenses
 
@@ -134,3 +151,26 @@ Activity feed actions: `shopping_added`, `shopping_bought`, `shopping_unbought`,
   "created_at": "2026-10-19T14:00:00Z"
 }
 ```
+
+## Reminders (bills)
+
+Recurring house payments. Admins set them up; everyone sees them and marks them paid. Every house starts with Rent (everyone pays, fixed), Electricity (anyone, changes each time), WiFi (anyone, fixed) and Gas (anyone, changes each time), all monthly and due on the 1st.
+
+- `frequency`: `monthly` | `weekly` | `daily`. Each occurrence (*period*) starts on the 1st, on Monday, or on the day, and shows up as a reminder then.
+- `due_day`: monthly → day of the month (29–31 use the last day of short months); weekly → weekday, 1 = Monday … 7 = Sunday; daily → unused.
+- `amount_type`: `fixed` (the bill's `amount_cents` repeats every period) or `variable` (an admin sets each period's amount, e.g. when the electricity bill arrives; `last_amount_cents` is a hint). Money is integer cents + a 3-letter currency, display only.
+- `payer_mode`: `one` (a named `payer_id`; anyone can still mark it for them), `anyone` (first payer settles it; later clicks get 409 "Bea already paid it"), `everyone` (each person pays their share and is counted: `paid_count` of `expected_count` active people; `share_cents` = amount ÷ people).
+- `status` of a period: `paid`, `due` (today or within 3 days), `overdue`, `upcoming`.
+
+| Method | Path | Who | Description |
+| ------ | ---- | --- | ----------- |
+| GET    | `/households/{id}/bills?include_paused=` | member | `{ today, bills }`: each bill with its `current` period (payments, amount, status). `include_paused` only works for admins |
+| GET    | `/bills/{id}/history?limit=6` | member | The periods before the current one, newest first (max 24) |
+| POST   | `/households/{id}/bills` | admin | `{ name, icon?, payer_mode?, payer_id?, frequency?, due_day?, amount_type?, amount_cents?, currency?, note? }` → 201 |
+| PATCH  | `/bills/{id}` | admin | Any of the above, plus `is_active` (pause/resume). `amount_cents: null` and `note: ""` clear them |
+| DELETE | `/bills/{id}` | admin | Deletes the bill and its history (pause it to keep the history) |
+| PUT    | `/bills/{id}/amount` | admin | Variable bills: `{ amount_cents, period? }` (any date in the period; default the current one; `null` clears). Fixed bills → 400 |
+| POST   | `/bills/{id}/pay` | member | `{ member_id?, period? }`: me and the current period by default. Future periods → 400; already paid → 409 |
+| DELETE | `/bill-payments/{id}` | member | Undo: whoever paid, whoever marked it, or an admin |
+
+Activity feed actions: `bill_paid`, `bill_unpaid`, `bill_amount_set`, `bill_created`, `bill_updated`, `bill_deleted`.

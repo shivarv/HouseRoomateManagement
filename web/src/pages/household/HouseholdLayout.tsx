@@ -40,7 +40,7 @@ export function HouseholdLayout() {
                   aria-label="Switch household"
                   value={h.id}
                   onChange={(e) => switchTo(e.target.value)}
-                  className="cursor-pointer rounded-lg bg-white/15 px-2 py-1 font-semibold uppercase tracking-widest text-white outline-none ring-1 ring-white/30 transition hover:bg-white/25 [&>option]:text-slate-900"
+                  className="select-on-dark cursor-pointer rounded-lg bg-white/15 px-2 py-1 font-semibold uppercase tracking-widest text-white outline-none ring-1 ring-white/30 transition hover:bg-white/25 [&>option]:text-slate-900"
                 >
                   {households.data!.map((other) => (
                     <option key={other.id} value={other.id}>

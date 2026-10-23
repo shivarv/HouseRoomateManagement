@@ -8,6 +8,17 @@
       "Bash(.venv/bin/*)",
       "Bash(backend/.venv/bin/*)",
       "Bash(curl -s http://localhost*)"
+    ],
+    "deny": [
+      "Read(//Users/shiva/Downloads/**)",
+      "Edit(//Users/shiva/Downloads/**)"
+    ],
+    "ask": [
+      "Bash(*Google Chrome*)",
+      "Bash(*google-chrome*)",
+      "Bash(*chromium*)",
+      "Bash(open *)",
+      "Bash(*/Downloads*)"
     ]
   }
 }
