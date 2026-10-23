@@ -235,7 +235,7 @@ def invited_emails(db: Session, household_id: uuid.UUID) -> set[str]:
 def member_out(member: HouseholdMember, invited: set[str] | None = None) -> MemberOut:
     user = member.user
     if user is not None:
-        status = "joined"
+        status = "verified" if user.email_verified_at is not None else "joined"
     elif member.email and invited and member.email in invited:
         status = "invited"
     else:

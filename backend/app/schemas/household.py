@@ -25,7 +25,8 @@ class MemberOut(MemberBrief):
     is_active: bool
     has_account: bool
     # added: by name only · invited: an email invite is waiting for them · joined: has an account
-    status: Literal["added", "invited", "joined"] = "added"
+    # · verified: has an account with a confirmed email (everyone who signed up before checks existed)
+    status: Literal["added", "invited", "joined", "verified"] = "added"
     # From their account (empty until they join): "Bea" might be "Beatrice Smith".
     first_name: str = ""
     last_name: str = ""
