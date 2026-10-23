@@ -99,7 +99,10 @@
       "Bash(grep -rn \"toggleAdmin\" Features/Households/HouseholdViewModel.swift)",
       "Bash(git stash *)",
       "Bash(grep -rlis \"neon.tech\" --include=\".env*\" .)",
-      "Bash(ls -a backend)"
+      "Bash(ls -a backend)",
+      "Bash(sed -n 1,45p backend/app/core/config.py)",
+      "Bash(sed -n 1,60p render.yaml)",
+      "Bash(grep -n \"email\\\\.\\\\|def \" backend/app/services/invites.py)"
     ]
   }
 }
