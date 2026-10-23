@@ -40,7 +40,9 @@ def verify(db: Session, token: str) -> User:
     decoded = decode_email_token(token)
     user = db.get(User, decoded[0]) if decoded else None
     if user is None:
-        raise BadRequest("This link doesn't work or has expired. Ask for a new one from your profile.")
+        raise BadRequest(
+            "This link doesn't work or has expired. Ask for a new one from your profile."
+        )
     if user.email.lower() != decoded[1]:
         raise BadRequest("This link was for a different email address. Ask for a new one.")
     if user.email_verified_at is None:

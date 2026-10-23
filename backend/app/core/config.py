@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     # Invite emails go out through Resend (https://resend.com) when a key is set; without one,
     # invites are still saved and the web app opens the sender's own email app instead.
     resend_api_key: str | None = None
+    # Or through Brevo (https://brevo.com); used instead of Resend when set.
+    brevo_api_key: str | None = None
     email_from: str = "Roommates <onboarding@resend.dev>"
 
     @field_validator("database_url", "database_url_unpooled")
