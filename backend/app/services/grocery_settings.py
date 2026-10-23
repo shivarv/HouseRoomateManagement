@@ -28,7 +28,7 @@ MAX_SUGGESTIONS = 20
 
 # (key, label, icon). Keys are what shopping items store; labels and icons can be renamed.
 STANDARD_CATEGORIES = (
-    ("groceries", "Groceries", "🥚"),
+    ("groceries", "Groceries", "🛒"),
     ("toiletries", "Toiletries", "🧴"),
     ("cleaning", "Cleaning", "🧼"),
     ("household", "Household", "🧻"),
