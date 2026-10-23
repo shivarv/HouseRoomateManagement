@@ -9,7 +9,7 @@ const CUSTOM = "custom";
 const fieldClass =
   "w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-slate-400 hover:border-indigo-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15";
 
-/** Ask for help (new), or edit my own open request (`editing`). */
+/** Ask a favour (new), or edit my own open one (`editing`). */
 export function HelpForm({
   households,
   editing,
@@ -57,7 +57,7 @@ export function HelpForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-4 rounded-2xl border border-indigo-100 bg-white/90 p-5 shadow-sm ring-1 ring-indigo-50">
-      <h2 className="font-semibold">{editing ? "Edit your request" : "Ask for help"}</h2>
+      <h2 className="font-semibold">{editing ? "Edit your favour" : "Ask a favour"}</h2>
 
       {!editing && households.length > 1 && (
         <label className="block space-y-1 text-sm">

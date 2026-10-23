@@ -5,17 +5,14 @@ import { chatApi } from "../api/chat";
 import { useAuth } from "../features/auth/AuthContext";
 import { useHelpRequests } from "../features/help/hooks";
 import { useDefaultHousehold, useSwitchHousehold } from "../features/households/hooks";
+import { avatarColor } from "../lib/avatar";
+import { mainTab, settingsButton } from "../lib/tabStyles";
 import { unsavedChanges } from "../lib/unsavedChanges";
 import type { Household } from "../types/api";
 import { WelcomePage } from "../pages/WelcomePage";
 import { Button } from "./ui";
 
-const link = ({ isActive }: { isActive: boolean }) =>
-  `shrink-0 snap-start whitespace-nowrap rounded-xl px-2.5 py-1.5 text-sm font-medium transition-all duration-200 ${
-    isActive
-      ? "bg-linear-to-r from-indigo-500/10 to-fuchsia-500/10 text-indigo-700 ring-1 ring-indigo-200"
-      : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
-  }`;
+const link = mainTab;
 
 const HOUSE_TABS = [
   { path: "reminders", label: "🧾 Reminders" },
@@ -125,7 +122,7 @@ export function AppShell() {
             {user && (
               <NavLink
                 to="/profile"
-                className="hidden h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-sky-400 to-indigo-500 text-sm font-semibold text-white shadow-sm transition hover:ring-2 hover:ring-indigo-300 sm:flex"
+                className={`hidden h-8 w-8 items-center justify-center rounded-full bg-linear-to-br ${avatarColor(user.name)} text-sm font-semibold text-white shadow-sm transition hover:ring-2 hover:ring-indigo-300 sm:flex`}
                 title={`${user.name} · your profile`}
               >
                 {user.name.slice(0, 1).toUpperCase()}
@@ -136,6 +133,21 @@ export function AppShell() {
             </Button>
           </div>
         </div>
+        {noHouse && (
+          // No home yet: the tabs are there to show what's coming, but locked until I create or join one.
+          <nav aria-label="Tabs (create or join a home first)" className="mx-auto flex max-w-4xl snap-x gap-1 overflow-x-auto px-4 py-2 [scrollbar-width:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden">
+            {["☀️ My day", ...HOUSE_TABS.map((t) => t.label), "🙋 Ask favours"].map((label) => (
+              <span
+                key={label}
+                aria-disabled="true"
+                title="Create or join a home first"
+                className="cursor-not-allowed select-none whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-medium text-slate-400 opacity-60"
+              >
+                🔒 {label}
+              </span>
+            ))}
+          </nav>
+        )}
         {!noHouse && (
           <div className="mx-auto flex max-w-4xl items-center">
             <div className="relative min-w-0 flex-1">
@@ -167,18 +179,15 @@ export function AppShell() {
                     Households
                   </NavLink>
                 )}
-                <NavLink to="/notifications" className={link} title="Help requests">
+                <NavLink to="/notifications" className={link} title="Favours you and your roommates asked for">
                   <span className="relative">
-                    🔔 Notifications
+                    🙋 Ask favours
                     {waiting > 0 && (
                       <span className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-fuchsia-600 px-1 text-[10px] font-bold text-white">
                         {waiting}
                       </span>
                     )}
                   </span>
-                </NavLink>
-                <NavLink to="/help" className={link}>
-                  🙋 Help
                 </NavLink>
               </nav>
               <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-linear-to-l from-white/90 to-transparent md:hidden" />
@@ -189,15 +198,10 @@ export function AppShell() {
                 <NavLink
                   to={`${base}/settings`}
                   title="House settings (admins)"
-                  className={({ isActive }) =>
-                    `flex items-center gap-1 whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-semibold shadow-sm transition ${
-                      isActive
-                        ? "bg-linear-to-r from-indigo-500 to-fuchsia-500 text-white shadow-indigo-500/30"
-                        : "bg-white text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50"
-                    }`
-                  }
+                  className={settingsButton}
                 >
-                  ⚙<span className="hidden sm:inline">Settings</span>
+                  <span className="inline-block transition-transform duration-500 group-hover:rotate-90">⚙</span>
+                  <span className="hidden sm:inline">Settings</span>
                 </NavLink>
               </div>
             )}

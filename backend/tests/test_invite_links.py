@@ -28,7 +28,7 @@ def test_the_email_has_a_private_link_that_joins_once(client, monkeypatch):
     assert house["invite_code"] not in text  # the house code isn't in the email
 
     page = client.get(f"{API}/invite-links/{token}")  # no sign-in needed
-    assert page.status_code == 200 and page.json() == {"household_name": "Maple", "people": 1, "email": "bea@example.com"}
+    assert page.status_code == 200 and page.json() == {"household_name": "Maple", "people": 1, "email": "bea@example.com", "invited_by": "Ann"}
 
     bea = register(client, "bea@example.com", "Bea")
     joined = client.post(f"{API}/invite-links/{token}/accept", headers=bea)

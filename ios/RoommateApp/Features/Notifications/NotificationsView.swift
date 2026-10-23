@@ -77,13 +77,14 @@ final class NotificationsViewModel {
     }
 }
 
-/// 🔔 Notifications (`.everyone`): everything asked; others' requests can be marked done, mine only withdrawn.
-/// 🙋 Help requests (`.mine`): what I asked for and its status, plus asking for something new.
+/// 🙋 Ask favours: every favour asked in my houses, with "Ask a favour" on top. "All" is the feed:
+/// others' requests can be marked done, mine only withdrawn. "Asked by me" is what I asked for, where
+/// I can also edit and mark them done. Mirrors web NotificationsPage.tsx.
 struct NotificationsView: View {
-    enum Scope { case everyone, mine }
+    enum Scope: String, CaseIterable { case everyone = "All", mine = "Asked by me" }
 
     let model: NotificationsViewModel
-    var scope: Scope = .everyone
+    @State private var scope: Scope = .everyone
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var form: FormTarget?
@@ -99,17 +100,28 @@ struct NotificationsView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Picker("Show", selection: $scope) {
+                        ForEach(Scope.allCases, id: \.self) { s in
+                            let open = model.mine.filter { !$0.isDone }.count
+                            Text(s == .mine && open > 0 ? "\(s.rawValue) · \(open)" : s.rawValue).tag(s)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
                 if model.error != nil {
                     ErrorBanner(message: model.error)
                 }
-                // Notifications shows everything, my own requests included (withdraw-only there).
+                // "All" shows everything, my own requests included (withdraw-only there).
                 let shown = scope == .everyone ? model.requests : model.mine
                 let open = shown.filter { !$0.isDone }
                 let done = shown.filter(\.isDone)
-                Section(scope == .everyone ? "Needs a hand" : "Waiting for help") {
+                Section(scope == .everyone ? "Favours asked" : "Waiting for someone") {
                     if open.isEmpty && model.hasLoaded {
-                        Text(scope == .everyone ? "Nobody needs help right now 🎉"
-                                                : "Nothing open. Tap + when you need a hand.")
+                        Text(scope == .everyone ? "No favours asked right now 🎉"
+                                                : "Nothing open. Tap “Ask a favour” when you need a hand.")
                             .foregroundStyle(.secondary)
                     }
                     ForEach(open) { row($0) }
@@ -120,10 +132,11 @@ struct NotificationsView: View {
                     }
                 }
             }
-            .navigationTitle(scope == .everyone ? "Notifications" : "Help requests")
+            .navigationTitle("Ask favours")
             .toolbar {
-                if scope == .mine && !model.households.isEmpty {
-                    Button("Ask for help", systemImage: "plus") { form = FormTarget(editing: nil) }
+                if !model.households.isEmpty {
+                    Button("Ask a favour", systemImage: "plus") { form = FormTarget(editing: nil) }
+                        .labelStyle(.titleAndIcon)
                 }
             }
             .sheet(item: $form) { target in
@@ -283,7 +296,7 @@ private struct HelpFormView: View {
                     ErrorBanner(message: error)
                 }
             }
-            .navigationTitle(editing == nil ? "Ask for help" : "Edit request")
+            .navigationTitle(editing == nil ? "Ask a favour" : "Edit your favour")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

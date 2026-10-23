@@ -484,4 +484,5 @@ export interface InviteLinkPublic {
   household_name: string;
   people: number;
   email: string; // who it's for
+  invited_by: string | null; // who sent it
 }

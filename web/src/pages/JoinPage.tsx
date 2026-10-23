@@ -176,12 +176,14 @@ export function InviteLinkPage() {
   const expired = !invite.data || (join.error instanceof ApiError && join.error.status === 404);
   if (expired) return <Frame><ExpiredInvite signedIn={!!user} /></Frame>;
   const i = invite.data!;
-  const state = { from: location.pathname, invite: i.household_name };
+  const state = { from: location.pathname, invite: i.household_name, invitedBy: i.invited_by ?? undefined };
   const wrongAccount = !!user && user.email.toLowerCase() !== i.email;
 
   return (
     <Frame>
-      <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">You're invited</p>
+      <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">
+        {i.invited_by ? `${i.invited_by} invited you` : "You're invited"}
+      </p>
       <h1 className="mt-1 text-2xl font-extrabold tracking-tight">Join {i.household_name}</h1>
       <p className="mt-2 text-sm text-slate-600">
         {i.people} {i.people === 1 ? "person lives" : "people live"} here. This invite is for <b>{i.email}</b>.

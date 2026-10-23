@@ -36,15 +36,15 @@ enum ActivityText {
         case "swap_expired":
             return ("⌛", "Nobody took \(subject)'s \(chore)\(forDay)")
         case "help_requested":
-            return ("🙋", "\(actor) asked for help: “\(e.detail ?? "something")”")
+            return ("🙋", "\(actor) asked a favour: “\(e.detail ?? "something")”")
         case "help_updated":
-            return ("✏️", "\(actor) edited their help request: “\(e.detail ?? "")”")
+            return ("✏️", "\(actor) edited their favour: “\(e.detail ?? "")”")
         case "help_done":
             return ("💪", "\(actor) helped \(subject): “\(e.detail ?? "a request")” is done")
         case "help_reopened":
-            return ("↩️", "\(actor) reopened the help request “\(e.detail ?? "")”")
+            return ("↩️", "\(actor) reopened the favour “\(e.detail ?? "")”")
         case "help_withdrawn":
-            return ("🗑", "\(actor) withdrew their help request “\(e.detail ?? "")”")
+            return ("🗑", "\(actor) withdrew their favour “\(e.detail ?? "")”")
         case "shopping_added":
             return ("🛒", "\(actor) added “\(e.detail ?? "something")” to the shopping list")
         case "shopping_bought":
@@ -81,6 +81,8 @@ enum ActivityText {
             return ("🚪", "\(actor) removed \(subject) from the house")
         case "member_joined":
             return ("🎉", "\(subject) joined the house")
+        case "invite_code_reset":
+            return ("🔑", "\(actor) made a new invite link (old links no longer work)")
         default:
             return ("•", "\(actor): \(e.action)")
         }

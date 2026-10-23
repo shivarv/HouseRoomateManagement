@@ -95,7 +95,7 @@ function Wizard({ template }: { template: SetupTemplate }) {
       lastHousehold.set(house.id);
       await queryClient.invalidateQueries();
       // Open the invite panel so roommates can be invited right away (link, WhatsApp, email).
-      navigate(`/households/${house.id}/reminders?invite=1`);
+      navigate(`/households/${house.id}/settings/people`); // next: invite roommates (admins only)
     },
   });
   const touched = step > 0 || details.name.trim() !== "" || details.address.trim() !== "";

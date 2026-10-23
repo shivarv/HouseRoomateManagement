@@ -52,3 +52,4 @@ class InviteLinkPublic(BaseModel):
     household_name: str
     people: int
     email: str  # who it's for, so they sign up / log in with that address
+    invited_by: str | None  # who sent it (None if they've since left the house)

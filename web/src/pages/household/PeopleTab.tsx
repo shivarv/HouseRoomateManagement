@@ -3,6 +3,7 @@ import { householdsApi } from "../../api/households";
 import { Badge, Button, ErrorText } from "../../components/ui";
 import { useRemoveMember, useUpdateMember } from "../../features/households/hooks";
 import { InvitePanel } from "../../features/households/InvitePanel";
+import { avatarColor } from "../../lib/avatar";
 import type { Member } from "../../types/api";
 import { useCurrentHousehold } from "./HouseholdLayout";
 
@@ -36,13 +37,13 @@ export function PeopleTab({ manage = false }: { manage?: boolean }) {
 
   return (
     <div className="space-y-4">
-      <InvitePanel house={household} />
+      {isAdmin && <InvitePanel house={household} />}
 
       <ErrorText error={remove.error ?? update.error ?? cancel.error} />
       <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-white/70 bg-white/90 shadow-sm ring-1 ring-slate-900/5 backdrop-blur">
         {household.members.map((m) => (
           <li key={m.id} className="flex items-center gap-3 px-4 py-3 transition hover:bg-indigo-50/40">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-indigo-400 to-fuchsia-500 text-sm font-semibold text-white shadow-sm">
+            <div className={`flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br text-sm font-semibold text-white shadow-sm ${avatarColor(m.display_name)}`}>
               {m.display_name.slice(0, 1).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
