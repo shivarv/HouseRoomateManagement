@@ -192,7 +192,21 @@ struct HistorySection: View {
 private struct ScheduleSection: View {
     let model: HouseholdViewModel
 
+    /// 7, 14 or 28 days, as pills like the House tabs above (mirrors web ScheduleTab).
+    enum Range: String, CaseIterable, Identifiable {
+        case week = "7 days", twoWeeks = "14 days", fourWeeks = "28 days"
+        var id: Self { self }
+        var days: Int { self == .week ? 7 : self == .twoWeeks ? 14 : 28 }
+    }
+
     var body: some View {
+        ChipTabs(items: Range.allCases, selection: Binding(
+            get: { Range.allCases.first { $0.days == model.scheduleDays } ?? .week },
+            set: { range in Task { await model.setScheduleDays(range.days) } }
+        ))
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets())
+
         ForEach(Array(model.schedule.enumerated()), id: \.element.id) { index, day in
             Section(index == 0 ? "Today · \(DayFormat.short(day.date))" : DayFormat.short(day.date)) {
                 ForEach(day.slots, id: \.chore.id) { slot in

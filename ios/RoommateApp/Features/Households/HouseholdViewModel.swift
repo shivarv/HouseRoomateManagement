@@ -13,6 +13,8 @@ final class HouseholdViewModel {
     var swaps: [Swap] = []  // open swap requests
     var chores: [Chore] = []
     var schedule: [ScheduleDay] = []
+    /// How many days House → Schedule shows (7, 14 or 28; like web).
+    var scheduleDays = 7
     var activity: [ActivityEvent] = []
     var report: Report?
     var error: String?
@@ -39,7 +41,7 @@ final class HouseholdViewModel {
             async let d = client.household(householdId)
             async let t = client.householdTasksToday(householdId: householdId)
             async let c = client.chores(householdId: householdId)
-            async let s = client.schedule(householdId: householdId, days: 14)
+            async let s = client.schedule(householdId: householdId, days: scheduleDays)
             async let a = client.activity(householdId: householdId)
             async let r = client.report(householdId: householdId)
             async let w = client.householdSwaps(householdId: householdId)
@@ -73,6 +75,15 @@ final class HouseholdViewModel {
     }
 
     /// Runs a change, then reloads everything (any change can affect today, the feed and the report).
+    func setScheduleDays(_ days: Int) async {
+        scheduleDays = days
+        do {
+            schedule = try await client.schedule(householdId: householdId, days: days).days
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     func perform(_ change: @escaping () async throws -> Void) async {
         do {
             try await change()
