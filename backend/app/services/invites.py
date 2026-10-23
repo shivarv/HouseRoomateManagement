@@ -40,7 +40,7 @@ def _new_link(row: HouseholdInvite) -> None:
     row.expires_at = datetime.now(UTC) + timedelta(days=INVITE_DAYS)
 
 
-def _message(me: HouseholdMember, url: str) -> tuple[str, str]:
+def _message(me: HouseholdMember, url: str) -> tuple[str, str, str]:
     house = me.household
     subject = f"{me.display_name} invited you to {house.name} on Roommates"
     text = (
@@ -49,7 +49,16 @@ def _message(me: HouseholdMember, url: str) -> tuple[str, str]:
         f"New to Roommates? The link asks you to sign up first (a minute) with this email address. "
         f"It works for {INVITE_DAYS} days.\n"
     )
-    return subject, text
+    html = email.button_email(
+        [
+            "Hi!",
+            f"{me.display_name} invited you to join “{house.name}” on Roommates, to share chores, groceries and bills.",
+        ],
+        f"Join {house.name}",
+        url,
+        f"New to Roommates? You'll sign up first (a minute) with this email address. The link works for {INVITE_DAYS} days.",
+    )
+    return subject, text, html
 
 
 def find_open(db: Session, token: str) -> HouseholdInvite:

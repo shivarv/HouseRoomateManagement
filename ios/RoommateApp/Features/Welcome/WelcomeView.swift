@@ -8,6 +8,8 @@ struct WelcomeView: View {
     @State private var invites: [MyInvite] = []
     @State private var creating = false
     @State private var joining: JoinTarget?
+    @State private var joiningInvite: String?  // the token being joined
+    @State private var inviteError: String?
 
     struct JoinTarget: Identifiable {
         let code: String
@@ -30,7 +32,7 @@ struct WelcomeView: View {
                     Section("📬 You're invited") {
                         ForEach(invites) { invite in
                             Button {
-                                joining = JoinTarget(code: invite.inviteCode)
+                                Task { await join(invite) }
                             } label: {
                                 HStack {
                                     VStack(alignment: .leading) {
@@ -39,10 +41,12 @@ struct WelcomeView: View {
                                             .font(.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Text("Join").bold()
+                                    if joiningInvite == invite.token { ProgressView() } else { Text("Join").bold() }
                                 }
                             }
+                            .disabled(joiningInvite != nil)
                         }
+                        ErrorBanner(message: inviteError)
                     }
                 }
 
@@ -91,5 +95,20 @@ struct WelcomeView: View {
 
     private func load() async {
         invites = (try? await APIClient.shared.myInvites()) ?? []
+    }
+
+    /// Joins with the invite's private link: refused if it was cancelled or expired meanwhile.
+    private func join(_ invite: MyInvite) async {
+        joiningInvite = invite.token
+        defer { joiningInvite = nil }
+        do {
+            let house = try await APIClient.shared.acceptInviteLink(token: invite.token)
+            session.rememberHousehold(house.id)
+            inviteError = nil
+            await onJoined()
+        } catch {
+            inviteError = error.localizedDescription
+            await load()  // a cancelled invite drops off the list
+        }
     }
 }

@@ -133,7 +133,7 @@ def test_first_and_last_names(client):
 def test_members_have_status_email_and_phone(client, monkeypatch):
     from app.services import email
 
-    monkeypatch.setattr(email, "deliver", lambda *a: email.NOT_SET_UP)
+    monkeypatch.setattr(email, "deliver", lambda *a, **k: email.NOT_SET_UP)
     ann = register(client, "ann@example.com", "Ann")
     house = _create(client, ann, "Maple")
     # A name alone isn't enough: they need an email or phone to be invited.

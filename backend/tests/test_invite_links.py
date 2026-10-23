@@ -11,7 +11,7 @@ from tests.test_last_household import _create
 
 def _invite(client, monkeypatch, headers, house, address="bea@example.com"):
     sent = []
-    monkeypatch.setattr(email, "deliver", lambda to, subject, text: sent.append(text))  # None: sent
+    monkeypatch.setattr(email, "deliver", lambda to, subject, text, html=None: sent.append(text))  # None: sent
     res = client.post(f"{API}/households/{house['id']}/email-invites", json={"emails": [address]}, headers=headers)
     assert res.status_code == 200, res.text
     return re.search(r"/invite/(\S+)", sent[-1]).group(1), sent[-1]
@@ -99,7 +99,7 @@ def test_a_failed_email_says_why(client, monkeypatch):
     ann = register(client, "ann@example.com", "Ann")
     house = _create(client, ann, "Maple")
     reasons = {"bad@example.com": email.BAD_ADDRESS, "down@example.com": email.UNAVAILABLE}
-    monkeypatch.setattr(email, "deliver", lambda to, subject, text: reasons.get(to))
+    monkeypatch.setattr(email, "deliver", lambda to, subject, text, html=None: reasons.get(to))
     res = client.post(
         f"{API}/households/{house['id']}/email-invites",
         json={"emails": ["bad@example.com", "down@example.com", "ok@example.com"]},

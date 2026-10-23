@@ -65,7 +65,7 @@ struct HouseholdDetailView: View {
         .toolbar {
             if model.detail != nil {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { inviting = true } label: { Label("Invite people", systemImage: "person.badge.plus") }
+                    Button { inviting = true } label: { Label("Invite roommates", systemImage: "person.badge.plus") }
                 }
             }
             // Admin pages live in Settings, apart from the everyday tabs (also under Profile → Sign out).
@@ -244,51 +244,32 @@ private struct ScheduleSection: View {
 
 private struct PeopleSection: View {
     let model: HouseholdViewModel
-    @State private var newName = ""
-    @State private var newEmail = ""
-    @State private var newPhone = ""
-    @State private var adding = false
-    @State private var added: [MemberAdded] = []
     @State private var pendingRemoval: Member?
+    @State private var inviting = false
+    @State private var invites: [EmailInvite] = []
+    @State private var error: String?
 
-    private func trimmed(_ text: String) -> String { text.trimmingCharacters(in: .whitespaces) }
-    private var canAdd: Bool { !trimmed(newName).isEmpty && !(trimmed(newEmail).isEmpty && trimmed(newPhone).isEmpty) && !adding }
+    /// Emailed invites not yet joined, listed with everyone (like web PeopleTab).
+    private var pending: [EmailInvite] {
+        let emails = Set((model.detail?.members ?? []).compactMap(\.email))
+        return invites.filter { !emails.contains($0.email) }
+    }
 
     var body: some View {
-        if model.isAdmin {
-            Section {
-                TextField("Name", text: $newName)
-                TextField("Email", text: $newEmail)
-                    .keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                TextField("Phone (+1 617…)", text: $newPhone).keyboardType(.phonePad)
-                Button(adding ? "Adding…" : "Add & invite") { Task { await add() } }
-                    .bold()
-                    .disabled(!canAdd)
-                ForEach(added, id: \.member.id) { result in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(addedLine(result)).font(.footnote).foregroundStyle(.green)
-                        if result.member.phone != nil || !result.emailed, let url = whatsappURL(result) {
-                            Link("💬 Send invite on WhatsApp", destination: url).font(.footnote.bold())
-                        }
-                    }
-                }
-            } header: {
-                Text("Add a roommate")
-            } footer: {
-                Text("Add an email or a phone (or both) so we can invite them. They join the end of every chore rotation. Anyone can also join with the house code \(model.detail?.inviteCode ?? "").")
-            }
+        Section {
+            Button { inviting = true } label: { Label("Invite roommates", systemImage: "envelope.badge.person.crop") }
+                .bold()
+        } footer: {
+            Text("Enter their email: they get an invite, log in or sign up from it, and join. Or share the house link.")
         }
+        .sheet(isPresented: $inviting, onDismiss: { Task { await loadInvites(); await model.load() } }) {
+            if let detail = model.detail { InviteSheet(house: detail) }
+        }
+        .task { await loadInvites() }
 
         Section("\(model.detail?.members.count ?? 0) people") {
             ForEach(model.detail?.members ?? []) { member in
-                Group {
-                    // Admins tap someone who hasn't joined to add their email / phone and invite them.
-                    if model.isAdmin && !member.hasAccount {
-                        NavigationLink { MemberContactView(model: model, member: member) } label: { memberRow(member) }
-                    } else {
-                        memberRow(member)
-                    }
-                }
+                memberRow(member)
                 .swipeActions {
                     if model.isAdmin && member.id != model.detail?.myMemberId {
                         Button("Remove", role: .destructive) { pendingRemoval = member }
@@ -312,32 +293,52 @@ private struct PeopleSection: View {
                 if let member = pendingRemoval { Task { await model.removeMember(member) } }
             }
         }
+        if !pending.isEmpty || error != nil {
+            Section {
+                ForEach(pending) { invite in
+                    HStack {
+                        Text(String(invite.email.prefix(1)).uppercased())
+                            .font(.subheadline.bold())
+                            .frame(width: 32, height: 32)
+                            .background(Color.secondary.opacity(0.15), in: Circle())
+                        VStack(alignment: .leading) {
+                            HStack(spacing: 6) {
+                                Text(invite.email).lineLimit(1)
+                                Badge(text: "Invited", color: .orange)
+                            }
+                            Text((invite.invitedBy.map { "Invited by \($0.displayName)" } ?? "Invited") + " · waiting to join")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .swipeActions {
+                        if invite.canCancel {
+                            Button("Cancel invite", role: .destructive) { Task { await cancel(invite) } }
+                        }
+                    }
+                }
+                ErrorBanner(message: error)
+            } header: {
+                Text("Invited")
+            } footer: {
+                Text("Swipe to cancel: their invite link stops working.")
+            }
+        }
     }
 }
 
 private extension PeopleSection {
-    func add() async {
-        adding = true
-        defer { adding = false }
-        let email = trimmed(newEmail), phone = trimmed(newPhone)
-        if let result = await model.addMember(trimmed(newName), email: email.isEmpty ? nil : email, phone: phone.isEmpty ? nil : phone) {
-            added.insert(result, at: 0)
-            newName = ""; newEmail = ""; newPhone = ""
+    func loadInvites() async {
+        invites = (try? await APIClient.shared.pendingInvites(householdId: model.householdId)) ?? invites
+    }
+
+    func cancel(_ invite: EmailInvite) async {
+        do {
+            try await APIClient.shared.cancelInvite(invite.id)
+            error = nil
+            await loadInvites()
+        } catch {
+            self.error = error.localizedDescription
         }
-    }
-
-    func addedLine(_ r: MemberAdded) -> String {
-        guard let email = r.member.email else { return "✓ \(r.member.displayName) added" }
-        if r.emailed { return "✓ \(r.member.displayName) added — invite emailed to \(email)" }
-        return "✓ \(r.member.displayName) added — " + (r.emailEnabled ? "the email couldn't be sent" : "email isn't set up, so it wasn't emailed")
-    }
-
-    /// WhatsApp to their number (digits only, with the country code) with their personal link.
-    func whatsappURL(_ r: MemberAdded) -> URL? {
-        let house = model.detail?.name ?? "our home"
-        let text = "Hi \(r.member.displayName)! Join “\(house)” on Roommates to share chores, groceries and bills: \(r.link)"
-        let digits = (r.member.phone ?? "").filter(\.isNumber)
-        return text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed).flatMap { URL(string: "https://wa.me/\(digits)?text=\($0)") }
     }
 
     func memberRow(_ member: Member) -> some View {
@@ -366,85 +367,10 @@ private func contactLine(_ m: Member) -> String {
     let parts = [m.fullName != m.displayName ? m.fullName : "", m.email ?? "", m.phone ?? ""].filter { !$0.isEmpty }
     if !parts.isEmpty { return parts.joined(separator: " · ") }
     switch m.status {
-    case .added: return "Not invited yet — add an email or phone to invite them"
+    case .added: return "Hasn't joined yet"
     case .invited: return "Invite sent — waiting for them to join"
     case .joined: return "Has an account — email not confirmed yet"
     case .verified: return "Has an account with a confirmed email"
-    }
-}
-
-/// Admins: an email and phone for someone who hasn't joined, and an email invite to them.
-private struct MemberContactView: View {
-    let model: HouseholdViewModel
-    let member: Member
-    @State private var email: String
-    @State private var phone: String
-    @State private var error: String?
-    @State private var note: String?
-    @State private var busy = false
-
-    init(model: HouseholdViewModel, member: Member) {
-        self.model = model
-        self.member = member
-        _email = State(initialValue: member.email ?? "")
-        _phone = State(initialValue: member.phone ?? "")
-    }
-
-    private var changed: Bool {
-        email.trimmingCharacters(in: .whitespaces) != (member.email ?? "") || phone.trimmingCharacters(in: .whitespaces) != (member.phone ?? "")
-    }
-
-    var body: some View {
-        Form {
-            Section {
-                TextField("Email", text: $email)
-                    .keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                TextField("Phone", text: $phone).keyboardType(.phonePad)
-            } footer: {
-                Text("Keep an email or phone (at least one) so they can be invited. Once they join, their account's email is used.")
-            }
-            Section {
-                Button(busy ? "Saving…" : "Save") { Task { await save() } }
-                    .disabled(!changed || busy || (email.trimmingCharacters(in: .whitespaces).isEmpty && phone.trimmingCharacters(in: .whitespaces).isEmpty))
-                if !email.isEmpty {
-                    Button(member.status == .invited ? "Invite again" : "Send invite by email") { Task { await invite() } }
-                        .disabled(changed || busy)
-                }
-            } footer: {
-                VStack(alignment: .leading) {
-                    if let note { Text(note).foregroundStyle(.green) }
-                    ErrorBanner(message: error)
-                }
-            }
-        }
-        .navigationTitle(member.displayName)
-    }
-
-    private func save() async {
-        busy = true
-        defer { busy = false }
-        do {
-            _ = try await APIClient.shared.setContact(memberId: member.id, email: email.trimmingCharacters(in: .whitespaces),
-                                                      phone: phone.trimmingCharacters(in: .whitespaces))
-            error = nil
-            note = "Saved"
-            await model.load()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    private func invite() async {
-        busy = true
-        defer { busy = false }
-        do {
-            let res = try await APIClient.shared.emailInvites(householdId: model.householdId, emails: [email.trimmingCharacters(in: .whitespaces)])
-            note = res.emailEnabled ? "Invite emailed" : "Invited — they'll see it when they sign up with this email"
-            error = nil
-            await model.load()
-        } catch {
-            self.error = error.localizedDescription
-        }
     }
 }
 

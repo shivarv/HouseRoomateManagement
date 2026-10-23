@@ -1,21 +1,27 @@
 import SwiftUI
 import UIKit
 
-/// Invite people to a house: the link (share sheet, WhatsApp, email, copy), email invites the
-/// server keeps as pending, and a personal link for each roommate added by name. Mirrors web
-/// InvitePanel.tsx.
+/// Invite roommates: their email gets a private invite (they log in or sign up from it and join), or
+/// share the house link. Admins can make a new link, which stops the old one. Pending invites are
+/// listed with the people (People). Mirrors web InvitePanel.tsx.
 struct InviteSheet: View {
     let house: HouseholdDetail
     @Environment(\.dismiss) private var dismiss
     @State private var emails = ""
-    @State private var pending: [EmailInvite] = []
     @State private var results: EmailInviteResults?
     @State private var error: String?
     @State private var busy = false
     @State private var copied = false
+    @State private var inviteCode: String
+    @State private var confirmReset = false
+    @State private var resetNote: String?
 
-    private var message: String { InviteLink.message(house: house.name, code: house.inviteCode) }
-    private var waiting: [Member] { house.members.filter { !$0.hasAccount } }
+    init(house: HouseholdDetail) {
+        self.house = house
+        _inviteCode = State(initialValue: house.inviteCode)
+    }
+
+    private var message: String { InviteLink.message(house: house.name, code: inviteCode) }
     private var parsed: [String] {
         var seen = Set<String>()
         return emails.split(whereSeparator: { $0 == "," || $0 == ";" || $0.isWhitespace })
@@ -28,26 +34,6 @@ struct InviteSheet: View {
         NavigationStack {
             List {
                 Section {
-                    ShareLink(item: message) { Label("Share invite…", systemImage: "square.and.arrow.up") }
-                    if let url = whatsappURL(message) {
-                        Link(destination: url) { Label("WhatsApp", systemImage: "message.fill") }
-                    }
-                    if let url = emailURL(to: [], message) {
-                        Link(destination: url) { Label("Email", systemImage: "envelope") }
-                    }
-                    Button {
-                        UIPasteboard.general.string = InviteLink.url(code: house.inviteCode)
-                        copied = true
-                    } label: {
-                        Label(copied ? "Copied" : "Copy link", systemImage: copied ? "checkmark" : "link")
-                    }
-                } header: {
-                    Text("Invite people to \(house.name)")
-                } footer: {
-                    Text("They open the link, sign up (or log in) and join. The code \(house.inviteCode) works too.")
-                }
-
-                Section {
                     TextField("bea@example.com, cy@example.com", text: $emails)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
@@ -55,64 +41,84 @@ struct InviteSheet: View {
                     Button(busy ? "Inviting…" : (parsed.count > 1 ? "Invite \(parsed.count)" : "Invite")) {
                         Task { await invite() }
                     }
+                    .bold()
                     .disabled(parsed.isEmpty || !invalid.isEmpty || busy)
                     if let results {
-                        ForEach(results.results, id: \.email) { r in
-                            Text("\(r.status == "sent" ? "✓ Emailed" : r.status == "saved" ? "✓ Invited (not emailed)" : "Already in the house:") \(r.email)")
-                                .font(.footnote)
-                                .foregroundStyle(r.status == "member" ? .secondary : Color.green)
-                        }
-                        let unsent = results.results.filter { $0.status == "saved" }.map(\.email)
+                        ForEach(results.results, id: \.email) { r in resultLine(r) }
+                        let unsent = results.results.filter { $0.status == "saved" || $0.status == "failed" }.map(\.email)
                         if !unsent.isEmpty, let url = emailURL(to: unsent, message) {
-                            Link(destination: url) {
-                                Text("\(results.emailEnabled ? "The email couldn't be sent" : "Emailing from the app isn't set up yet") — they'll still see the invite when they sign up with that email. Tap to send it from Mail.")
-                                    .font(.footnote)
-                            }
+                            Link("Send it from Mail instead", destination: url).font(.footnote)
                         }
                     }
                 } header: {
-                    Text("Invite by email")
+                    Text("Their email")
                 } footer: {
-                    if !invalid.isEmpty { Text("Check \(invalid.joined(separator: ", ")): that isn't an email address.").foregroundStyle(.red) }
-                }
-
-                if !pending.isEmpty {
-                    Section("Waiting to join") {
-                        ForEach(pending) { p in
-                            VStack(alignment: .leading) {
-                                Text(p.email)
-                                Text((p.lastSentAt == nil ? "invited" : "emailed") + (p.invitedBy.map { " by \($0.displayName)" } ?? ""))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            .swipeActions {
-                                if p.canCancel {
-                                    Button("Cancel", role: .destructive) { Task { await cancel(p) } }
-                                }
-                            }
-                        }
+                    if !invalid.isEmpty {
+                        Text("Check \(invalid.joined(separator: ", ")): that isn't an email address.").foregroundStyle(.red)
+                    } else {
+                        Text("They get an invite, log in or sign up from it, and join \(house.name) — at the end of every chore rotation.")
                     }
                 }
 
-                if !waiting.isEmpty {
-                    Section {
-                        ForEach(waiting) { m in
-                            ShareLink(item: InviteLink.message(house: house.name, code: house.inviteCode, member: m)) {
-                                Label("Invite \(m.displayName)", systemImage: "person.crop.circle.badge.plus")
-                            }
-                        }
-                    } header: {
-                        Text("Haven't joined yet")
-                    } footer: {
-                        Text("A personal link matches them to their name when they join.")
+                Section {
+                    ShareLink(item: message) { Label("Share invite…", systemImage: "square.and.arrow.up") }
+                    if let url = whatsappURL(message) {
+                        Link(destination: url) { Label("WhatsApp", systemImage: "message.fill") }
+                    }
+                    Button {
+                        UIPasteboard.general.string = InviteLink.url(code: inviteCode)
+                        copied = true
+                    } label: {
+                        Label(copied ? "Copied" : "Copy link", systemImage: copied ? "checkmark" : "link")
+                    }
+                    if house.myRole == .admin {
+                        Button("Make a new link (stops the old one)", systemImage: "arrow.clockwise") { confirmReset = true }
+                    }
+                } header: {
+                    Text("Or share the link")
+                } footer: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Anyone with the link can join. The code \(inviteCode) works too.")
+                        if let resetNote { Text(resetNote).foregroundStyle(.green) }
                     }
                 }
 
                 if let error { Section { ErrorBanner(message: error) } }
             }
-            .navigationTitle("Invite people")
+            .navigationTitle("Invite roommates")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .task { await loadPending() }
+            .confirmationDialog("Make a new link?", isPresented: $confirmReset, titleVisibility: .visible) {
+                Button("Make a new link", role: .destructive) { Task { await resetLink() } }
+            } message: {
+                Text("The current link and code stop working right away. Share the new one with anyone who still needs it.")
+            }
+        }
+    }
+
+    /// One address's outcome, in words the sender can act on. Mirrors web InviteResultLine.
+    @ViewBuilder
+    private func resultLine(_ r: EmailInviteResult) -> some View {
+        switch r.status {
+        case "sent":
+            Text("✓ Invite emailed to \(r.email)").font(.footnote).foregroundStyle(.green)
+        case "member":
+            Text("\(r.email) is already in the house.").font(.footnote).foregroundStyle(.secondary)
+        default:
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Couldn't email \(r.email).").font(.footnote.bold())
+                Text(failureReason(r)).font(.footnote)
+            }
+            .foregroundStyle(.orange)
+        }
+    }
+
+    private func failureReason(_ r: EmailInviteResult) -> String {
+        if r.status == "saved" { return "Sending email isn't set up on this server yet." }
+        switch r.reason {
+        case "bad_address": return "That address doesn't look right — check for typos and invite again."
+        case "unavailable": return "Our email service isn't responding right now. Try Invite again in a few minutes."
+        default: return "Our email service didn't accept it. Try again later; if it keeps happening, the app's email setup needs a look."
         }
     }
 
@@ -128,10 +134,6 @@ struct InviteSheet: View {
         return parts.url
     }
 
-    private func loadPending() async {
-        pending = (try? await APIClient.shared.pendingInvites(householdId: house.id)) ?? []
-    }
-
     private func invite() async {
         busy = true
         defer { busy = false }
@@ -139,16 +141,19 @@ struct InviteSheet: View {
             results = try await APIClient.shared.emailInvites(householdId: house.id, emails: parsed)
             emails = ""
             error = nil
-            await loadPending()
+        } catch let e as APIError where e.status == 0 || e.status >= 500 {
+            error = "We couldn't reach the server, so nothing was sent. Check your connection and try again in a minute."
         } catch {
             self.error = error.localizedDescription
         }
     }
 
-    private func cancel(_ invite: EmailInvite) async {
+    private func resetLink() async {
         do {
-            try await APIClient.shared.cancelInvite(invite.id)
-            await loadPending()
+            inviteCode = try await APIClient.shared.resetInviteCode(householdId: house.id).inviteCode
+            copied = false
+            resetNote = "✓ New link made — old links no longer work."
+            error = nil
         } catch {
             self.error = error.localizedDescription
         }
