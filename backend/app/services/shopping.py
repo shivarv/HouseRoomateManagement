@@ -7,7 +7,6 @@
 """
 
 import uuid
-from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
@@ -17,12 +16,10 @@ from sqlalchemy.orm import Session
 from app.models import HouseholdMember, ShoppingItem
 from app.schemas.household import MemberBrief
 from app.schemas.shopping import ShoppingItemOut, ShoppingList
-from app.services import activity
+from app.services import activity, grocery_settings
 from app.services.errors import BadRequest, Conflict, Forbidden, NotFound
 
 RECENT_DAYS = 14  # bought items stay visible this long
-SUGGESTION_DAYS = 120
-MAX_SUGGESTIONS = 12
 
 # Keyword → category, so "Head & Shoulders shampoo" lands in toiletries on every client.
 _CATEGORY_WORDS = {
@@ -130,11 +127,26 @@ _CATEGORY_WORDS = {
 
 
 def guess_category(name: str) -> str:
+    """Keyword guess among the standard categories; "other" when nothing matches."""
     lowered = name.lower()
     for category, words in _CATEGORY_WORDS.items():
         if any(word in lowered for word in words):
             return category
     return "other"
+
+
+def resolve_category(db: Session, household_id: uuid.UUID, name: str, requested: str | None) -> str:
+    """The category asked for (it must exist in the house), else the quick-add item's, else a guess."""
+    keys = grocery_settings.category_keys(db, household_id)
+    if requested:
+        if requested not in keys:
+            raise BadRequest("That category doesn't exist in this house")
+        return requested
+    preset = grocery_settings.preset_named(db, household_id, name)
+    if preset is not None and preset.status == "active" and preset.category_key in keys:
+        return preset.category_key
+    guess = guess_category(name)
+    return guess if guess in keys else grocery_settings.FALLBACK
 
 
 def get(db: Session, item_id: uuid.UUID) -> ShoppingItem:
@@ -184,7 +196,7 @@ def add(
         household_id=me.household_id,
         name=name,
         quantity=quantity or None,
-        category=category or guess_category(name),
+        category=resolve_category(db, me.household_id, name, category),
         note=note or None,
         status="needed",
         added_by_id=me.id,
@@ -225,7 +237,7 @@ def update(
     if quantity is not None:
         item.quantity = quantity or None
     if category is not None:
-        item.category = category
+        item.category = resolve_category(db, item.household_id, item.name, category)
     if note is not None:
         item.note = note or None
     db.commit()
@@ -312,22 +324,21 @@ def shopping_list(db: Session, me: HouseholdMember) -> ShoppingList:
             .where(
                 ShoppingItem.household_id == me.household_id,
                 ShoppingItem.status == "bought",
-                ShoppingItem.bought_at >= now - timedelta(days=SUGGESTION_DAYS),
+                ShoppingItem.bought_at >= now - timedelta(days=RECENT_DAYS),
             )
             .order_by(ShoppingItem.bought_at.desc())
         ).unique()
     )
-    on_list = {i.name.lower() for i in needed}
-    counts = Counter(i.name.lower() for i in bought if i.name.lower() not in on_list)
-    display = {}
-    for i in bought:  # newest first: keep the most recent spelling
-        display.setdefault(i.name.lower(), i.name)
-    suggestions = [display[n] for n, _ in counts.most_common(MAX_SUGGESTIONS)]
-    recent_cutoff = now - timedelta(days=RECENT_DAYS)
     return ShoppingList(
         needed=[out(i, me) for i in needed],
-        recently_bought=[out(i, me) for i in bought if i.bought_at >= recent_cutoff],
-        suggestions=suggestions,
+        recently_bought=[out(i, me) for i in bought],
+        categories=[
+            grocery_settings.category_out(c)
+            for c in grocery_settings.categories(db, me.household_id)
+        ],
+        quick_add=[
+            grocery_settings.preset_out(p) for p in grocery_settings.presets(db, me.household_id)
+        ],
     )
 
 

@@ -2,11 +2,11 @@ import { useMemo, useState } from "react";
 import { Empty, ErrorText, Loading } from "../../components/ui";
 import { activityPlainText, activityText, type ActivityKind, type ActivityLine } from "../../features/chores/activityText";
 import { useActivityMonth } from "../../features/chores/hooks";
-import { formatMonth, formatTime, localIsoDate } from "../../lib/format";
+import { formatMonth, formatTime, localIsoDate, shiftMonth } from "../../lib/format";
 import type { ActivityEvent } from "../../types/api";
 import { useCurrentHousehold } from "./HouseholdLayout";
 
-type KindFilter = "all" | "done" | "swaps" | "help" | "shopping" | "changes";
+type KindFilter = "all" | "done" | "swaps" | "help" | "shopping" | "bills" | "changes";
 
 const kindStyle: Record<ActivityKind, string> = {
   done: "from-emerald-300 to-teal-500 shadow-teal-500/30",
@@ -14,15 +14,10 @@ const kindStyle: Record<ActivityKind, string> = {
   swap: "from-fuchsia-300 to-pink-500 shadow-pink-500/30",
   help: "from-amber-200 to-orange-400 shadow-orange-500/30",
   shopping: "from-lime-300 to-emerald-500 shadow-emerald-500/30",
+  bills: "from-cyan-300 to-sky-500 shadow-sky-500/30",
   settings: "from-indigo-300 to-violet-500 shadow-violet-500/30",
   people: "from-sky-300 to-blue-500 shadow-blue-500/30",
 };
-
-function shiftMonth(month: string, delta: number): string {
-  const [y, m] = month.split("-").map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
 
 /** Every update in the house for one month: who did what, and who marked it. */
 export function ActivityTab() {
@@ -43,7 +38,8 @@ export function ActivityTab() {
     if (kind === "swaps" && line.kind !== "swap") return false;
     if (kind === "help" && line.kind !== "help") return false;
     if (kind === "shopping" && line.kind !== "shopping") return false;
-    if (kind === "changes" && ["done", "undo", "swap", "help", "shopping"].includes(line.kind)) return false;
+    if (kind === "bills" && line.kind !== "bills") return false;
+    if (kind === "changes" && ["done", "undo", "swap", "help", "shopping", "bills"].includes(line.kind)) return false;
     if (person !== "all" && ![event.actor, event.subject, event.assignee].some((m) => m?.id === person)) return false;
     return true;
   });
@@ -51,7 +47,8 @@ export function ActivityTab() {
   const swapCount = lines.filter((l) => l.line.kind === "swap").length;
   const helpCount = lines.filter((l) => l.line.kind === "help").length;
   const shoppingCount = lines.filter((l) => l.line.kind === "shopping").length;
-  const changeCount = lines.length - choreCount - swapCount - helpCount - shoppingCount;
+  const billCount = lines.filter((l) => l.line.kind === "bills").length;
+  const changeCount = lines.length - choreCount - swapCount - helpCount - shoppingCount - billCount;
 
   const groups = new Map<string, { event: ActivityEvent; line: ActivityLine }[]>();
   for (const item of visible) {
@@ -89,6 +86,7 @@ export function ActivityTab() {
               ["swaps", `Swaps · ${swapCount}`],
               ["help", `Help · ${helpCount}`],
               ["shopping", `Shopping · ${shoppingCount}`],
+              ["bills", `Bills · ${billCount}`],
               ["changes", `Changes · ${changeCount}`],
             ] as const
           ).map(([value, label]) => (

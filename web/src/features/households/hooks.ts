@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMatch, useNavigate } from "react-router";
 import { householdsApi } from "../../api/households";
 import { lastHousehold, useLastHousehold } from "../../lib/lastHousehold";
+import { unsavedChanges } from "../../lib/unsavedChanges";
 
 export const householdKeys = {
   all: ["households"] as const,
@@ -85,6 +86,7 @@ export function useSwitchHousehold() {
   const match = useMatch("/households/:householdId/*");
   const onHousePage = match && match.params.householdId !== "new";
   return (id: string) => {
+    if (!unsavedChanges.confirmLeave()) return; // the dropdown is controlled, so it snaps back
     lastHousehold.set(id);
     if (onHousePage) navigate(`/households/${id}/${match.params["*"] ?? ""}`);
   };

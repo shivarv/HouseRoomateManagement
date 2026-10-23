@@ -20,6 +20,7 @@ struct ProfileView: View {
                 Section {
                     Button("Sign out", role: .destructive) { session.signOut() }
                 }
+                AdminSettingsLinks()
             }
             .navigationTitle("Profile")
         }

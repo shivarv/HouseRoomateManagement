@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Household, HouseholdMember, User
 from app.schemas.household import HouseholdOut, MemberOut
-from app.services import activity, chores, clock
+from app.services import activity, bills, chores, clock, grocery_settings
 from app.services.errors import BadRequest, Conflict, Forbidden, NotFound
 
 # No 0/O/1/I so codes are easy to read out loud.
@@ -65,6 +65,8 @@ def create_household(
         chores.create_chore(
             db, household, chore_name, member_ids=None, today=today, assignment_mode=mode
         )
+    grocery_settings.seed(db, household.id)
+    bills.seed(db, household.id)
     user.last_household_id = household.id  # a new house opens on every device
     db.commit()
     return admin

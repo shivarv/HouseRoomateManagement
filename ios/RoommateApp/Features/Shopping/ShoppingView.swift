@@ -1,13 +1,5 @@
 import SwiftUI
 
-/// Quick-add chips. The backend works out the category from the name. Mirrors web presets.ts.
-private let shoppingPresets = [
-    "Eggs", "Milk", "Rice", "Oil", "Bread", "Onions",
-    "Shampoo", "Toothpaste", "Hand wash",
-    "Washing soap", "Dish soap", "Garbage bags",
-    "Tissues", "Toilet paper", "Paper towels",
-]
-
 @MainActor
 @Observable
 final class ShoppingViewModel {
@@ -26,13 +18,23 @@ final class ShoppingViewModel {
     var bought: [ShoppingItem] { list?.recentlyBought ?? [] }
     var myMemberId: UUID? { households.first { $0.id == householdId }?.myMemberId }
 
-    /// Suggestions (bought before) first, then presets, minus anything already on the list.
-    var quickAdd: [String] {
+    var categories: [GroceryCategory] { list?.categories ?? [] }
+
+    /// The admin's quick-add items, minus anything already on the list.
+    var quickAdd: [GroceryPreset] {
         let onList = Set(needed.map { $0.name.lowercased() })
-        var seen = Set<String>()
-        return ((list?.suggestions ?? []) + shoppingPresets).filter {
-            !onList.contains($0.lowercased()) && seen.insert($0.lowercased()).inserted
-        }
+        return (list?.quickAdd ?? []).filter { !onList.contains($0.name.lowercased()) }
+    }
+
+    /// The icon of an item's type; unknown types use "Other"'s.
+    func icon(for key: String) -> String {
+        (categories.first { $0.key == key } ?? categories.first { $0.key == "other" })?.icon ?? "🛍️"
+    }
+
+    /// Items whose category no longer exists are shown under "Other".
+    func items(in category: GroceryCategory) -> [ShoppingItem] {
+        let known = Set(categories.map(\.key))
+        return needed.filter { (known.contains($0.category) ? $0.category : "other") == category.key }
     }
 
     /// `preferred` is the house to show when none is picked yet (or the picked one is gone).
@@ -53,10 +55,10 @@ final class ShoppingViewModel {
         }
     }
 
-    func add(_ name: String, quantity: String? = nil) async {
+    func add(_ name: String, quantity: String? = nil, category: String? = nil) async {
         guard let householdId else { return }
         do {
-            _ = try await client.addShoppingItem(householdId: householdId, name: name, quantity: quantity)
+            _ = try await client.addShoppingItem(householdId: householdId, name: name, quantity: quantity, category: category)
         } catch {
             self.error = error.localizedDescription
         }
@@ -105,6 +107,9 @@ struct ShoppingView: View {
     @State private var name = ""
     @State private var quantity = ""
     @State private var editing: ShoppingItem?
+    /// The quick-add item tapped: asks how much before it goes on the list.
+    @State private var picking: GroceryPreset?
+    @State private var pickQuantity = ""
     @Environment(\.scenePhase) private var scenePhase
     @Environment(Session.self) private var session
 
@@ -128,8 +133,8 @@ struct ShoppingView: View {
                         Text("Nothing on the list. Add what's running out above.").foregroundStyle(.secondary)
                     }
                 }
-                ForEach(ShoppingCategory.allCases) { category in
-                    let items = model.needed.filter { $0.category == category }
+                ForEach(model.categories) { category in
+                    let items = model.items(in: category)
                     if !items.isEmpty {
                         Section("\(category.icon) \(category.label)") {
                             ForEach(items) { neededRow($0) }
@@ -152,6 +157,20 @@ struct ShoppingView: View {
                         Button("Clear") { model.selected = [] }
                     }
                 }
+            }
+            .alert(picking.map { "How much \($0.name)?" } ?? "",
+                   isPresented: Binding(get: { picking != nil }, set: { if !$0 { picking = nil } })) {
+                TextField("e.g. 2 dozen", text: $pickQuantity)
+                Button("Add to list") {
+                    if let chip = picking {
+                        let qty = pickQuantity.trimmingCharacters(in: .whitespaces)
+                        Task { await model.add(chip.name, quantity: qty.isEmpty ? nil : qty, category: chip.categoryKey) }
+                    }
+                    picking = nil
+                }
+                Button("Cancel", role: .cancel) { picking = nil }
+            } message: {
+                Text("Optional: leave it empty if it doesn't matter.")
             }
             .sheet(item: $editing) { item in
                 EditShoppingItemView(item: item) { name, quantity, note in
@@ -181,12 +200,14 @@ struct ShoppingView: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    ForEach(model.quickAdd, id: \.self) { chip in
-                        let before = model.list?.suggestions.contains(chip) == true
-                        Button("+ \(chip)") { Task { await model.add(chip) } }
+                    ForEach(model.quickAdd) { chip in
+                        Button("+ \(model.icon(for: chip.categoryKey)) \(chip.name)") {
+                            pickQuantity = ""
+                            picking = chip
+                        }
                             .font(.caption)
                             .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background((before ? Color.accentColor : Color.secondary).opacity(0.12), in: Capsule())
+                            .background(Color.secondary.opacity(0.12), in: Capsule())
                             .buttonStyle(.plain)
                     }
                 }
@@ -213,7 +234,7 @@ struct ShoppingView: View {
                     .foregroundStyle(ticked ? Color.accentColor : .secondary)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(item.name).font(.body.weight(.medium))
+                        Text("\(model.icon(for: item.category)) \(item.name)").font(.body.weight(.medium))
                         if let q = item.quantity { Badge(text: q) }
                     }
                     if let note = item.note { Text(note).font(.subheadline) }
@@ -244,7 +265,7 @@ struct ShoppingView: View {
             HStack {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.name + (item.quantity.map { " · \($0)" } ?? ""))
+                    Text("\(model.icon(for: item.category)) " + item.name + (item.quantity.map { " · \($0)" } ?? ""))
                         .strikethrough()
                         .foregroundStyle(.secondary)
                     Text("\(item.boughtBy?.displayName ?? "Someone") bought it" + (item.boughtAt.map { " · \(Self.when($0))" } ?? ""))

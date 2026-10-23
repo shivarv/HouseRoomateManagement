@@ -170,7 +170,37 @@ export interface ScheduleDay {
   slots: { chore: ChoreBrief; member: MemberBrief; status: TaskStatus | null; swapped_with: MemberBrief | null }[];
 }
 
-export type ShoppingCategory = "groceries" | "toiletries" | "cleaning" | "household" | "other";
+/** A GroceryCategory.key of the house. Admins configure the categories; "other" always exists. */
+export type ShoppingCategory = string;
+
+export interface GroceryCategory {
+  id: string;
+  key: ShoppingCategory; // what items store; never changes, so renaming is free
+  label: string;
+  icon: string;
+  position: number;
+  can_delete: boolean; // false only for "other", the fallback
+}
+
+export interface GroceryPreset {
+  id: string;
+  name: string;
+  category_key: ShoppingCategory;
+  position: number;
+}
+
+/** Something people added that isn't a quick-add item yet. */
+export interface GrocerySuggestion {
+  name: string;
+  times_added: number;
+  category_key: ShoppingCategory;
+}
+
+export interface GrocerySettings {
+  categories: GroceryCategory[];
+  presets: GroceryPreset[];
+  suggestions: GrocerySuggestion[]; // most added first
+}
 
 export interface ShoppingItem {
   id: string;
@@ -189,7 +219,8 @@ export interface ShoppingItem {
 export interface ShoppingList {
   needed: ShoppingItem[]; // oldest first
   recently_bought: ShoppingItem[]; // last 14 days, newest first
-  suggestions: string[]; // bought before, not on the list now
+  categories: GroceryCategory[]; // display order
+  quick_add: GroceryPreset[]; // chosen by the admin, in order
 }
 
 export type HelpStatus = "open" | "done";
@@ -251,4 +282,72 @@ export interface Report {
   fair_share: number;
   chores: ChoreReport[];
   leaderboard: { member: MemberBrief; is_active: boolean; done: number; missed: number; covered_for_others: number }[];
+}
+
+/** one: a named person pays · anyone: the first to pay closes it · everyone: each pays a share */
+export type PayerMode = "one" | "anyone" | "everyone";
+export type BillFrequency = "monthly" | "weekly" | "daily";
+/** fixed: the amount repeats · variable: an admin enters each period's amount (gas, electricity) */
+export type AmountType = "fixed" | "variable";
+export type BillStatus = "paid" | "due" | "overdue" | "upcoming";
+
+export interface BillPayment {
+  id: string;
+  member: MemberBrief; // who paid
+  recorded_by: MemberBrief | null;
+  paid_at: string;
+  can_undo: boolean;
+}
+
+/** One occurrence of a bill: this month's rent, this week's cleaner, today's milk money. */
+export interface BillPeriod {
+  period: string; // start: month start, Monday, or the day
+  period_end: string;
+  label: string; // "Oct 2026", "Week of Oct 19", "Mon, Oct 19"
+  due_date: string;
+  status: BillStatus;
+  amount_cents: number | null; // fixed: the bill's; variable: this period's, once an admin sets it
+  share_cents: number | null; // everyone mode: each person's part
+  payments: BillPayment[];
+  paid_count: number;
+  expected_count: number; // everyone: active people in the house; otherwise 1
+  i_paid: boolean;
+  is_current: boolean; // not a future period, so it can be paid
+}
+
+export interface Bill {
+  id: string;
+  name: string;
+  icon: string;
+  payer_mode: PayerMode;
+  payer: MemberBrief | null; // payer_mode "one"
+  frequency: BillFrequency;
+  due_day: number; // monthly: day of the month · weekly: 1 = Mon … 7 = Sun · daily: unused
+  amount_type: AmountType;
+  amount_cents: number | null; // fixed bills
+  last_amount_cents: number | null; // variable bills: the latest amount before this period
+  currency: string;
+  note: string | null;
+  position: number;
+  is_active: boolean;
+  current: BillPeriod;
+}
+
+export interface BillList {
+  today: string;
+  bills: Bill[];
+}
+
+export interface BillFields {
+  name?: string;
+  icon?: string;
+  payer_mode?: PayerMode;
+  payer_id?: string | null;
+  frequency?: BillFrequency;
+  due_day?: number;
+  amount_type?: AmountType;
+  amount_cents?: number | null;
+  currency?: string;
+  note?: string;
+  is_active?: boolean;
 }

@@ -22,24 +22,34 @@ function useNotices() {
   return { notices, setNotice };
 }
 
-/** 🔔 Notifications: what other people in my houses need. Anyone can help and mark it done. */
+/**
+ * 🔔 Notifications: everything asked in my houses. Others' requests can be marked done;
+ * my own only show Withdraw (editing and marking done live on Help requests).
+ */
 export function NotificationsPage() {
   const households = useHouseholds();
   const help = useHelpRequests();
   const { notices, setNotice } = useNotices();
 
   if (households.isLoading || help.isLoading) return <Loading />;
-  const others = (help.data ?? []).filter((r) => !r.is_mine);
-  const open = others.filter((r) => r.status === "open");
-  const recentlyDone = others.filter((r) => r.status === "done");
+  const all = help.data ?? [];
+  const open = all.filter((r) => r.status === "open");
+  const recentlyDone = all.filter((r) => r.status === "done");
   const multiHouse = (households.data?.length ?? 0) > 1;
   const card = (r: HelpRequest) => (
-    <HelpCard key={r.id} req={r} showHousehold={multiHouse} notice={notices[r.id]} setNotice={(n) => setNotice(r.id, n)} />
+    <HelpCard
+      key={r.id}
+      req={r}
+      inFeed
+      showHousehold={multiHouse}
+      notice={notices[r.id]}
+      setNotice={(n) => setNotice(r.id, n)}
+    />
   );
 
   return (
     <>
-      <PageTitle title="Notifications" subtitle="What your roommates need. Help out, then mark it done." />
+      <PageTitle title="Notifications" subtitle="What your roommates need, and what you've asked for. Help out, then mark it done." />
       <ErrorText error={help.error} />
       <div className="space-y-8">
         <section className="space-y-3">
@@ -129,12 +139,15 @@ export function HelpRequestsPage() {
 
 function HelpCard({
   req,
+  inFeed = false,
   showHousehold,
   onEdit,
   notice,
   setNotice,
 }: {
   req: HelpRequest;
+  /** On Notifications: my own requests can only be withdrawn there, not marked done. */
+  inFeed?: boolean;
   showHousehold: boolean;
   onEdit?: (r: HelpRequest) => void;
   notice?: Notice;
@@ -184,11 +197,13 @@ function HelpCard({
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          {!isDone && req.is_mine && onEdit && (
+          {!isDone && req.is_mine && (
             <>
-              <Button variant="ghost" disabled={busy} onClick={() => onEdit(req)}>
-                Edit
-              </Button>
+              {onEdit && (
+                <Button variant="ghost" disabled={busy} onClick={() => onEdit(req)}>
+                  Edit
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 disabled={busy}
@@ -198,7 +213,7 @@ function HelpCard({
               </Button>
             </>
           )}
-          {!isDone && (
+          {!isDone && !(inFeed && req.is_mine) && (
             <Button disabled={busy} onClick={() => done.mutate(req.id, handlers)}>
               {done.isPending ? "Saving…" : req.is_mine ? "Mark done" : "I helped ✓"}
             </Button>

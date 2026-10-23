@@ -168,7 +168,7 @@ function HouseCard() {
           aria-label="Switch household"
           value={house.id}
           onChange={(e) => switchTo(e.target.value)}
-          className="mt-0.5 cursor-pointer rounded-lg bg-white/10 py-0.5 pr-1 text-lg font-bold text-white outline-none ring-1 ring-white/30 transition hover:bg-white/20 [&>option]:text-slate-900"
+          className="select-on-dark mt-0.5 cursor-pointer rounded-lg bg-white/10 py-0.5 pr-1 text-lg font-bold text-white outline-none ring-1 ring-white/30 transition hover:bg-white/20 [&>option]:text-slate-900"
         >
           {list.map((h) => (
             <option key={h.id} value={h.id}>

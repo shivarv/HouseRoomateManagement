@@ -22,6 +22,8 @@ struct MainTabView: View {
         TabView {
             MyDayView()
                 .tabItem { Label("Today", systemImage: "checklist") }
+            RemindersView()
+                .tabItem { Label("Reminders", systemImage: "calendar.badge.clock") }
             HouseholdsView()
                 .tabItem { Label("Households", systemImage: "house") }
             ShoppingView()

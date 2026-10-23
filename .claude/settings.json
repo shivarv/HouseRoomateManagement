@@ -2,7 +2,6 @@
   "permissions": {
     "allow": [
       "Bash(xcodebuild -version)",
-      "Read(//Users/shiva/.local/bin/**)",
       "Bash(mv alembic/versions/20261019_d7f8c9aff15e_initial_schema.py alembic/versions/20261019_0001_initial_schema.py)",
       "Bash(sed -i '' \"s/^revision: str = 'd7f8c9aff15e'/revision: str = '0001'/; s/Revision ID: d7f8c9aff15e/Revision ID: 0001/\" alembic/versions/20261019_0001_initial_schema.py)",
       "Bash(.venv/bin/alembic downgrade *)",
@@ -48,7 +47,31 @@
       "Bash(xcodebuild -project RoommateApp.xcodeproj -scheme RoommateApp -destination 'platform=iOS Simulator,id=997517DE-2BC9-4886-9328-678A112E5757' -derivedDataPath /private/tmp/claude-501/-Users-shiva-Desktop-git-hub-HouseRoomateManagement/b1a5820b-7578-4ec6-ad7c-a7f3f1ee77c3/scratchpad/dd build)",
       "WebSearch",
       "Bash(grep -v \"^--$\")",
-      "Bash(.venv/bin/python -m pytest -q)"
+      "Bash(.venv/bin/python -m pytest -q)",
+      "Bash(cat web/src/features/shopping/presets.ts web/src/features/help/presets.ts)",
+      "Bash(grep -n \"DEFAULT_CHORES\" -A6 backend/app/services/chores.py)",
+      "Bash(cat -n pages/household/GroceriesTab.tsx)",
+      "Bash(sed -n 1,32p pages/household/SettingsPages.tsx)",
+      "Bash(sed -n 70,200p pages/household/SettingsPages.tsx)",
+      "Bash(cat api/shopping.ts features/shopping/hooks.ts)",
+      "Bash(grep -n \"Shopping\" -A14 types/api.ts)",
+      "Bash(wc -l Features/Households/*.swift Core/Services/ShoppingService.swift)",
+      "Bash(sed -n 1,200p Features/Households/HouseholdDetailView.swift)",
+      "Bash(sed -n 200,347p Features/Households/HouseholdDetailView.swift)",
+      "Bash(cat Core/Services/ShoppingService.swift)",
+      "Bash(sed -n 1,60p Features/Households/HouseholdViewModel.swift)",
+      "Bash(grep -rn \"struct ErrorBanner\\\\|struct Badge\" -A12 Shared Features)",
+      "Bash(DATABASE_URL=__TRACKED_VAR__ DATABASE_URL_UNPOOLED='' .venv/bin/alembic upgrade head)",
+      "Bash(grep -n \"^export function\" lib/format.ts)",
+      "Bash(sed -n 36,100p pages/household/ActivityTab.tsx)",
+      "Bash(grep -n \"useHousehold\\\\b\\\\|householdKeys\" features/households/hooks.ts)",
+      "Bash(DATABASE_URL=__TRACKED_VAR__ DATABASE_URL_UNPOOLED='' .venv/bin/alembic upgrade 0009)",
+      "Bash(grep -n \"    func \" Features/Households/HouseholdViewModel.swift)",
+      "Bash(grep -n \"^struct TaskRow\\\\|^struct OpenChoreRow\" -A14 Shared/Components/TaskRow.swift)",
+      "Bash(cat Features/Profile/ProfileView.swift)",
+      "Bash(grep -n \"private struct HistorySection\" Features/Households/HouseholdDetailView.swift)",
+      "Bash(sed -n 1,110p Features/Households/HouseholdDetailView.swift)",
+      "Bash(xcodebuild -project RoommateApp.xcodeproj -scheme RoommateApp -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO)"
     ]
   }
 }

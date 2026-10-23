@@ -10,9 +10,8 @@ import {
   useUndoBought,
   useUpdateShopping,
 } from "../../features/shopping/hooks";
-import { CATEGORIES, SHOPPING_PRESETS } from "../../features/shopping/presets";
 import { formatTime, localIsoDate, relativeDay } from "../../lib/format";
-import type { ShoppingItem } from "../../types/api";
+import type { GroceryCategory, GroceryPreset, ShoppingItem } from "../../types/api";
 import { useCurrentHousehold } from "./HouseholdLayout";
 
 const fieldClass =
@@ -38,6 +37,11 @@ export function GroceriesTab() {
   if (list.isLoading) return <Loading />;
   const needed = list.data?.needed ?? [];
   const bought = list.data?.recently_bought ?? [];
+  const categories = list.data?.categories ?? [];
+  const known = new Set(categories.map((c) => c.key));
+  // An item in a category that no longer exists is shown under "Other".
+  const sectionOf = (i: ShoppingItem) => (known.has(i.category) ? i.category : "other");
+  const iconOf = (key: string) => iconFor(categories, key);
   const picked = needed.filter((i) => selected.has(i.id));
 
   const toggle = (id: string) =>
@@ -67,7 +71,12 @@ export function GroceriesTab() {
   return (
     <div className="space-y-8">
       <ErrorText error={list.error} />
-      <AddItem householdId={household.id} onList={needed.map((i) => i.name)} suggestions={list.data?.suggestions ?? []} />
+      <AddItem
+        householdId={household.id}
+        onList={needed.map((i) => i.name)}
+        categories={categories}
+        quickAdd={list.data?.quick_add ?? []}
+      />
 
       <section className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -87,8 +96,8 @@ export function GroceriesTab() {
         {needed.length === 0 ? (
           <Empty>Nothing on the list. Add what's running out above.</Empty>
         ) : (
-          CATEGORIES.map((c) => {
-            const items = needed.filter((i) => i.category === c.key);
+          categories.map((c) => {
+            const items = needed.filter((i) => sectionOf(i) === c.key);
             if (items.length === 0) return null;
             return (
               <div key={c.key} className="space-y-2">
@@ -100,6 +109,8 @@ export function GroceriesTab() {
                     <NeededRow
                       key={item.id}
                       item={item}
+                      icon={iconOf(item.category)}
+                      categories={categories}
                       checked={selected.has(item.id)}
                       onToggle={() => toggle(item.id)}
                       notice={notices[item.id]}
@@ -118,7 +129,13 @@ export function GroceriesTab() {
           <h2 className="section-title">Recently bought</h2>
           <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-white/70 bg-white/80 shadow-sm ring-1 ring-slate-900/5">
             {bought.map((item) => (
-              <BoughtRow key={item.id} item={item} notice={notices[item.id]} setNotice={(n) => setNotice(item.id, n)} />
+              <BoughtRow
+                key={item.id}
+                item={item}
+                icon={iconOf(item.category)}
+                notice={notices[item.id]}
+                setNotice={(n) => setNotice(item.id, n)}
+              />
             ))}
           </ul>
         </section>
@@ -127,22 +144,56 @@ export function GroceriesTab() {
   );
 }
 
-function AddItem({ householdId, onList, suggestions }: { householdId: string; onList: string[]; suggestions: string[] }) {
+/** The icon of an item's type; unknown types use "Other"'s. */
+function iconFor(categories: GroceryCategory[], key: string): string {
+  return (categories.find((c) => c.key === key) ?? categories.find((c) => c.key === "other"))?.icon ?? "🛍️";
+}
+
+/**
+ * Add by name (new things are fine: the admin sees them as suggestions), or tap a quick-add item,
+ * which asks how much before it goes on the list.
+ */
+function AddItem({
+  householdId,
+  onList,
+  categories,
+  quickAdd,
+}: {
+  householdId: string;
+  onList: string[];
+  categories: GroceryCategory[];
+  quickAdd: GroceryPreset[];
+}) {
   const add = useAddShopping(householdId);
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
+  const [category, setCategory] = useState(""); // "" = let the app decide from the name
+  const [picking, setPicking] = useState<GroceryPreset | null>(null);
+  const [pickQuantity, setPickQuantity] = useState("");
   const listed = new Set(onList.map((n) => n.toLowerCase()));
-  const chips = [...new Map([...suggestions, ...SHOPPING_PRESETS].map((n) => [n.toLowerCase(), n])).values()].filter(
-    (n) => !listed.has(n.toLowerCase()),
-  );
+  const chips = quickAdd.filter((p) => !listed.has(p.name.toLowerCase()));
+
+  const pick = (p: GroceryPreset) => {
+    setPicking(p);
+    setPickQuantity("");
+  };
+  const addPicked = (e: FormEvent) => {
+    e.preventDefault();
+    if (!picking) return;
+    add.mutate(
+      { name: picking.name, quantity: pickQuantity.trim() || undefined, category: picking.category_key },
+      { onSuccess: () => setPicking(null) },
+    );
+  };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    add.mutate({ name: name.trim(), quantity: quantity.trim() || undefined }, {
+    add.mutate({ name: name.trim(), quantity: quantity.trim() || undefined, category: category || undefined }, {
       onSuccess: () => {
         setName("");
         setQuantity("");
+        setCategory("");
       },
     });
   };
@@ -164,6 +215,19 @@ function AddItem({ householdId, onList, suggestions }: { householdId: string; on
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
         />
+        <select
+          className={`${fieldClass} w-40`}
+          aria-label="Category"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
+          <option value="">Category: auto</option>
+          {categories.map((c) => (
+            <option key={c.key} value={c.key}>
+              {c.icon} {c.label}
+            </option>
+          ))}
+        </select>
         <Button type="submit" disabled={!name.trim() || add.isPending}>
           + Add
         </Button>
@@ -174,21 +238,41 @@ function AddItem({ householdId, onList, suggestions }: { householdId: string; on
       {chips.length > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-xs text-slate-500">Quick add:</span>
-          {chips.map((n) => (
+          {chips.map((p) => (
             <button
-              key={n}
+              key={p.id}
               type="button"
               disabled={add.isPending}
-              onClick={() => add.mutate({ name: n })}
+              onClick={() => pick(p)}
               className={`rounded-full border px-2.5 py-1 text-xs transition hover:border-indigo-300 hover:text-indigo-700 ${
-                suggestions.includes(n) ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600"
+                picking?.id === p.id ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600"
               }`}
-              title={suggestions.includes(n) ? "Bought before" : undefined}
             >
-              + {n}
+              + {iconFor(categories, p.category_key)} {p.name}
             </button>
           ))}
         </div>
+      )}
+      {picking && (
+        <form onSubmit={addPicked} className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-indigo-50/60 p-3 ring-1 ring-indigo-100">
+          <span className="text-sm font-medium">
+            {iconFor(categories, picking.category_key)} {picking.name} · how much?
+          </span>
+          <input
+            className={`${fieldClass} w-40`}
+            placeholder="e.g. 2 dozen (optional)"
+            maxLength={40}
+            value={pickQuantity}
+            onChange={(e) => setPickQuantity(e.target.value)}
+            autoFocus
+          />
+          <Button type="submit" disabled={add.isPending}>
+            {add.isPending ? "Adding…" : "Add to list"}
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => setPicking(null)}>
+            Cancel
+          </Button>
+        </form>
       )}
     </div>
   );
@@ -196,12 +280,16 @@ function AddItem({ householdId, onList, suggestions }: { householdId: string; on
 
 function NeededRow({
   item,
+  icon,
+  categories,
   checked,
   onToggle,
   notice,
   setNotice,
 }: {
   item: ShoppingItem;
+  icon: string;
+  categories: GroceryCategory[];
   checked: boolean;
   onToggle: () => void;
   notice?: Notice;
@@ -214,6 +302,7 @@ function NeededRow({
   const [name, setName] = useState(item.name);
   const [quantity, setQuantity] = useState(item.quantity ?? "");
   const [note, setNote] = useState(item.note ?? "");
+  const [category, setCategory] = useState(categories.some((c) => c.key === item.category) ? item.category : "other");
   const busy = bought.isPending || remove.isPending || update.isPending;
   const handlers = {
     onSuccess: () => setNotice(null),
@@ -228,7 +317,7 @@ function NeededRow({
           onSubmit={(e) => {
             e.preventDefault();
             update.mutate(
-              { id: item.id, name: name.trim(), quantity: quantity.trim(), note: note.trim() },
+              { id: item.id, name: name.trim(), quantity: quantity.trim(), note: note.trim(), category },
               { onSuccess: () => (setEditing(false), setNotice(null)), onError: handlers.onError },
             );
           }}
@@ -236,6 +325,13 @@ function NeededRow({
           <input className={`${fieldClass} min-w-32 flex-1`} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
           <input className={`${fieldClass} w-32`} placeholder="How much?" value={quantity} maxLength={40} onChange={(e) => setQuantity(e.target.value)} />
           <input className={`${fieldClass} min-w-40 flex-1`} placeholder="Note, e.g. the brown one" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} />
+          <select className={`${fieldClass} w-40`} aria-label="Category" value={category} onChange={(e) => setCategory(e.target.value)}>
+            {categories.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.icon} {c.label}
+              </option>
+            ))}
+          </select>
           <Button type="submit" disabled={!name.trim() || busy}>
             Save
           </Button>
@@ -260,6 +356,7 @@ function NeededRow({
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
+            <span aria-hidden>{icon}</span>
             <span className="font-medium">{item.name}</span>
             {item.quantity && <Badge>{item.quantity}</Badge>}
           </div>
@@ -285,13 +382,24 @@ function NeededRow({
   );
 }
 
-function BoughtRow({ item, notice, setNotice }: { item: ShoppingItem; notice?: Notice; setNotice: (n: Notice | null) => void }) {
+function BoughtRow({
+  item,
+  icon,
+  notice,
+  setNotice,
+}: {
+  item: ShoppingItem;
+  icon: string;
+  notice?: Notice;
+  setNotice: (n: Notice | null) => void;
+}) {
   const undo = useUndoBought();
   return (
     <li className="px-4 py-2.5">
       <div className="flex items-center gap-3">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-xs text-emerald-700">✓</span>
         <div className="min-w-0 flex-1 text-sm">
+          <span className="mr-1" aria-hidden>{icon}</span>
           <span className="text-slate-500 line-through">{item.name}</span>
           {item.quantity && <span className="text-slate-400"> · {item.quantity}</span>}
           <span className="ml-2 text-xs font-medium text-emerald-700">

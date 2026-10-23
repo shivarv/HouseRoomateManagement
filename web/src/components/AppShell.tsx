@@ -1,4 +1,5 @@
-import { NavLink, Outlet, useMatch } from "react-router";
+import { useEffect, useRef } from "react";
+import { NavLink, Outlet, useLocation, useMatch } from "react-router";
 import { useAuth } from "../features/auth/AuthContext";
 import { useHelpRequests } from "../features/help/hooks";
 import { useDefaultHousehold, useSwitchHousehold } from "../features/households/hooks";
@@ -6,18 +7,17 @@ import type { Household } from "../types/api";
 import { Button } from "./ui";
 
 const link = ({ isActive }: { isActive: boolean }) =>
-  `whitespace-nowrap rounded-xl px-2.5 py-1.5 text-sm font-medium transition-all duration-200 ${
+  `shrink-0 snap-start whitespace-nowrap rounded-xl px-2.5 py-1.5 text-sm font-medium transition-all duration-200 ${
     isActive
       ? "bg-linear-to-r from-indigo-500/10 to-fuchsia-500/10 text-indigo-700 ring-1 ring-indigo-200"
       : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
   }`;
 
 const HOUSE_TABS = [
-  { path: "activity", label: "Activity" },
-  { path: "report", label: "Report" },
-  { path: "schedule", label: "Schedule" },
-  { path: "people", label: "People" },
-  { path: "chores", label: "Chores" },
+  { path: "reminders", label: "🧾 Reminders" },
+  { path: "activity", label: "📰 Activity" },
+  { path: "house", label: "🏡 House" }, // Schedule, Report and People
+  { path: "chores", label: "🧹 Chores" },
   { path: "groceries", label: "🛒 Groceries" },
 ] as const;
 
@@ -38,6 +38,12 @@ export function AppShell() {
   const base = house ? `/households/${house.id}` : null;
   // The badge counts requests other people are waiting on.
   const waiting = (help.data ?? []).filter((r) => r.status === "open" && !r.is_mine).length;
+  // On phones the tabs scroll sideways: keep the one I'm on in view.
+  const nav = useRef<HTMLElement>(null);
+  const { pathname } = useLocation();
+  useEffect(() => {
+    nav.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [pathname]);
 
   return (
     <div className="min-h-screen">
@@ -85,40 +91,62 @@ export function AppShell() {
             </Button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-4xl gap-1 overflow-x-auto px-4 py-2">
-          <NavLink to="/" end className={link}>
-            My day
-          </NavLink>
-          {base ? (
-            HOUSE_TABS.map((t) => (
-              <NavLink key={t.label} to={`${base}/${t.path}`} className={link}>
-                {t.label}
+        <div className="mx-auto flex max-w-4xl items-center">
+          <div className="relative min-w-0 flex-1">
+            {/* Phones: one swipeable row (the fade says there's more). Wider screens: wrap, all visible. */}
+            <nav
+              ref={nav}
+              className="flex snap-x gap-1 overflow-x-auto px-4 py-2 [scrollbar-width:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden"
+            >
+              <NavLink to="/" end className={link}>
+                ☀️ My day
               </NavLink>
-            ))
-          ) : (
-            <NavLink to="/households" className={link}>
-              Households
-            </NavLink>
-          )}
-          <NavLink to="/notifications" className={link} title="Help requests">
-            <span className="relative">
-              🔔 Notifications
-              {waiting > 0 && (
-                <span className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-fuchsia-600 px-1 text-[10px] font-bold text-white">
-                  {waiting}
-                </span>
+              {base ? (
+                HOUSE_TABS.map((t) => (
+                  <NavLink key={t.label} to={`${base}/${t.path}`} className={link}>
+                    {t.label}
+                  </NavLink>
+                ))
+              ) : (
+                <NavLink to="/households" className={link}>
+                  Households
+                </NavLink>
               )}
-            </span>
-          </NavLink>
-          <NavLink to="/help" className={link}>
-            🙋 Help
-          </NavLink>
+              <NavLink to="/notifications" className={link} title="Help requests">
+                <span className="relative">
+                  🔔 Notifications
+                  {waiting > 0 && (
+                    <span className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-fuchsia-600 px-1 text-[10px] font-bold text-white">
+                      {waiting}
+                    </span>
+                  )}
+                </span>
+              </NavLink>
+              <NavLink to="/help" className={link}>
+                🙋 Help
+              </NavLink>
+            </nav>
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-linear-to-l from-white/90 to-transparent md:hidden" />
+          </div>
+          {/* Under Sign out, always in view for admins; only the tabs beside it scroll. */}
           {house?.my_role === "admin" && (
-            <NavLink to={`${base}/settings`} className={(state) => `ml-auto ${link(state)}`}>
-              ⚙ Settings
-            </NavLink>
+            <div className="shrink-0 pr-4">
+              <NavLink
+                to={`${base}/settings`}
+                title="House settings (admins)"
+                className={({ isActive }) =>
+                  `flex items-center gap-1 whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-semibold shadow-sm transition ${
+                    isActive
+                      ? "bg-linear-to-r from-indigo-500 to-fuchsia-500 text-white shadow-indigo-500/30"
+                      : "bg-white text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50"
+                  }`
+                }
+              >
+                ⚙<span className="hidden sm:inline">Settings</span>
+              </NavLink>
+            </div>
           )}
-        </nav>
+        </div>
       </header>
       <main className="mx-auto max-w-4xl px-4 py-8">
         <Outlet />
