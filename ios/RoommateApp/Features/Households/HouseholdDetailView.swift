@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HouseholdDetailView: View {
     enum Tab: String, CaseIterable, Identifiable {
-        case today = "Today", activity = "Activity", house = "House", chores = "Chores"
+        case today = "Today", activity = "Activity", house = "House"  // chores live in My day
         var id: Self { self }
     }
 
@@ -14,6 +14,7 @@ struct HouseholdDetailView: View {
 
     @State private var model: HouseholdViewModel
     @State private var tab: Tab = .today
+    @Environment(\.dismiss) private var dismiss
     @State private var housePart: HousePart = .schedule
 
     init(householdId: UUID) {
@@ -57,7 +58,6 @@ struct HouseholdDetailView: View {
                 case .report: ReportTabSection(model: model)
                 case .people: PeopleSection(model: model)
                 }
-            case .chores: ChoresSection(model: model)
             }
         }
         .navigationTitle(model.detail?.name ?? "Household")
@@ -73,7 +73,7 @@ struct HouseholdDetailView: View {
             if model.isAdmin {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        HouseSettingsView(model: model)
+                        HouseSettingsView(model: model) { dismiss() }
                     } label: {
                         Label("Settings", systemImage: "gearshape")
                     }
@@ -306,7 +306,8 @@ private struct PeopleSection: View {
 
 // MARK: - Chores
 
-private struct ChoresSection: View {
+/// Every chore with its rotation; admins add and edit them. Shown in My day → Chores.
+struct ChoresSection: View {
     let model: HouseholdViewModel
     @State private var newChore = ""
     @State private var frequency: Frequency = .daily
@@ -325,6 +326,7 @@ private struct ChoresSection: View {
                             Badge(text: chore.frequency == .weekly ? "Weekly" : "Daily")
                             if chore.isOpen { Badge(text: "Anyone", color: .green) }
                             if !chore.isActive { Badge(text: "Paused", color: .orange) }
+                            if !chore.isOpen, let who = whoTakesTurns(chore) { Badge(text: who.text, color: who.everyone ? .green : .orange) }
                         }
                         Text(summary(chore))
                             .font(.caption)
@@ -358,6 +360,18 @@ private struct ChoresSection: View {
                 Text("Need it twice a day? Add two chores, e.g. \"Cooking – Lunch\" and \"Cooking – Dinner\".")
             }
         }
+    }
+
+    /// "👥 Everyone" · "👥 Everyone except Bea" · "👥 3 of 8": who's in the rotation.
+    private func whoTakesTurns(_ chore: Chore) -> (text: String, everyone: Bool)? {
+        guard let everyone = model.detail?.members, !everyone.isEmpty else { return nil }
+        let inIt = Set(chore.rotation.map(\.id))
+        let left = everyone.filter { !inIt.contains($0.id) }
+        if left.isEmpty { return ("👥 Everyone", true) }
+        if left.count <= 2 && chore.rotation.count > left.count {
+            return ("👥 Everyone except " + left.map(\.displayName).joined(separator: " & "), false)
+        }
+        return ("👥 \(chore.rotation.count) of \(everyone.count)", false)
     }
 
     private func summary(_ chore: Chore) -> String {

@@ -1,7 +1,6 @@
 import Foundation
 
 extension APIClient {
-    private struct CreateHouseholdBody: Encodable { let name: String; let address: String; let timezone: String }
     private struct MemberBody: Encodable { let displayName: String }
     private struct RoleBody: Encodable { let role: Role }
     private struct AcceptBody: Encodable { let memberId: UUID? }
@@ -14,9 +13,20 @@ extension APIClient {
         try await get("/households/\(id)")
     }
 
-    func createHousehold(name: String, address: String, timezone: String) async throws -> Household {
-        try await send("POST", "/households", body: CreateHouseholdBody(name: name, address: address, timezone: timezone))
+    /// Guided set-up: defaults to prefill, then the whole house created in one go.
+    func setupTemplate() async throws -> SetupTemplate {
+        try await get("/households/setup/template")
     }
+
+    func setupHousehold(_ setup: HouseholdSetup) async throws -> Household {
+        try await send("POST", "/households/setup", body: setup)
+    }
+
+    /// Admins, for everyone in it. The last home you're an admin of can't be deleted (409).
+    func deleteHousehold(_ id: UUID) async throws {
+        try await sendNoContent("DELETE", "/households/\(id)")
+    }
+
 
     func addMember(householdId: UUID, displayName: String) async throws -> Member {
         try await send("POST", "/households/\(householdId)/members", body: MemberBody(displayName: displayName))

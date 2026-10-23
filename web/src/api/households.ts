@@ -1,4 +1,4 @@
-import type { Household, HouseholdDetail, InvitePreview, Member } from "../types/api";
+import type { Household, HouseholdDetail, HouseholdSetup, InvitePreview, Member, SetupTemplate } from "../types/api";
 import { api } from "./client";
 
 export const householdsApi = {
@@ -6,6 +6,11 @@ export const householdsApi = {
   get: (id: string) => api<HouseholdDetail>(`/households/${id}`),
   create: (name: string, address: string, timezone: string) =>
     api<Household>("/households", { method: "POST", body: { name, address, timezone } }),
+  /** Guided set-up: defaults to prefill, then the whole house created in one go. */
+  /** Admins only, for everyone in it. The last home you're an admin of can't be deleted (409). */
+  remove: (id: string) => api<void>(`/households/${id}`, { method: "DELETE" }),
+  setupTemplate: () => api<SetupTemplate>("/households/setup/template"),
+  setup: (body: HouseholdSetup) => api<Household>("/households/setup", { method: "POST", body }),
   update: (id: string, changes: { name?: string; address?: string; timezone?: string }) =>
     api<Household>(`/households/${id}`, { method: "PATCH", body: changes }),
 

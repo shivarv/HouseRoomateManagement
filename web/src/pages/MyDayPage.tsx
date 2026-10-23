@@ -1,16 +1,88 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { Card, Empty, ErrorText, Loading, PageTitle } from "../components/ui";
 import { useAuth } from "../features/auth/AuthContext";
 import { OpenChoreCard } from "../features/chores/OpenChoreCard";
 import { SwapRequests } from "../features/chores/SwapRequests";
 import { TaskCard } from "../features/chores/TaskCard";
 import { useMySwaps, useMyTasksToday } from "../features/chores/hooks";
-import { useDefaultHousehold, useHouseholds, useSwitchHousehold } from "../features/households/hooks";
+import { useDefaultHousehold, useHousehold, useHouseholds, useSwitchHousehold } from "../features/households/hooks";
+import { ChoresTab } from "./household/ChoresTab";
+import { CurrentHouseholdProvider } from "./household/HouseholdLayout";
 import { formatDay, localIsoDate } from "../lib/format";
 
-/** Landing page after login: the in-app reminder of what *I* need to do today / this week. */
+type View = "today" | "chores";
+
+/**
+ * Landing page after login. ☀️ Today: what *I* need to do today / this week, across my houses.
+ * 🧹 Chores: every chore of my current house and whose turn it is (`?view=chores`).
+ */
 export function MyDayPage() {
+  const [params, setParams] = useSearchParams();
+  const households = useHouseholds();
+  const hasHouse = (households.data?.length ?? 0) > 0;
+  const view: View = hasHouse && params.get("view") === "chores" ? "chores" : "today";
+  const show = (next: View) => setParams(next === "today" ? {} : { view: next });
+
+  return (
+    <div className="space-y-6">
+      {hasHouse && (
+        <div className="flex w-fit gap-1 rounded-2xl bg-white/80 p-1 text-sm shadow-sm ring-1 ring-slate-900/5">
+          {(
+            [
+              ["today", "☀️ Today"],
+              ["chores", "🧹 Chores"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => show(value)}
+              className={`rounded-xl px-4 py-1.5 font-semibold transition ${
+                view === value
+                  ? "bg-linear-to-r from-indigo-500 to-fuchsia-500 text-white shadow-md shadow-indigo-500/30"
+                  : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {view === "chores" ? <ChoresView /> : <TodayView />}
+    </div>
+  );
+}
+
+/** Every chore of the house picked in the header, with its rotation. Admins edit them in Settings. */
+function ChoresView() {
+  const { house } = useDefaultHousehold();
+  const detail = useHousehold(house?.id ?? "");
+  if (!house || detail.isLoading) return <Loading />;
+  if (!detail.data) return <ErrorText error={detail.error ?? "Household not found"} />;
+  return (
+    <>
+      <PageTitle
+        title={`🧹 Chores · ${house.name}`}
+        subtitle={
+          <>
+            Every chore and whose turn it is.{" "}
+            {house.my_role === "admin" && (
+              <Link to={`/households/${house.id}/settings/chores`} className="font-medium text-indigo-600 hover:underline">
+                Add or change chores in ⚙ Settings
+              </Link>
+            )}
+          </>
+        }
+      />
+      <CurrentHouseholdProvider household={detail.data}>
+        <ChoresTab />
+      </CurrentHouseholdProvider>
+    </>
+  );
+}
+
+/** The in-app reminder of what *I* need to do today / this week. */
+function TodayView() {
   const { user } = useAuth();
   const households = useHouseholds();
   const mine = useMyTasksToday();
@@ -159,9 +231,6 @@ function HouseCard() {
     <div className="rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25 backdrop-blur">
       <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-widest text-white/70">
         🏠 Household
-        <Link to="/households/new" className="rounded-md px-1.5 py-0.5 normal-case tracking-normal text-white/80 transition hover:bg-white/15 hover:text-white">
-          + New or join
-        </Link>
       </div>
       {list.length > 1 ? (
         <select

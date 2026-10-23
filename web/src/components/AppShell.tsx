@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
-import { NavLink, Outlet, useLocation, useMatch } from "react-router";
+import { NavLink, Outlet, useLocation, useMatch, useNavigate } from "react-router";
 import { useAuth } from "../features/auth/AuthContext";
 import { useHelpRequests } from "../features/help/hooks";
 import { useDefaultHousehold, useSwitchHousehold } from "../features/households/hooks";
+import { unsavedChanges } from "../lib/unsavedChanges";
 import type { Household } from "../types/api";
 import { Button } from "./ui";
 
@@ -17,9 +18,11 @@ const HOUSE_TABS = [
   { path: "reminders", label: "🧾 Reminders" },
   { path: "activity", label: "📰 Activity" },
   { path: "house", label: "🏡 House" }, // Schedule, Report and People
-  { path: "chores", label: "🧹 Chores" },
   { path: "groceries", label: "🛒 Groceries" },
 ] as const;
+
+const NEW_GUIDED = "__new-guided";
+const NEW_QUICK = "__new-quick";
 
 /** Two of my houses can share a name (mine and one I joined): tell them apart by address. */
 function houseLabel(h: Household, all: Household[]): string {
@@ -32,6 +35,25 @@ export function AppShell() {
   const help = useHelpRequests();
   const { households, house: defaultHouse } = useDefaultHousehold();
   const switchTo = useSwitchHousehold();
+  const navigate = useNavigate();
+  // The house dropdown also starts a new home. On those pages it shows that choice; anywhere
+  // else (e.g. after clicking a tab) it shows my house again, and the tabs act on that house.
+  const { pathname } = useLocation();
+  const adding = pathname.startsWith("/households/new/setup") ? NEW_GUIDED : pathname.startsWith("/households/new") ? NEW_QUICK : null;
+  const pickHouse = (value: string) => {
+    if (value === NEW_GUIDED || value === NEW_QUICK) {
+      if (unsavedChanges.confirmLeave()) navigate(value === NEW_GUIDED ? "/households/new/setup" : "/households/new");
+      return; // a cancelled leave keeps the current choice: the dropdown follows the page
+    }
+    if (adding) {
+      // Leaving "create" or "join" for a house: show that house's day.
+      if (!unsavedChanges.confirmLeave()) return;
+      switchTo(value);
+      navigate("/");
+      return;
+    }
+    switchTo(value);
+  };
   // The house tabs act on the house I'm looking at; elsewhere, my default house.
   const viewing = useMatch("/households/:householdId/*")?.params.householdId;
   const house = households.data?.find((h) => h.id === viewing) ?? defaultHouse;
@@ -40,7 +62,14 @@ export function AppShell() {
   const waiting = (help.data ?? []).filter((r) => r.status === "open" && !r.is_mine).length;
   // On phones the tabs scroll sideways: keep the one I'm on in view.
   const nav = useRef<HTMLElement>(null);
-  const { pathname } = useLocation();
+  // A load or reload always starts on my default house: half-done "create" or "join" pages
+  // aren't kept (nothing was created yet), so they go back to My day. No house yet: stay.
+  const firstLoad = useRef(true);
+  useEffect(() => {
+    if (!firstLoad.current || households.isLoading) return;
+    firstLoad.current = false;
+    if (adding && (households.data?.length ?? 0) > 0) navigate("/", { replace: true });
+  }, [adding, households.isLoading, households.data, navigate]);
   useEffect(() => {
     nav.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ inline: "center", block: "nearest" });
   }, [pathname]);
@@ -57,26 +86,27 @@ export function AppShell() {
               <span className="text-gradient">Roommates</span>
             </span>
           </span>
-          {/* Which house the tabs act on, from any page. With one house it's just shown. */}
-          {house &&
-            ((households.data?.length ?? 0) > 1 ? (
-              <select
-                aria-label="Switch household"
-                value={house.id}
-                onChange={(e) => switchTo(e.target.value)}
-                className="min-w-0 max-w-48 cursor-pointer truncate rounded-xl bg-white/80 px-2.5 py-1.5 text-sm font-medium text-slate-700 outline-none ring-1 ring-slate-200 transition hover:ring-indigo-300 focus:ring-indigo-400"
-              >
+          {/* Which house the tabs act on, from any page; also where a new home is started. */}
+          {house && (
+            <select
+              aria-label="Switch household, or start a new one"
+              value={adding ?? house.id}
+              onChange={(e) => pickHouse(e.target.value)}
+              className="min-w-0 max-w-56 cursor-pointer truncate rounded-xl bg-white/80 px-2.5 py-1.5 text-sm font-medium text-slate-700 outline-none ring-1 ring-slate-200 transition hover:ring-indigo-300 focus:ring-indigo-400"
+            >
+              <optgroup label="Your homes">
                 {households.data!.map((h) => (
                   <option key={h.id} value={h.id}>
                     🏠 {houseLabel(h, households.data!)}
                   </option>
                 ))}
-              </select>
-            ) : (
-              <span className="min-w-0 truncate rounded-xl px-2.5 py-1.5 text-sm font-medium text-slate-600">
-                🏠 {house.name}
-              </span>
-            ))}
+              </optgroup>
+              <optgroup label="Add a home">
+                <option value={NEW_GUIDED}>✨ Create a new home</option>
+                <option value={NEW_QUICK}>🔑 Join with an invite code</option>
+              </optgroup>
+            </select>
+          )}
           <div className="ml-auto flex items-center gap-2">
             {user && (
               <span

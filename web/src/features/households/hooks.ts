@@ -91,3 +91,9 @@ export function useSwitchHousehold() {
     if (onHousePage) navigate(`/households/${id}/${match.params["*"] ?? ""}`);
   };
 }
+
+/** Deleting a house touches everything (lists, tasks, bills), so refetch all. */
+export function useDeleteHousehold() {
+  const invalidate = useInvalidateEverything();
+  return useMutation({ mutationFn: householdsApi.remove, onSuccess: invalidate });
+}

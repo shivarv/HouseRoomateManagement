@@ -80,3 +80,23 @@ def test_address_is_required(client):
     assert client.post(f"{API}/households", json={"name": "Maple"}, headers=ann).status_code == 422
     res = client.post(f"{API}/households", json={"name": "Maple", "address": "   "}, headers=ann)
     assert res.status_code == 400
+
+
+def test_admins_delete_homes_but_not_their_last_one(client, fake_today):
+    ann = register(client, "ann@example.com", "Ann")
+    maple = _create(client, ann, "Maple")
+    # Only one home Ann runs: it can't go.
+    res = client.delete(f"{API}/households/{maple['id']}", headers=ann)
+    assert res.status_code == 409 and "last home" in res.text
+
+    oak = _create(client, ann, "Oak")
+    bea = register(client, "bea@example.com", "Bea")
+    client.post(f"{API}/invites/{oak['invite_code']}/accept", json={}, headers=bea)
+    assert client.delete(f"{API}/households/{oak['id']}", headers=bea).status_code == 403  # not an admin
+
+    assert client.delete(f"{API}/households/{oak['id']}", headers=ann).status_code == 204
+    assert [h["name"] for h in client.get(f"{API}/households", headers=ann).json()] == ["Maple"]
+    assert client.get(f"{API}/households", headers=bea).json() == []  # gone for everyone
+    assert _me(client, ann)["last_household_id"] is None  # Oak was the one she'd opened last
+    # Maple is the last one again.
+    assert client.delete(f"{API}/households/{maple['id']}", headers=ann).status_code == 409

@@ -66,12 +66,26 @@ struct MyDayView: View {
     @Environment(Session.self) private var session
     @Environment(\.scenePhase) private var scenePhase
     @State private var model = MyDayViewModel()
+    /// ☀️ Today: my turns across my houses · 🧹 Chores: every chore of my current house.
+    @State private var mode: Mode = .today
+    enum Mode: String, CaseIterable { case today = "☀️ Today", chores = "🧹 Chores" }
 
     private var multiHouse: Bool { model.households.count > 1 }
 
     var body: some View {
         NavigationStack {
             List {
+                if !model.households.isEmpty {
+                    Picker("View", selection: $mode) {
+                        ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                }
+                if mode == .chores, let houseId = session.preferredHousehold(in: model.households) {
+                    MyDayChores(householdId: houseId).id(houseId)  // a new house, a fresh list
+                } else {
                 Section {
                     Text(headline)
                         .font(.subheadline)
@@ -115,6 +129,7 @@ struct MyDayView: View {
                         }
                     }
                 }
+                }
             }
             .navigationTitle("Hi \(session.user?.name ?? "") 👋")
             .overlay { if model.isLoading && !model.hasLoaded { ProgressView() } }
@@ -152,5 +167,30 @@ struct MyDayView: View {
         if model.tasks.isEmpty { return "No turns for you right now." }
         if model.pendingCount == 0 { return "All your turns are done. Nice!" }
         return "You have \(model.pendingCount) chore\(model.pendingCount > 1 ? "s" : "") to do."
+    }
+}
+
+/// My day → Chores: the chores of my current house (the one I picked or opened last).
+private struct MyDayChores: View {
+    let householdId: UUID
+    @State private var model: HouseholdViewModel
+
+    init(householdId: UUID) {
+        self.householdId = householdId
+        _model = State(initialValue: HouseholdViewModel(householdId: householdId))
+    }
+
+    var body: some View {
+        Group {
+            if let name = model.detail?.name {
+                Section {
+                    Text("Every chore in \(name) and whose turn it is.").font(.subheadline).foregroundStyle(.secondary)
+                }
+                .listRowBackground(Color.clear)
+            }
+            ErrorBanner(message: model.error)
+            ChoresSection(model: model)
+        }
+        .task { await model.load() }
     }
 }

@@ -28,6 +28,7 @@ Status: **implemented** for health, auth, households, members, chores and tasks.
 | POST   | `/households`                         | Create household: `{ name, address, timezone? }`. `address` required. 409 if I already created a house with that name (case-insensitive; other people's houses don't count) |
 | GET    | `/households/{id}`                    | Household detail + members   |
 | PATCH  | `/households/{id}`                    | Change name / address / timezone (admin). Renaming follows the same per-creator uniqueness |
+| DELETE | `/households/{id}`                    | Admins: delete the home and everything in it, for everyone → 204. The last home you're an admin of can't be deleted (409) |
 | GET    | `/invites/{code}`                     | Preview: household + names not yet claimed |
 | POST   | `/invites/{code}/accept`              | Join: `{ member_id }` claims a name, `{}` joins as new person |
 
@@ -174,3 +175,14 @@ Recurring house payments. Admins set them up; everyone sees them and marks them 
 | DELETE | `/bill-payments/{id}` | member | Undo: whoever paid, whoever marked it, or an admin |
 
 Activity feed actions: `bill_paid`, `bill_unpaid`, `bill_amount_set`, `bill_created`, `bill_updated`, `bill_deleted`.
+
+## Guided set-up (new house from a template)
+
+Anyone signed in can set up a new house in one go; they become its admin. Nothing is saved unless every part is valid. Each list holds at most 10 items, and a house starts with at most 10 people (you + 9 roommates).
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET    | `/households/setup/template` | Defaults to prefill the set-up with: `{ max_items, chores, groceries, bills, categories }` (10 chores, 10 grocery items, 10 bills, the standard grocery categories). Asking for N of something takes the first N |
+| POST   | `/households/setup` | `{ name, address, timezone, roommates: [names], chores: [{ name, frequency, assignment_mode, people? }], groceries: [{ name, category_key }], bills: [{ name, icon, payer_mode, payer_name?, frequency, due_day, amount_type, amount_cents? }], currency }` → 201 with the new house. `people` (names, in turn order) leaves others out of a chore's rotation; without it everyone takes turns. `payer_name` names who pays a `one` bill. Unknown names or categories → 400; duplicates or more than 10 → 422 |
+
+The house gets exactly what was sent: the standard chores, quick-add items and bills are not added on top (the standard grocery categories are).

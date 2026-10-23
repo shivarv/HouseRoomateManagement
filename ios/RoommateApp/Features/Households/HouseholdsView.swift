@@ -31,7 +31,7 @@ struct HouseholdsView: View {
                     } description: {
                         Text("Create a household, or join one with an invite code from your house admin.")
                     } actions: {
-                        Button("Create household") { showCreate = true }.buttonStyle(.borderedProminent)
+                        Button("Create a new home") { showCreate = true }.buttonStyle(.borderedProminent)
                         Button("Join with code") { showJoin = true }
                     }
                 }
@@ -40,16 +40,18 @@ struct HouseholdsView: View {
             .navigationDestination(for: UUID.self) { HouseholdDetailView(householdId: $0) }
             .toolbar {
                 Menu {
-                    Button("Create household", systemImage: "plus") { showCreate = true }
+                    Button("Create a new home", systemImage: "sparkles") { showCreate = true }
                     Button("Join with invite code", systemImage: "person.badge.plus") { showJoin = true }
                 } label: {
                     Image(systemName: "plus")
                 }
             }
-            .sheet(isPresented: $showCreate) { CreateHouseholdSheet { Task { await load() } } }
+            // Creating always goes through the guided setup, so every new house starts complete.
+            .sheet(isPresented: $showCreate) { SetupWizardView { _ in Task { await load() } } }
             .sheet(isPresented: $showJoin) { JoinHouseholdSheet { Task { await load() } } }
             .refreshable { await load() }
             .task { await load() }
+            .onAppear { Task { await load() } }  // e.g. after a home was deleted in Settings
         }
     }
 
@@ -61,60 +63,6 @@ struct HouseholdsView: View {
             self.error = error.localizedDescription
         }
         hasLoaded = true
-    }
-}
-
-struct CreateHouseholdSheet: View {
-    var onCreated: () -> Void
-    @Environment(\.dismiss) private var dismiss
-    @Environment(Session.self) private var session
-    @State private var name = ""
-    @State private var address = ""
-    @State private var timezone = TimeZone.current.identifier
-    @State private var error: String?
-    @State private var isSaving = false
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Name, e.g. Maple Street House", text: $name)
-                    TextField("Address, e.g. 12 Maple St, Boston, MA", text: $address)
-                        .textContentType(.fullStreetAddress)
-                    TextField("Timezone", text: $timezone)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                } footer: {
-                    VStack(alignment: .leading) {
-                        Text("Comes with Cooking, Clean hall and Dispose garbage. Add your roommates next. You can't have two houses with the same name.")
-                        ErrorBanner(message: error)
-                    }
-                }
-            }
-            .navigationTitle("New household")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
-                        Task {
-                            isSaving = true
-                            defer { isSaving = false }
-                            do {
-                                let house = try await APIClient.shared.createHousehold(name: name, address: address, timezone: timezone)
-                                session.rememberHousehold(house.id)
-                                onCreated()
-                                dismiss()
-                            } catch {
-                                self.error = error.localizedDescription
-                            }
-                        }
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty
-                              || address.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
-                }
-            }
-        }
     }
 }
 

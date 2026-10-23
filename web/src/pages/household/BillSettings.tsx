@@ -1,6 +1,7 @@
 import { useCallback, useState, type FormEvent } from "react";
 import { billsApi } from "../../api/bills";
 import { Badge, Button, Card, Empty, ErrorText, Loading } from "../../components/ui";
+import { DueDayField, dueText as billDueText } from "../../features/bills/DueDayField";
 import { useBillChange, useBills } from "../../features/bills/hooks";
 import { formatMoney } from "../../lib/format";
 import { useUnsavedChangesGuard } from "../../lib/unsavedChanges";
@@ -25,12 +26,9 @@ const FREQUENCY_LABEL: Record<BillFrequency, string> = {
   weekly: "Every week",
   daily: "Every day",
 };
-const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 function dueText(bill: Bill): string {
-  if (bill.frequency === "daily") return "Every day";
-  if (bill.frequency === "weekly") return `Every ${WEEKDAYS[bill.due_day - 1] ?? "Monday"}`;
-  return `Monthly on day ${bill.due_day}`;
+  return billDueText(bill.frequency, bill.due_day);
 }
 
 const MODE_LABEL: Record<PayerMode, string> = {
@@ -82,7 +80,7 @@ function problem(v: FormValues): string | null {
   if (!v.name.trim()) return "Give the bill a name";
   if (v.payer_mode === "one" && !v.payer_id) return "Pick who pays it";
   const day = Number(v.due_day);
-  if (v.frequency === "monthly" && (!Number.isInteger(day) || day < 1 || day > 31)) return "Due day must be 1–31";
+  if (v.frequency === "monthly" && (!Number.isInteger(day) || day < 1 || day > 31)) return "Pick a due day";
   if (v.amount_type === "fixed" && cents(v.amount) === undefined) return "Amount must be a number, like 60 or 1250.50";
   if (!/^[A-Za-z]{3}$/.test(v.currency.trim())) return "Currency is a 3-letter code, like USD or INR";
   return null;
@@ -324,25 +322,7 @@ function BillForm({
             </option>
           ))}
         </select>
-        {values.frequency === "monthly" && (
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            due on day
-            <input className={`${fieldClass} w-20`} type="number" min={1} max={31} value={values.due_day} onChange={(e) => set({ due_day: e.target.value })} />
-          </label>
-        )}
-        {values.frequency === "weekly" && (
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            due on
-            <select className={`${fieldClass} min-w-36`} value={values.due_day} onChange={(e) => set({ due_day: e.target.value })}>
-              {WEEKDAYS.map((d, i) => (
-                <option key={d} value={String(i + 1)}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {values.frequency === "daily" && <span className="text-sm text-slate-500">due the same day</span>}
+        <DueDayField frequency={values.frequency} value={Number(values.due_day)} onChange={(d) => set({ due_day: String(d) })} />
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <select
@@ -370,7 +350,7 @@ function BillForm({
         aria-label="Note"
       />
       <p className="text-xs text-slate-500">
-        {values.frequency === "monthly" && "Due day 29–31 uses the last day of shorter months."}
+        {values.frequency === "monthly" && "“Last day of month” follows each month: the 30th, 31st, or Feb 28/29."}
         {values.payer_mode === "everyone" && " Each person taps their name once they've paid their share."}
       </p>
       {touched && error && <p className="text-sm text-red-600">{error}</p>}

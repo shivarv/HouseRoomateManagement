@@ -15,7 +15,9 @@ from app.schemas.household import (
     MemberOut,
     MemberUpdate,
 )
+from app.schemas.setup import HouseholdSetup, SetupTemplate
 from app.services import households as svc
+from app.services import setup as setup_svc
 
 router = APIRouter(tags=["households"])
 
@@ -32,6 +34,21 @@ def create_household(body: HouseholdCreate, db: DbSession, user: CurrentUser):
     )
 
 
+@router.get("/households/setup/template", response_model=SetupTemplate)
+def setup_template(user: CurrentUser):
+    """Defaults to prefill the guided set-up with (up to `max_items` of each list)."""
+    return setup_svc.template()
+
+
+@router.post("/households/setup", response_model=HouseholdOut, status_code=status.HTTP_201_CREATED)
+def setup_household(body: HouseholdSetup, db: DbSession, user: CurrentUser):
+    """A new house with its people, chores, quick-add groceries and bills, all in one go.
+
+    Anyone signed in can do this; they become the new house's admin.
+    """
+    return svc.household_out(setup_svc.create(db, user, body))
+
+
 @router.get("/households/{household_id}", response_model=HouseholdDetail)
 def get_household(household_id: uuid.UUID, db: DbSession, user: CurrentUser):
     me = svc.require_membership(db, household_id, user)
@@ -46,6 +63,13 @@ def update_household(
     me = svc.require_membership(db, household_id, user, admin=True)
     svc.update_household(db, me.household, body.name, body.address, body.timezone)
     return svc.household_out(me)
+
+
+@router.delete("/households/{household_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_household(household_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    """Admins only, for everyone in it. Not the last home you're an admin of (409)."""
+    me = svc.require_membership(db, household_id, user, admin=True)
+    svc.delete_household(db, me, user)
 
 
 @router.get("/households/{household_id}/members", response_model=list[MemberOut])

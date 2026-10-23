@@ -71,7 +71,17 @@
       "Bash(cat Features/Profile/ProfileView.swift)",
       "Bash(grep -n \"private struct HistorySection\" Features/Households/HouseholdDetailView.swift)",
       "Bash(sed -n 1,110p Features/Households/HouseholdDetailView.swift)",
-      "Bash(xcodebuild -project RoommateApp.xcodeproj -scheme RoommateApp -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO)"
+      "Bash(xcodebuild -project RoommateApp.xcodeproj -scheme RoommateApp -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO)",
+      "Bash(git config *)",
+      "Bash(.venv/bin/python -m pytest -q tests/test_setup.py)",
+      "Bash(grep -n \"New or join\" -B2 -A2 pages/household/HouseholdLayout.tsx pages/MyDayPage.tsx)",
+      "Bash(sed -n '/Which house the tabs act on/,/<div className=\"ml-auto/p' components/AppShell.tsx)",
+      "Bash(sed -i '' 's/import { Link, Outlet, useOutletContext, useParams } from \"react-router\";/import { Outlet, useOutletContext, useParams } from \"react-router\";/' src/pages/household/HouseholdLayout.tsx)",
+      "Bash(head -3 src/pages/household/HouseholdLayout.tsx)",
+      "Bash(.venv/bin/python -m pytest -q tests/test_last_household.py)",
+      "Bash(grep -n \"export function HouseDetailsSettings\" -A3 pages/household/SettingsPages.tsx)",
+      "Bash(grep -n \"remove\\\\|updateMember\" api/households.ts)",
+      "Bash(.venv/bin/python -c ' *)"
     ]
   }
 }

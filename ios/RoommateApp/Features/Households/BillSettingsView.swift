@@ -266,9 +266,14 @@ private struct BillFormView: View {
                     .onChange(of: frequency) { _, f in if f == .weekly && dueDay > 7 { dueDay = 1 } }
                     switch frequency {
                     case .monthly:
-                        Stepper("Due on day \(dueDay)", value: $dueDay, in: 1...31)
+                        // 1–28, then the last day (stored as 31: each month's own last day).
+                        Picker("Due", selection: Binding(get: { dueDay > 28 ? Bill.lastDay : dueDay },
+                                                         set: { dueDay = $0 })) {
+                            ForEach(1...28, id: \.self) { Text("\($0)").tag($0) }
+                            Text("Last day of month").tag(Bill.lastDay)
+                        }
                     case .weekly:
-                        Picker("Due on", selection: $dueDay) {
+                        Picker("Due", selection: $dueDay) {
                             ForEach(1...7, id: \.self) { Text(Bill.weekdays[$0 - 1]).tag($0) }
                         }
                     case .daily:
@@ -277,7 +282,7 @@ private struct BillFormView: View {
                 } header: {
                     Text("When")
                 } footer: {
-                    if frequency == .monthly { Text("Days 29–31 use the last day of shorter months.") }
+                    if frequency == .monthly { Text("“Last day of month” follows each month: the 30th, 31st, or Feb 28/29.") }
                 }
                 Section("Amount") {
                     Picker("Amount", selection: $amountType) {

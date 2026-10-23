@@ -461,12 +461,14 @@ struct Bill: Decodable, Identifiable, Hashable {
     let current: BillPeriod
 
     static let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    /// Stored as 31; the backend uses each month's own last day.
+    static let lastDay = 31
 
     var dueText: String {
         switch frequency {
         case .daily: "Every day"
         case .weekly: "Every \(Self.weekdays[max(0, min(6, dueDay - 1))])"
-        case .monthly: "Monthly on day \(dueDay)"
+        case .monthly: dueDay > 28 ? "Monthly on the last day" : "Monthly on day \(dueDay)"
         }
     }
 }
@@ -489,4 +491,57 @@ enum Money {
         guard let value = Double(cleaned), value >= 0 else { return -1 }
         return Int((value * 100).rounded())
     }
+}
+
+// MARK: - Guided set-up of a new house
+
+struct SetupChore: Codable, Hashable {
+    var name: String
+    var frequency: Frequency
+    var assignmentMode: AssignmentMode
+    var people: [String]? = nil  // who takes turns, by name; nil = everyone
+}
+
+struct SetupGrocery: Codable, Hashable {
+    var name: String
+    var categoryKey: String
+}
+
+struct SetupBill: Codable, Hashable {
+    var name: String
+    var icon: String
+    var payerMode: PayerMode
+    var payerName: String?  // payerMode .one: me or a roommate, by name
+    var frequency: BillFrequency
+    var dueDay: Int
+    var amountType: AmountType
+    var amountCents: Int?
+}
+
+struct SetupCategory: Decodable, Hashable, Identifiable {
+    let key: String
+    let label: String
+    let icon: String
+    var id: String { key }
+}
+
+/// Defaults to prefill the set-up with, up to `maxItems` of each.
+struct SetupTemplate: Decodable {
+    let maxItems: Int
+    let chores: [SetupChore]
+    let groceries: [SetupGrocery]
+    let bills: [SetupBill]
+    let categories: [SetupCategory]
+}
+
+/// Everything a new house starts with, created in one go.
+struct HouseholdSetup: Encodable {
+    let name: String
+    let address: String
+    let timezone: String
+    let roommates: [String]  // besides me
+    let chores: [SetupChore]
+    let groceries: [SetupGrocery]
+    let bills: [SetupBill]
+    let currency: String
 }

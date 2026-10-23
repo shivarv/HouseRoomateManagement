@@ -38,6 +38,23 @@ def _ensure_name_free(
 def create_household(
     db: Session, user: User, name: str, address: str, timezone: str
 ) -> HouseholdMember:
+    """A new house with the standard chores, grocery lists and bills."""
+    household, admin = new_household(db, user, name, address, timezone)
+    today = clock.today_in(timezone)
+    for chore_name, mode in chores.DEFAULT_CHORES:
+        chores.create_chore(
+            db, household, chore_name, member_ids=None, today=today, assignment_mode=mode
+        )
+    grocery_settings.seed(db, household.id)
+    bills.seed(db, household.id)
+    db.commit()
+    return admin
+
+
+def new_household(
+    db: Session, user: User, name: str, address: str, timezone: str
+) -> tuple[Household, HouseholdMember]:
+    """The house and me as its admin, with nothing in it yet. The caller fills it and commits."""
     name, address = name.strip(), address.strip()
     if not name or not address:
         raise BadRequest("A house needs a name and an address")
@@ -60,16 +77,8 @@ def create_household(
     )
     db.add(admin)
     db.flush()
-    today = clock.today_in(timezone)
-    for chore_name, mode in chores.DEFAULT_CHORES:
-        chores.create_chore(
-            db, household, chore_name, member_ids=None, today=today, assignment_mode=mode
-        )
-    grocery_settings.seed(db, household.id)
-    bills.seed(db, household.id)
     user.last_household_id = household.id  # a new house opens on every device
-    db.commit()
-    return admin
+    return household, admin
 
 
 def update_household(
@@ -87,6 +96,20 @@ def update_household(
         household.address = address.strip()
     if timezone is not None:
         household.timezone = timezone
+    db.commit()
+
+
+def delete_household(db: Session, me: HouseholdMember, user: User) -> None:
+    """An admin deletes a home and everything in it, for everyone.
+
+    You always keep at least one home you're an admin of, so the last one can't be deleted.
+    """
+    # Lock me, so two deletes at once can't both pass the check and leave me with none.
+    db.execute(select(User.id).where(User.id == user.id).with_for_update())
+    admin_of = [m for m in memberships(db, user) if m.role == "admin"]
+    if len(admin_of) <= 1:
+        raise Conflict("This is the last home you're an admin of, so it can't be deleted")
+    db.delete(me.household)  # members, chores, lists, bills and history go with it
     db.commit()
 
 

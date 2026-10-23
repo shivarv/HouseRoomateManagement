@@ -351,3 +351,48 @@ export interface BillFields {
   note?: string;
   is_active?: boolean;
 }
+
+// --- Guided set-up of a new house -------------------------------------------------------------
+
+export interface SetupChore {
+  name: string;
+  frequency: Frequency; // daily | weekly
+  assignment_mode: AssignmentMode; // rotation | open
+  people?: string[]; // who takes turns, in order, by name; left out = everyone
+}
+
+export interface SetupGrocery {
+  name: string;
+  category_key: string;
+}
+
+export interface SetupBill {
+  name: string;
+  icon: string;
+  payer_mode: PayerMode;
+  payer_name: string | null; // payer_mode "one": me or a roommate, by name
+  frequency: BillFrequency;
+  due_day: number;
+  amount_type: AmountType;
+  amount_cents: number | null;
+}
+
+/** Defaults to prefill the set-up with, up to `max_items` of each. */
+export interface SetupTemplate {
+  max_items: number;
+  chores: SetupChore[];
+  groceries: SetupGrocery[];
+  bills: SetupBill[];
+  categories: { key: string; label: string; icon: string }[];
+}
+
+export interface HouseholdSetup {
+  name: string;
+  address: string;
+  timezone: string;
+  roommates: string[]; // besides me
+  chores: SetupChore[];
+  groceries: SetupGrocery[];
+  bills: SetupBill[];
+  currency: string;
+}

@@ -3,6 +3,7 @@ import { AppShell } from "./components/AppShell";
 import { AuthPage } from "./pages/AuthPage";
 import { AddHouseholdPage, HouseholdsPage } from "./pages/HouseholdsPage";
 import { MyDayPage } from "./pages/MyDayPage";
+import { SetupWizardPage } from "./pages/SetupWizardPage";
 import { HelpRequestsPage, NotificationsPage } from "./pages/NotificationsPage";
 import { ActivityTab } from "./pages/household/ActivityTab";
 import { ChoresTab } from "./pages/household/ChoresTab";
@@ -33,6 +34,7 @@ export default function App() {
         <Route index element={<MyDayPage />} />
         <Route path="households" element={<HouseholdsPage />} />
         <Route path="households/new" element={<AddHouseholdPage />} />
+        <Route path="households/new/setup" element={<SetupWizardPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="help" element={<HelpRequestsPage />} />
         <Route path="households/:householdId" element={<HouseholdLayout />}>
@@ -50,7 +52,8 @@ export default function App() {
           <Route path="report" element={<Navigate to="../house/report" replace />} />
           <Route path="schedule" element={<Navigate to="../house/schedule" replace />} />
           <Route path="people" element={<Navigate to="../house/people" replace />} />
-          <Route path="chores" element={<ChoresTab />} />
+          {/* Chores now live in My day. */}
+          <Route path="chores" element={<Navigate to="/?view=chores" replace />} />
           <Route path="groceries" element={<GroceriesTab />} />
           <Route path="reminders" element={<RemindersTab />} />
           {/* Admin-only configuration, kept apart from the everyday tabs. */}
