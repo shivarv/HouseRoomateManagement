@@ -6,17 +6,13 @@ import { useAuth } from "../features/auth/AuthContext";
 import { useHelpRequests } from "../features/help/hooks";
 import { useDefaultHousehold, useSwitchHousehold } from "../features/households/hooks";
 import { avatarColor } from "../lib/avatar";
+import { mainTab, settingsButton } from "../lib/tabStyles";
 import { unsavedChanges } from "../lib/unsavedChanges";
 import type { Household } from "../types/api";
 import { WelcomePage } from "../pages/WelcomePage";
 import { Button } from "./ui";
 
-const link = ({ isActive }: { isActive: boolean }) =>
-  `shrink-0 snap-start whitespace-nowrap rounded-xl px-2.5 py-1.5 text-sm font-medium transition-all duration-200 ${
-    isActive
-      ? "bg-linear-to-r from-indigo-500/10 to-fuchsia-500/10 text-indigo-700 ring-1 ring-indigo-200"
-      : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
-  }`;
+const link = mainTab;
 
 const HOUSE_TABS = [
   { path: "reminders", label: "🧾 Reminders" },
@@ -202,15 +198,10 @@ export function AppShell() {
                 <NavLink
                   to={`${base}/settings`}
                   title="House settings (admins)"
-                  className={({ isActive }) =>
-                    `flex items-center gap-1 whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-semibold shadow-sm transition ${
-                      isActive
-                        ? "bg-linear-to-r from-indigo-500 to-fuchsia-500 text-white shadow-indigo-500/30"
-                        : "bg-white text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50"
-                    }`
-                  }
+                  className={settingsButton}
                 >
-                  ⚙<span className="hidden sm:inline">Settings</span>
+                  <span className="inline-block transition-transform duration-500 group-hover:rotate-90">⚙</span>
+                  <span className="hidden sm:inline">Settings</span>
                 </NavLink>
               </div>
             )}

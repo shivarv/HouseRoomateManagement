@@ -1,16 +1,12 @@
 import { useState, type FormEvent } from "react";
+import { subTab, subTabTray } from "../../lib/tabStyles";
 import { Link, Navigate, NavLink, Outlet, useNavigate } from "react-router";
 import { Badge, Button, Card, ErrorText, Input } from "../../components/ui";
 import { useDeleteHousehold, useHouseholds, useUpdateHousehold } from "../../features/households/hooks";
 import type { Household } from "../../types/api";
 import { useCurrentHousehold } from "./HouseholdLayout";
 
-const section = ({ isActive }: { isActive: boolean }) =>
-  `whitespace-nowrap rounded-xl px-3.5 py-1.5 text-sm font-medium transition-all duration-200 ${
-    isActive
-      ? "bg-linear-to-r from-indigo-500 to-fuchsia-500 text-white shadow-md shadow-indigo-500/30"
-      : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
-  }`;
+const section = subTab;
 
 /** Household settings: everything only an admin can change, kept out of the everyday tabs. */
 export function SettingsLayout() {
@@ -19,17 +15,19 @@ export function SettingsLayout() {
 
   return (
     <div className="space-y-6">
-      <nav className="flex flex-wrap items-center gap-1">
-        <span className="mr-2 text-xs font-semibold uppercase tracking-widest text-slate-400">Admin only</span>
+      <nav className="flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-xs font-semibold uppercase tracking-widest text-slate-400">Admin only</span>
+        <div className={subTabTray}>
         <NavLink to="" end className={section}>House details</NavLink>
         <NavLink to="people" className={section}>Roommates</NavLink>
         <NavLink to="chores" className={section}>Chores</NavLink>
         <NavLink to="groceries" className={section}>Groceries</NavLink>
         <NavLink to="reminders" className={section}>Reminders</NavLink>
         <NavLink to="history" className={section}>Past months</NavLink>
+        </div>
         <Link
           to="/households/new/setup"
-          className="ml-auto whitespace-nowrap rounded-xl bg-white px-3.5 py-1.5 text-sm font-semibold text-indigo-700 shadow-sm ring-1 ring-indigo-200 transition hover:bg-indigo-50"
+          className="ml-auto whitespace-nowrap rounded-xl bg-white px-3.5 py-1.5 text-sm font-semibold text-indigo-700 shadow-sm ring-1 ring-indigo-200 transition-all duration-200 hover:-translate-y-px hover:shadow-md hover:shadow-indigo-500/15 hover:ring-indigo-300 active:translate-y-0"
           title="Set up another home from a template"
         >
           ＋ New home from a template
