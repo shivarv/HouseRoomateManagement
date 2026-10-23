@@ -9,6 +9,8 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   signIn: (response: TokenResponse) => void;
+  /** After editing my profile. */
+  updateUser: (user: User) => void;
   signOut: () => void;
 }
 
@@ -45,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, [signOut]);
 
-  const value = useMemo(() => ({ user, loading, signIn, signOut }), [user, loading, signIn, signOut]);
+  const value = useMemo(() => ({ user, loading, signIn, signOut, updateUser: setUser }), [user, loading, signIn, signOut]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

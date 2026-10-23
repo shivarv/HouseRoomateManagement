@@ -22,6 +22,12 @@ services:
         generateValue: true
       - key: CORS_ORIGINS # the web app's URL, e.g. https://housemate-web.onrender.com
         sync: false
+      - key: WEB_URL # the web app's URL again: invite links in emails point here
+        sync: false
+      - key: RESEND_API_KEY # optional: emails invites through Resend; without it they're saved, not emailed
+        sync: false
+      - key: EMAIL_FROM # e.g. "Roommates <invites@yourdomain.com>" (a domain verified in Resend)
+        sync: false
 
   - type: web
     name: housemate-web

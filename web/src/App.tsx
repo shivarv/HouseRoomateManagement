@@ -1,8 +1,10 @@
 import { Navigate, Route, Routes } from "react-router";
 import { AppShell } from "./components/AppShell";
 import { AuthPage } from "./pages/AuthPage";
+import { JoinPage } from "./pages/JoinPage";
 import { AddHouseholdPage, HouseholdsPage } from "./pages/HouseholdsPage";
 import { MyDayPage } from "./pages/MyDayPage";
+import { ProfilePage } from "./pages/ProfilePage";
 import { SetupWizardPage } from "./pages/SetupWizardPage";
 import { HelpRequestsPage, NotificationsPage } from "./pages/NotificationsPage";
 import { ActivityTab } from "./pages/household/ActivityTab";
@@ -24,6 +26,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<AuthPage mode="login" />} />
       <Route path="/register" element={<AuthPage mode="register" />} />
+      {/* Invite links: work signed out (sign up or log in, then come back to join). */}
+      <Route path="/join/:code" element={<JoinPage />} />
       <Route
         element={
           <RequireAuth>
@@ -36,6 +40,7 @@ export default function App() {
         <Route path="households/new" element={<AddHouseholdPage />} />
         <Route path="households/new/setup" element={<SetupWizardPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route path="help" element={<HelpRequestsPage />} />
         <Route path="households/:householdId" element={<HouseholdLayout />}>
           {/* "Today" was merged into My day. */}

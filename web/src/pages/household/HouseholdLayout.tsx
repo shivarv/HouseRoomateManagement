@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { Outlet, useOutletContext, useParams } from "react-router";
+import { Outlet, useOutletContext, useParams, useSearchParams } from "react-router";
 import { ErrorText, Loading } from "../../components/ui";
+import { InvitePanel } from "../../features/households/InvitePanel";
 import { useHousehold, useHouseholds, useSwitchHousehold } from "../../features/households/hooks";
 import { lastHousehold } from "../../lib/lastHousehold";
 import type { HouseholdDetail } from "../../types/api";
@@ -11,6 +12,12 @@ export function HouseholdLayout() {
   const households = useHouseholds();
   const switchTo = useSwitchHousehold();
   const [copied, setCopied] = useState(false);
+  // Just created with the guided setup (?invite=1): start with the invite panel open.
+  const [params, setParams] = useSearchParams();
+  const [inviting, setInviting] = useState(params.get("invite") === "1");
+  useEffect(() => {
+    if (params.get("invite") === "1") setParams({}, { replace: true }); // a reload shouldn't reopen it
+  }, [params, setParams]);
 
   // Remember this house (e.g. opened from a link) so the tabs open it next time.
   useEffect(() => {
@@ -69,18 +76,31 @@ export function HouseholdLayout() {
               </span>
             </div>
           </div>
-          <button
-            onClick={copyCode}
-            className="rounded-2xl bg-white/15 px-4 py-2 text-left ring-1 ring-white/30 backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/25"
-            title="Copy invite code"
-          >
-            <span className="block text-[11px] font-medium uppercase tracking-widest text-white/70">
-              {copied ? "Copied!" : "Invite code"}
-            </span>
-            <span className="font-mono text-lg font-semibold tracking-wider">{h.invite_code}</span>
-          </button>
+          <div className="flex flex-wrap items-stretch gap-2">
+            <button
+              onClick={copyCode}
+              className="rounded-2xl bg-white/15 px-4 py-2 text-left ring-1 ring-white/30 backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/25"
+              title="Copy invite code"
+            >
+              <span className="block text-[11px] font-medium uppercase tracking-widest text-white/70">
+                {copied ? "Copied!" : "Invite code"}
+              </span>
+              <span className="font-mono text-lg font-semibold tracking-wider">{h.invite_code}</span>
+            </button>
+            <button
+              onClick={() => setInviting((v) => !v)}
+              className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-indigo-700 shadow-md transition hover:-translate-y-0.5"
+            >
+              ✉️ Invite people
+            </button>
+          </div>
         </div>
       </div>
+      {inviting && (
+        <div className="mb-6">
+          <InvitePanel house={h} onClose={() => setInviting(false)} />
+        </div>
+      )}
       <Outlet context={h} />
     </>
   );

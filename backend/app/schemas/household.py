@@ -2,7 +2,7 @@ import uuid
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 def _validate_timezone(value: str) -> str:
@@ -24,6 +24,13 @@ class MemberOut(MemberBrief):
     role: Literal["admin", "member"]
     is_active: bool
     has_account: bool
+    # added: by name only · invited: an email invite is waiting for them · joined: has an account
+    status: Literal["added", "invited", "joined"] = "added"
+    # From their account (empty until they join): "Bea" might be "Beatrice Smith".
+    first_name: str = ""
+    last_name: str = ""
+    email: str | None = None  # their account's once joined, else what an admin added
+    phone: str | None = None
 
 
 class MemberCreate(BaseModel):
@@ -31,8 +38,12 @@ class MemberCreate(BaseModel):
 
 
 class MemberUpdate(BaseModel):
+    """Only the fields sent change; `email: ""` and `phone: ""` clear them."""
+
     display_name: str | None = Field(default=None, min_length=1, max_length=100)
     role: Literal["admin", "member"] | None = None
+    email: EmailStr | Literal[""] | None = None
+    phone: str | None = Field(default=None, max_length=32, pattern=r"^[0-9+()\-\s]*$")
 
 
 class HouseholdCreate(BaseModel):
@@ -70,6 +81,13 @@ class HouseholdOut(BaseModel):
 
 class HouseholdDetail(HouseholdOut):
     members: list[MemberOut]
+
+
+class InvitePublic(BaseModel):
+    """What an invite link shows before signing in: just enough to know it's the right house."""
+
+    household_name: str
+    people: int
 
 
 class InvitePreview(BaseModel):

@@ -81,7 +81,22 @@
       "Bash(.venv/bin/python -m pytest -q tests/test_last_household.py)",
       "Bash(grep -n \"export function HouseDetailsSettings\" -A3 pages/household/SettingsPages.tsx)",
       "Bash(grep -n \"remove\\\\|updateMember\" api/households.ts)",
-      "Bash(.venv/bin/python -c ' *)"
+      "Bash(.venv/bin/python -c ' *)",
+      "Bash(grep -n \"previewInvite\\\\|acceptInvite\" api/households.ts)",
+      "Bash(grep -n \"Route path=\\\\\"/register\\\\\"\" App.tsx)",
+      "Bash(grep -n \"^from pydantic\" app/schemas/household.py)",
+      "Bash(grep -n \"def update_member\" -A12 app/api/routes/households.py)",
+      "Bash(.venv/bin/python -c \"from app.core.config import settings; u=settings.migration_url; assert 'localhost' in u; print\\('local db:', u.split\\('@'\\)[1]\\)\")",
+      "Bash(.venv/bin/python -m scripts.backfill_user_names)",
+      "Bash(sed -n 36,90p pages/household/PeopleTab.tsx)",
+      "Bash(grep -n \"updateMember\" api/households.ts features/households/hooks.ts)",
+      "Bash(cat Features/Auth/AuthView.swift)",
+      "Bash(grep -n \"struct Member:\" -A10 Core/Models/Models.swift)",
+      "Bash(grep -n \"struct User:\" -A8 Core/Models/Models.swift)",
+      "Bash(sed -n 69,140p Features/Households/HouseholdsView.swift)",
+      "Bash(grep -n \"func updateMember\\\\|func renameMember\\\\|func setRole\\\\|struct RoleBody\\\\|MemberBody\" Core/Services/HouseholdService.swift)",
+      "Bash(grep -n \"API_BASE_URL\" -A1 Resources/Info.plist)",
+      "Bash(grep -rn \"toggleAdmin\" Features/Households/HouseholdViewModel.swift)"
     ]
   }
 }

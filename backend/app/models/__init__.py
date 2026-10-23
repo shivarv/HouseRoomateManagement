@@ -9,6 +9,7 @@ from app.models.chore import (
     HelpRequest,
 )
 from app.models.household import Household, HouseholdMember
+from app.models.invite import HouseholdInvite
 from app.models.shopping import GroceryCategory, GroceryPreset, ShoppingItem
 from app.models.user import User
 
@@ -26,6 +27,7 @@ __all__ = [
     "GroceryPreset",
     "HelpRequest",
     "Household",
+    "HouseholdInvite",
     "HouseholdMember",
     "ShoppingItem",
     "User",

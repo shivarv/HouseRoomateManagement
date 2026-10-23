@@ -10,6 +10,9 @@ class User(UUIDPrimaryKey, Timestamps, Base):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    first_name: Mapped[str] = mapped_column(String(50), default="")
+    last_name: Mapped[str] = mapped_column(String(50), default="")
+    # "First Last": what houses call me by default. Kept in step with the two parts.
     name: Mapped[str] = mapped_column(String(100))
     password_hash: Mapped[str] = mapped_column(String(255))
     # The house the apps open on: the one picked or joined last, on any device.

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { householdsApi } from "../api/households";
-import { Badge, Button, Card, ErrorText, Input, Loading, PageTitle } from "../components/ui";
+import { Button, Card, ErrorText, Input, Loading, PageTitle } from "../components/ui";
 import { useAuth } from "../features/auth/AuthContext";
 import { DueDayField } from "../features/bills/DueDayField";
 import { browserTimezone } from "../lib/format";
@@ -13,27 +13,17 @@ import type { HouseholdSetup, SetupBill, SetupChore, SetupGrocery, SetupTemplate
 const fieldClass =
   "rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-slate-400 hover:border-indigo-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15";
 
-const STEPS = ["Your home", "Roommates", "Chores", "Groceries", "Bills", "Review"] as const;
+const STEPS = ["Your home", "Chores", "Groceries", "Bills", "Review"] as const;
 type StepName = (typeof STEPS)[number];
 const LEAVE_PROMPT =
   "Your new home isn't created yet. Finish the setup and tap “Create home” to save it, or you'll lose what you've filled in.\n\nLeave anyway?";
 
-/** A chore as the wizard edits it: who's left out of its turns, by position in `people` (0 = me). */
+/** A chore as the wizard edits it. (Who takes turns is set later, once people have joined.) */
 type WizardChore = SetupChore & { excluded: number[] };
 
-/** "Everyone" · "Everyone except Bea" · "Ann, Cy" · "Nobody yet" */
-function rotationLabel(people: string[], excluded: number[]): string {
-  const left = excluded.filter((i) => i < people.length);
-  if (left.length === 0) return "Everyone";
-  const included = people.filter((_, i) => !left.includes(i));
-  if (included.length === 0) return "Nobody yet";
-  if (left.length <= 2 && included.length > left.length) return `Everyone except ${left.map((i) => people[i]).join(" & ")}`;
-  return included.join(", ");
-}
-
-/** How many of each to start with. Roommates and groceries can be 0; chores and bills start at 1. */
+/** How many of each to start with. Groceries can be 0; chores and bills start at 1.
+ *  Roommates aren't asked for: they're invited (link or email) and join themselves. */
 interface Counts {
-  roommates: number; // besides me
   chores: number;
   groceries: number;
   bills: number;
@@ -77,48 +67,51 @@ function Wizard({ template }: { template: SetupTemplate }) {
 
   const [step, setStep] = useState(0);
   const [details, setDetails] = useState({ name: "", address: "", timezone: browserTimezone() });
-  const [counts, setCounts] = useState<Counts>({ roommates: 2, chores: 2, groceries: 0, bills: 2 });
-  // No roommates skips their step. Groceries always shows, so items can still be added there.
-  const steps: StepName[] = STEPS.filter((s) => s !== "Roommates" || counts.roommates > 0);
+  const [counts, setCounts] = useState<Counts>({ chores: 2, groceries: 0, bills: 2 });
+  const steps: readonly StepName[] = STEPS;
   /** Groceries added or removed on their step keep the count in step, so going back keeps them. */
   const setGroceryList = (list: SetupGrocery[]) => {
     setGroceries(list);
     setCounts((c) => ({ ...c, groceries: list.length }));
   };
   const current = steps[step];
-  const [roommates, setRoommates] = useState<string[]>([]);
+  const [inviteText, setInviteText] = useState(""); // emails to invite once the home exists
   const [chores, setChores] = useState<WizardChore[]>([]);
   const [groceries, setGroceries] = useState<SetupGrocery[]>([]);
   const [bills, setBills] = useState<SetupBill[]>([]);
   const [currency, setCurrency] = useState("USD");
   const [error, setError] = useState<string | null>(null);
 
+  const inviteEmails = [...new Set(inviteText.split(/[\s,;]+/).map((e) => e.trim()).filter(Boolean))];
+  const badEmails = inviteEmails.filter((e) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
   const create = useMutation({
-    mutationFn: () => householdsApi.setup(payload()),
+    mutationFn: async () => {
+      const house = await householdsApi.setup(payload());
+      // The home exists now; inviting is a bonus, so a failure here doesn't undo it.
+      if (inviteEmails.length) await householdsApi.emailInvites(house.id, inviteEmails).catch(() => null);
+      return house;
+    },
     onSuccess: async (house) => {
       lastHousehold.set(house.id);
       await queryClient.invalidateQueries();
-      navigate(`/households/${house.id}/reminders`);
+      // Open the invite panel so roommates can be invited right away (link, WhatsApp, email).
+      navigate(`/households/${house.id}/reminders?invite=1`);
     },
   });
   const touched = step > 0 || details.name.trim() !== "" || details.address.trim() !== "";
   useUnsavedChangesGuard(touched && !create.isSuccess, LEAVE_PROMPT);
 
   const me = user?.name ?? "You";
-  const people = [me, ...roommates.map((r) => r.trim())];
+  const people = [me]; // others join through invites, and join every rotation as they do
 
   function payload(): HouseholdSetup {
     return {
       name: details.name.trim(),
       address: details.address.trim(),
       timezone: details.timezone.trim(),
-      roommates: roommates.map((r) => r.trim()),
-      chores: chores.map(({ excluded, ...c }) => {
-        const left = excluded.filter((i) => i < people.length);
-        // Everyone (people left out) unless someone was taken off the rotation.
-        const turns = c.assignment_mode === "rotation" && left.length ? people.filter((_, i) => !left.includes(i)) : undefined;
-        return { ...c, name: c.name.trim(), ...(turns ? { people: turns } : {}) };
-      }),
+      roommates: [],
+      // Everyone takes turns: people who join later are added to every rotation.
+      chores: chores.map(({ excluded: _, ...c }) => ({ ...c, name: c.name.trim() })),
       groceries: groceries.map((g) => ({ ...g, name: g.name.trim() })),
       bills: bills.map((b) => ({
         ...b,
@@ -139,21 +132,14 @@ function Wizard({ template }: { template: SetupTemplate }) {
         if (!details.address.trim()) return "Add the home's address";
         if (!details.timezone.trim()) return "Add a timezone, e.g. America/New_York";
         const bad = (n: number, lo: number, hi: number) => !Number.isInteger(n) || n < lo || n > hi;
-        if (bad(counts.roommates, 0, max - 1)) return `Roommates: pick 0–${max - 1}`;
         if (bad(counts.chores, 1, max)) return `Chores: pick 1–${max} (at least one to begin with)`;
         if (bad(counts.groceries, 0, max)) return `Grocery items: pick 0–${max}`;
         if (bad(counts.bills, 1, max)) return `Bills: pick 1–${max} (at least one to begin with)`;
         return null;
       }
-      case "Roommates":
-        if (roommates.some((r) => !r.trim())) return "Every roommate needs a name";
-        if (duplicate(people)) return `Two people are called “${duplicate(people)}”: names must be different`;
-        return null;
       case "Chores":
         if (chores.some((c) => !c.name.trim())) return "Every chore needs a name";
         if (duplicate(chores.map((c) => c.name))) return `Two chores are called “${duplicate(chores.map((c) => c.name))}”`;
-        if (chores.some((c) => c.assignment_mode === "rotation" && people.every((_, i) => c.excluded.includes(i))))
-          return "Every “take turns” chore needs at least one person";
         return null;
       case "Groceries":
         if (groceries.some((g) => !g.name.trim())) return "Every grocery item needs a name";
@@ -179,14 +165,9 @@ function Wizard({ template }: { template: SetupTemplate }) {
     if (p) return;
     if (current === "Your home") {
       // Prefill each list to its count, keeping anything already edited.
-      setRoommates((r) => {
-        const out = r.slice(0, counts.roommates);
-        while (out.length < counts.roommates) out.push(`Roommate ${out.length + 2}`);
-        return out;
-      });
       setChores((c) =>
         resize(
-          c.map((x) => ({ ...x, excluded: x.excluded.filter((i) => i <= counts.roommates) })),
+          c,
           counts.chores,
           template.chores.map((t) => ({ ...t, excluded: [] })),
           () => ({ name: "", frequency: "daily", assignment_mode: "rotation", excluded: [] }),
@@ -237,15 +218,6 @@ function Wizard({ template }: { template: SetupTemplate }) {
             <h3 className="mb-2 mt-6 text-xs font-semibold uppercase tracking-widest text-slate-500">How many to start with</h3>
             <div className="space-y-3">
               <Question
-                icon="👥"
-                question="How many roommates live with you?"
-                hint={counts.roommates === 0 ? "Just you for now — invite people later with the house's invite code." : "Not counting you. They can claim their name later with the invite code."}
-                value={counts.roommates}
-                min={0}
-                max={max - 1}
-                onChange={(roommates) => setCounts({ ...counts, roommates })}
-              />
-              <Question
                 icon="🧹"
                 question="How many chores should we start with?"
                 hint="At least one. Cooking, cleaning and the trash are a good start."
@@ -276,30 +248,8 @@ function Wizard({ template }: { template: SetupTemplate }) {
           </Step>
         )}
 
-        {current === "Roommates" && (
-          <Step title="👥 Roommates" hint="They can claim their name later with the invite code, or stay name-only.">
-            <ul className="space-y-2">
-              <li className="flex items-center gap-2">
-                <input className={`${fieldClass} flex-1 bg-slate-50`} value={me} disabled />
-                <Badge tone="indigo">You · admin</Badge>
-              </li>
-              {roommates.map((r, i) => (
-                <li key={i}>
-                  <input
-                    className={`${fieldClass} w-full`}
-                    value={r}
-                    maxLength={100}
-                    onChange={(e) => setRoommates(roommates.map((x, j) => (j === i ? e.target.value : x)))}
-                    aria-label={`Roommate ${i + 2}`}
-                  />
-                </li>
-              ))}
-            </ul>
-          </Step>
-        )}
-
         {current === "Chores" && (
-          <Step title="🧹 Chores" hint="Take turns: the people in it rotate (tap “👥” to leave someone out). Anyone: whoever does it logs it.">
+          <Step title="🧹 Chores" hint="Take turns: everyone who joins rotates (you can leave people out later in ⚙ Settings → Chores). Anyone: whoever does it logs it.">
             {chores.length === 0 ? (
               <Nothing what="chores" />
             ) : (
@@ -317,9 +267,6 @@ function Wizard({ template }: { template: SetupTemplate }) {
                         <option value="open">Anyone</option>
                       </select>
                     </div>
-                    {c.assignment_mode === "rotation" && (
-                      <RotationPicker people={people} excluded={c.excluded} onChange={(excluded) => setChores(chores.map((x, j) => (j === i ? { ...x, excluded } : x)))} />
-                    )}
                   </li>
                 ))}
               </ul>
@@ -361,21 +308,30 @@ function Wizard({ template }: { template: SetupTemplate }) {
           <Step title="✅ Review" hint="Looks right? Create it — you can change everything later in ⚙ Settings.">
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
               <Summary label="🏠 Home" value={`${details.name} · ${details.address}`} />
-              <Summary
-                label="👥 People"
-                value={roommates.length ? people.join(", ") : `Just you (${me}) for now. Invite people later with the invite code on the home's banner.`}
-              />
+              <Summary label="👥 People" value={`You (${me}) to start. Invite your roommates below or after creating.`} />
               <Summary
                 label="🧹 Chores"
-                value={
-                  chores
-                    .map((c) => (c.assignment_mode === "open" ? `${c.name} (anyone)` : `${c.name} (${rotationLabel(people, c.excluded).toLowerCase()})`))
-                    .join(", ") || "None"
-                }
+                value={chores.map((c) => `${c.name} (${c.assignment_mode === "open" ? "anyone" : "take turns"})`).join(", ") || "None"}
               />
               <Summary label="🛒 Quick-add" value={groceries.map((g) => g.name).join(", ") || "None"} />
               <Summary label="🧾 Bills" value={bills.map((b) => `${b.icon} ${b.name}`).join(", ") || "None"} />
             </dl>
+            <div className="mt-5 rounded-2xl bg-indigo-50/60 p-4 ring-1 ring-indigo-100">
+              <label className="block text-sm font-semibold text-indigo-900" htmlFor="invite-emails">
+                ✉️ Invite your roommates by email (optional)
+              </label>
+              <p className="mb-2 text-xs text-slate-600">
+                They get a link to sign up and join. You can also share the link on WhatsApp right after creating the home.
+              </p>
+              <input
+                id="invite-emails"
+                className={`${fieldClass} w-full`}
+                placeholder="bea@example.com, cy@example.com"
+                value={inviteText}
+                onChange={(e) => setInviteText(e.target.value)}
+              />
+              {badEmails.length > 0 && <p className="mt-1 text-sm text-red-600">Check {badEmails.join(", ")}: that isn't an email address.</p>}
+            </div>
           </Step>
         )}
 
@@ -389,7 +345,7 @@ function Wizard({ template }: { template: SetupTemplate }) {
             </Button>
           )}
           {current === "Review" ? (
-            <Button disabled={create.isPending} onClick={() => create.mutate()}>
+            <Button disabled={create.isPending || badEmails.length > 0} onClick={() => create.mutate()}>
               {create.isPending ? "Creating…" : "Create home"}
             </Button>
           ) : (
@@ -397,53 +353,6 @@ function Wizard({ template }: { template: SetupTemplate }) {
           )}
         </div>
       </Card>
-    </div>
-  );
-}
-
-/** Who takes turns: "Everyone" until someone is tapped off. */
-function RotationPicker({ people, excluded, onChange }: { people: string[]; excluded: number[]; onChange: (excluded: number[]) => void }) {
-  const [open, setOpen] = useState(false);
-  const label = rotationLabel(people, excluded);
-  const everyone = label === "Everyone";
-  return (
-    <div className="text-sm">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 transition ${
-          everyone ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-50 text-amber-800 ring-amber-200"
-        }`}
-        title="Choose who takes turns"
-      >
-        👥 {label} {open ? "▴" : "▾"}
-      </button>
-      {open && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {people.map((p, i) => {
-            const out = excluded.includes(i);
-            return (
-              <button
-                key={i}
-                type="button"
-                onClick={() => onChange(out ? excluded.filter((x) => x !== i) : [...excluded, i])}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                  out ? "border-slate-200 bg-white text-slate-400 line-through" : "border-indigo-200 bg-indigo-50 text-indigo-700"
-                }`}
-                title={out ? `Add ${p} back` : `Leave ${p} out`}
-              >
-                {out ? "" : "✓ "}
-                {p}
-              </button>
-            );
-          })}
-          {excluded.length > 0 && (
-            <button type="button" className="text-xs text-slate-500 hover:underline" onClick={() => onChange([])}>
-              Everyone again
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }

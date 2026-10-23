@@ -186,3 +186,19 @@ Anyone signed in can set up a new house in one go; they become its admin. Nothin
 | POST   | `/households/setup` | `{ name, address, timezone, roommates: [names], chores: [{ name, frequency, assignment_mode, people? }], groceries: [{ name, category_key }], bills: [{ name, icon, payer_mode, payer_name?, frequency, due_day, amount_type, amount_cents? }], currency }` → 201 with the new house. `people` (names, in turn order) leaves others out of a chore's rotation; without it everyone takes turns. `payer_name` names who pays a `one` bill. Unknown names or categories → 400; duplicates or more than 10 → 422 |
 
 The house gets exactly what was sent: the standard chores, quick-add items and bills are not added on top (the standard grocery categories are).
+
+## Invites, profile and people
+
+| Method | Path | Who | Description |
+| ------ | ---- | --- | ----------- |
+| GET    | `/invites/{code}/public` | anyone (no sign-in) | `{ household_name, people }`, for an invite link's landing page. Names need sign-in (`GET /invites/{code}`) |
+| POST   | `/households/{id}/email-invites` | member | `{ emails: [...] }` (1–20). Each is saved as pending and emailed when `RESEND_API_KEY` is set → `{ results: [{ email, status: sent \| saved \| member }], link, email_enabled }` |
+| GET    | `/households/{id}/email-invites` | member | Pending email invites |
+| DELETE | `/email-invites/{id}` | admin or the sender | Cancel one |
+| GET    | `/me/invites` | me | Houses that invited my email and I haven't joined (`{ household_name, invite_code, invited_by }`) |
+| PATCH  | `/auth/me` | me | `{ first_name, last_name? }`. Houses that called me by my old full name follow the new one |
+
+- Accounts have `first_name` and `last_name` (may be empty); `name` is "First Last" without an empty last name. Register takes `first_name` / `last_name` (older clients' single `name` is split).
+- Members have `status`: `added` (name only), `invited` (an email invite is waiting for their email), `joined` (has an account), plus optional `email` and `phone`. Admins set those with `PATCH /members/{id}` (`""` clears; a joined member's email comes from their account → 400).
+- Joining with a plain link or code claims the name-only member whose `email` matches the account's email.
+- Invite links are `{WEB_URL}/join/{code}`, or `?as={member_id}` to match a specific name-only member.

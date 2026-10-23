@@ -66,8 +66,16 @@ export function useRemoveMember() {
 export function useUpdateMember() {
   const invalidate = useInvalidateEverything();
   return useMutation({
-    mutationFn: ({ id, display_name, role }: { id: string; display_name?: string; role?: "admin" | "member" }) =>
-      householdsApi.updateMember(id, { display_name, role }),
+    mutationFn: ({
+      id,
+      ...changes
+    }: {
+      id: string;
+      display_name?: string;
+      role?: "admin" | "member";
+      email?: string;
+      phone?: string;
+    }) => householdsApi.updateMember(id, changes),
     onSuccess: invalidate,
   });
 }

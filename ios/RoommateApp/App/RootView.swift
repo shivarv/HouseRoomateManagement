@@ -9,7 +9,7 @@ struct RootView: View {
         } else if session.user == nil {
             AuthView()
         } else {
-            MainTabView()
+            HomeGate()
         }
     }
 }

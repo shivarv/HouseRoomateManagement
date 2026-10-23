@@ -4,9 +4,9 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Household, HouseholdMember, User
+from app.models import Household, HouseholdInvite, HouseholdMember, User
 from app.schemas.household import HouseholdOut, MemberOut
-from app.services import activity, bills, chores, clock, grocery_settings
+from app.services import activity, bills, chores, clock, grocery_settings, invites
 from app.services.errors import BadRequest, Conflict, Forbidden, NotFound
 
 # No 0/O/1/I so codes are easy to read out loud.
@@ -202,6 +202,12 @@ def accept_invite(
     if any(m.user_id == user.id and m.is_active for m in household.members):
         raise Conflict("You are already a member of this household")
     if member_id is None:
+        # An admin added me by name with this email: that's me.
+        by_email = next(
+            (m for m in unclaimed_members(household) if m.email and m.email == user.email.lower()), None
+        )
+        member_id = by_email.id if by_email else None
+    if member_id is None:
         member = add_member(db, household, display_name or user.name, user_id=user.id)
     else:
         member = next((m for m in unclaimed_members(household) if m.id == member_id), None)
@@ -209,18 +215,42 @@ def accept_invite(
             raise BadRequest("That person has already been claimed or does not exist")
         member.user_id = user.id
     activity.record(db, household.id, "member_joined", member, subject_id=member.id)
+    invites.mark_accepted(db, household.id, user)
     user.last_household_id = household.id
     db.commit()
     return member
 
 
-def member_out(member: HouseholdMember) -> MemberOut:
+def invited_emails(db: Session, household_id: uuid.UUID) -> set[str]:
+    """Emails with an email invite waiting, so name-only members can show as "invited"."""
+    return set(
+        db.scalars(
+            select(HouseholdInvite.email).where(
+                HouseholdInvite.household_id == household_id, HouseholdInvite.accepted_at.is_(None)
+            )
+        )
+    )
+
+
+def member_out(member: HouseholdMember, invited: set[str] | None = None) -> MemberOut:
+    user = member.user
+    if user is not None:
+        status = "joined"
+    elif member.email and invited and member.email in invited:
+        status = "invited"
+    else:
+        status = "added"
     return MemberOut(
         id=member.id,
         display_name=member.display_name,
         role=member.role,
         is_active=member.is_active,
         has_account=member.user_id is not None,
+        status=status,
+        email=user.email if user else member.email,
+        phone=member.phone,
+        first_name=user.first_name if user else "",
+        last_name=user.last_name if user else "",
     )
 
 

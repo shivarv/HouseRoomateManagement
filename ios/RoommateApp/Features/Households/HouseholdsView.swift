@@ -67,6 +67,7 @@ struct HouseholdsView: View {
 }
 
 struct JoinHouseholdSheet: View {
+    var initialCode: String = ""
     var onJoined: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(Session.self) private var session
@@ -91,20 +92,23 @@ struct JoinHouseholdSheet: View {
                     }
                 } else {
                     Section {
-                        TextField("Invite code", text: $code)
+                        TextField("Invite code or link", text: $code)
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                         Button("Find household") { Task { await find() } }
                             .disabled(code.count < 4 || isBusy)
                     } footer: {
                         VStack(alignment: .leading) {
-                            Text("Ask your house admin for the 8-character code.")
+                            Text("Paste the link a roommate sent you, or the 8-character code.")
                             ErrorBanner(message: error)
                         }
                     }
                 }
             }
             .disabled(isBusy)
+            .task {
+                if !initialCode.isEmpty && preview == nil { code = initialCode; await find() }
+            }
             .navigationTitle("Join household")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -117,7 +121,8 @@ struct JoinHouseholdSheet: View {
         isBusy = true
         defer { isBusy = false }
         do {
-            preview = try await APIClient.shared.previewInvite(code: code.trimmingCharacters(in: .whitespaces).uppercased())
+            code = InviteLink.code(from: code)  // a whole link works too
+            preview = try await APIClient.shared.previewInvite(code: code)
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -128,7 +133,7 @@ struct JoinHouseholdSheet: View {
         isBusy = true
         defer { isBusy = false }
         do {
-            let house = try await APIClient.shared.acceptInvite(code: code.trimmingCharacters(in: .whitespaces).uppercased(), memberId: memberId)
+            let house = try await APIClient.shared.acceptInvite(code: InviteLink.code(from: code), memberId: memberId)
             session.rememberHousehold(house.id)
             onJoined()
             dismiss()

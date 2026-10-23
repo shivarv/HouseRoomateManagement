@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Guided set-up of a new home: your home (with how many of each), roommates, chores, groceries,
+/// Guided set-up of a new home: your home (with how many of each), chores, groceries,
 /// bills, review. Everything is prefilled from the server's template; nothing is created until
 /// "Create home". Mirrors web SetupWizardPage.tsx.
 struct SetupWizardView: View {
@@ -35,10 +35,10 @@ struct SetupWizardView: View {
 }
 
 private enum Step: String, CaseIterable {
-    case home = "Your home", roommates = "Roommates", chores = "Chores", groceries = "Groceries", bills = "Bills", review = "Review"
+    case home = "Your home", chores = "Chores", groceries = "Groceries", bills = "Bills", review = "Review"
 }
 
-/// A chore as the wizard edits it: who's left out of its turns, by position in `people` (0 = me).
+/// A chore as the wizard edits it. Everyone who joins takes turns; who's in it is edited later in Settings.
 private struct WizardChore: Hashable {
     var chore: SetupChore
     var excluded: Set<Int> = []
@@ -54,12 +54,12 @@ private struct WizardSteps: View {
     @State private var name = ""
     @State private var address = ""
     @State private var timezone = TimeZone.current.identifier
-    // How many of each to start with. Roommates and groceries can be 0; chores and bills start at 1.
-    @State private var roommateCount = 2
+    // How many of each to start with. Groceries can be 0; chores and bills start at 1. Roommates
+    // aren't asked for: they're invited (link or email) and join every rotation as they do.
     @State private var choreCount = 2
     @State private var groceryCount = 0
     @State private var billCount = 2
-    @State private var roommates: [String] = []
+    @State private var inviteText = ""  // emails to invite once the home exists
     @State private var chores: [WizardChore] = []
     @State private var groceries: [SetupGrocery] = []
     @State private var bills: [SetupBill] = []
@@ -72,12 +72,9 @@ private struct WizardSteps: View {
     @State private var confirmCancel = false
 
     private var max: Int { template.maxItems }
-    private var people: [String] { [me] + roommates.map { $0.trimmingCharacters(in: .whitespaces) } }
+    private var people: [String] { [me] }
 
-    /// No roommates skips their step. Groceries always shows, so items can still be added there.
-    private var steps: [Step] {
-        Step.allCases.filter { $0 != .roommates || roommateCount > 0 }
-    }
+    private var steps: [Step] { Step.allCases }
     private var index: Int { steps.firstIndex(of: step) ?? 0 }
     private var touched: Bool { step != .home || !name.isEmpty || !address.isEmpty }
 
@@ -101,7 +98,6 @@ private struct WizardSteps: View {
 
             switch step {
             case .home: homeStep
-            case .roommates: roommatesStep
             case .chores: choresStep
             case .groceries: groceriesStep
             case .bills: billsStep
@@ -118,7 +114,7 @@ private struct WizardSteps: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 if step == .review {
-                    Button(creating ? "Creating…" : "Create") { Task { await create() } }.disabled(creating)
+                    Button(creating ? "Creating…" : "Create") { Task { await create() } }.disabled(creating || !badEmails.isEmpty)
                 } else {
                     Button("Next") { next() }
                 }
@@ -149,8 +145,6 @@ private struct WizardSteps: View {
             Text("You'll be its admin.")
         }
         Section {
-            question("👥 Roommates living with you", value: $roommateCount, range: 0...(max - 1),
-                     hint: roommateCount == 0 ? "Just you for now — invite people later with the invite code." : "Not counting you.")
             question("🧹 Chores to start with", value: $choreCount, range: 1...max, hint: "At least one.")
             question("🛒 Grocery quick-add items", value: $groceryCount, range: 0...max,
                      hint: groceryCount == 0 ? "None for now — anyone can still add anything." : "One-tap buttons for things you buy often.")
@@ -173,23 +167,6 @@ private struct WizardSteps: View {
         }
     }
 
-    private var roommatesStep: some View {
-        Section {
-            HStack {
-                Text(me)
-                Spacer()
-                Badge(text: "You · admin", color: .accentColor)
-            }
-            ForEach(roommates.indices, id: \.self) { i in
-                TextField("Roommate \(i + 2)", text: $roommates[i])
-            }
-        } header: {
-            Text("👥 Roommates")
-        } footer: {
-            Text("They can claim their name later with the invite code, or stay name-only.")
-        }
-    }
-
     private var choresStep: some View {
         ForEach(chores.indices, id: \.self) { i in
             Section {
@@ -202,21 +179,8 @@ private struct WizardSteps: View {
                     Text("Take turns").tag(AssignmentMode.rotation)
                     Text("Anyone").tag(AssignmentMode.open)
                 }
-                if chores[i].chore.assignmentMode == .rotation {
-                    DisclosureGroup {
-                        ForEach(people.indices, id: \.self) { p in
-                            Toggle(people[p], isOn: Binding(
-                                get: { !chores[i].excluded.contains(p) },
-                                set: { on in if on { chores[i].excluded.remove(p) } else { chores[i].excluded.insert(p) } }
-                            ))
-                        }
-                    } label: {
-                        Label(rotationLabel(chores[i].excluded), systemImage: "person.2")
-                            .foregroundStyle(chores[i].excluded.isEmpty ? Color.green : Color.orange)
-                    }
-                }
             } header: {
-                if i == 0 { Text("🧹 Chores — take turns rotates; anyone logs it") }
+                if i == 0 { Text("🧹 Chores — take turns: everyone who joins rotates; anyone: whoever does it logs it") }
             }
         }
     }
@@ -349,35 +313,40 @@ private struct WizardSteps: View {
         }
     }
 
-    private var reviewStep: some View {
+    @ViewBuilder private var reviewStep: some View {
         Section {
             LabeledContent("🏠 Home", value: "\(name) · \(address)")
-            LabeledContent("👥 People", value: roommates.isEmpty ? "Just you for now" : people.joined(separator: ", "))
-            LabeledContent("🧹 Chores", value: chores.map { $0.chore.assignmentMode == .open ? "\($0.chore.name) (anyone)" : "\($0.chore.name) (\(rotationLabel($0.excluded).lowercased()))" }.joined(separator: ", "))
+            LabeledContent("👥 People", value: "You to start — invite your roommates below")
+            LabeledContent("🧹 Chores", value: chores.map { "\($0.chore.name) (\($0.chore.assignmentMode == .open ? "anyone" : "take turns"))" }.joined(separator: ", "))
             LabeledContent("🛒 Quick-add", value: groceries.isEmpty ? "None" : groceries.map(\.name).joined(separator: ", "))
             LabeledContent("🧾 Bills", value: bills.map { "\($0.icon) \($0.name)" }.joined(separator: ", "))
         } header: {
             Text("✅ Review")
         } footer: {
-            Text(roommates.isEmpty
-                 ? "Invite people later with the invite code on the home's screen. You can change everything in Settings."
-                 : "Looks right? Tap Create. You can change everything later in Settings.")
+            Text("Looks right? Tap Create. You can change everything later in Settings.")
+        }
+        Section {
+            TextField("bea@example.com, cy@example.com", text: $inviteText)
+                .keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+        } header: {
+            Text("✉️ Invite your roommates by email (optional)")
+        } footer: {
+            if badEmails.isEmpty {
+                Text("They get a link to sign up and join. You can also share it on WhatsApp from the home's Invite button.")
+            } else {
+                Text("Check \(badEmails.joined(separator: ", ")): that isn't an email address.").foregroundStyle(.red)
+            }
         }
     }
+
+    private var inviteEmails: [String] {
+        var seen = Set<String>()
+        return inviteText.split(whereSeparator: { $0 == "," || $0 == ";" || $0.isWhitespace })
+            .map { $0.lowercased() }.filter { seen.insert($0).inserted }
+    }
+    private var badEmails: [String] { inviteEmails.filter { !$0.contains("@") || !$0.contains(".") } }
 
     // MARK: Logic
-
-    /// "Everyone" · "Everyone except Bea" · "Ann, Cy" · "Nobody yet"
-    private func rotationLabel(_ excluded: Set<Int>) -> String {
-        let left = excluded.filter { $0 < people.count }.sorted()
-        if left.isEmpty { return "Everyone" }
-        let included = people.indices.filter { !left.contains($0) }.map { people[$0] }
-        if included.isEmpty { return "Nobody yet" }
-        if left.count <= 2 && included.count > left.count {
-            return "Everyone except " + left.map { people[$0] }.joined(separator: " & ")
-        }
-        return included.joined(separator: ", ")
-    }
 
     private func duplicate(_ names: [String]) -> String? {
         var seen = Set<String>()
@@ -396,16 +365,9 @@ private struct WizardSteps: View {
             if blank(address) { return "Add the home's address" }
             if blank(timezone) { return "Add a timezone, e.g. America/New_York" }
             return nil
-        case .roommates:
-            if roommates.contains(where: blank) { return "Every roommate needs a name" }
-            if let d = duplicate(people) { return "Two people are called “\(d)”: names must be different" }
-            return nil
         case .chores:
             if chores.contains(where: { blank($0.chore.name) }) { return "Every chore needs a name" }
             if let d = duplicate(chores.map(\.chore.name)) { return "Two chores are called “\(d)”" }
-            if chores.contains(where: { $0.chore.assignmentMode == .rotation && people.indices.allSatisfy($0.excluded.contains) }) {
-                return "Every “take turns” chore needs at least one person"
-            }
             return nil
         case .groceries:
             if groceries.contains(where: { blank($0.name) }) { return "Every grocery item needs a name" }
@@ -434,10 +396,7 @@ private struct WizardSteps: View {
 
     /// Prefill each list to its count, keeping anything already edited.
     private func prefill() {
-        roommates = Array(roommates.prefix(roommateCount))
-        while roommates.count < roommateCount { roommates.append("Roommate \(roommates.count + 2)") }
-
-        chores = resize(chores.map { var c = $0; c.excluded = c.excluded.filter { $0 <= roommateCount }; return c },
+        chores = resize(chores,
                         to: choreCount, defaults: template.chores.map { WizardChore(chore: $0) }, name: \.chore.name,
                         blank: WizardChore(chore: SetupChore(name: "", frequency: .daily, assignmentMode: .rotation)))
         groceries = resize(groceries, to: groceryCount, defaults: template.groceries, name: \.name,
@@ -465,14 +424,11 @@ private struct WizardSteps: View {
             name: name.trimmingCharacters(in: .whitespaces),
             address: address.trimmingCharacters(in: .whitespaces),
             timezone: timezone.trimmingCharacters(in: .whitespaces),
-            roommates: roommates.map { $0.trimmingCharacters(in: .whitespaces) },
+            roommates: [],
             chores: chores.map { c in
                 var chore = c.chore
                 chore.name = chore.name.trimmingCharacters(in: .whitespaces)
-                let left = c.excluded.filter { $0 < people.count }
-                chore.people = chore.assignmentMode == .rotation && !left.isEmpty
-                    ? people.indices.filter { !left.contains($0) }.map { people[$0] } : nil
-                return chore
+                return chore  // everyone takes turns; people who join are added to every rotation
             },
             groceries: groceries.map { SetupGrocery(name: $0.name.trimmingCharacters(in: .whitespaces), categoryKey: $0.categoryKey) },
             bills: bills.indices.map { i in
@@ -486,7 +442,12 @@ private struct WizardSteps: View {
             currency: currency.trimmingCharacters(in: .whitespaces).uppercased()
         )
         do {
-            onCreated(try await APIClient.shared.setupHousehold(setup))
+            let house = try await APIClient.shared.setupHousehold(setup)
+            // The home exists now; inviting is a bonus, so a failure here doesn't undo it.
+            if !inviteEmails.isEmpty {
+                _ = try? await APIClient.shared.emailInvites(householdId: house.id, emails: inviteEmails)
+            }
+            onCreated(house)
         } catch {
             self.error = error.localizedDescription
         }

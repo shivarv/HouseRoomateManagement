@@ -4,10 +4,14 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models import User
-from app.schemas.auth import LastHouseholdIn, LoginIn, RegisterIn, TokenOut, UserOut
+from app.schemas.auth import LastHouseholdIn, LoginIn, ProfileUpdate, RegisterIn, TokenOut, UserOut
 from app.services import households
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def full_name(first: str, last: str) -> str:
+    return f"{first} {last}".strip()
 
 
 def _token(user: User) -> TokenOut:
@@ -19,7 +23,14 @@ def register(body: RegisterIn, db: DbSession):
     email = body.email.lower()
     if db.scalar(select(User.id).where(User.email == email)):
         raise HTTPException(status.HTTP_409_CONFLICT, "An account with this email already exists")
-    user = User(email=email, name=body.name.strip(), password_hash=hash_password(body.password))
+    first, last = body.first_name, body.last_name or ""
+    user = User(
+        email=email,
+        first_name=first,
+        last_name=last,
+        name=full_name(first, last),
+        password_hash=hash_password(body.password),
+    )
     db.add(user)
     db.commit()
     return _token(user)
@@ -35,6 +46,19 @@ def login(body: LoginIn, db: DbSession):
 
 @router.get("/me", response_model=UserOut)
 def me(user: CurrentUser):
+    return user
+
+
+@router.patch("/me", response_model=UserOut)
+def update_profile(body: ProfileUpdate, db: DbSession, user: CurrentUser):
+    """My first and last name. Houses keep the name they call me unless it was my old full name."""
+    old = user.name
+    user.first_name, user.last_name = body.first_name, body.last_name
+    user.name = full_name(body.first_name, body.last_name)
+    for member in households.memberships(db, user):
+        if member.display_name == old:  # never renamed in that house: follow the new name
+            member.display_name = user.name
+    db.commit()
     return user
 
 

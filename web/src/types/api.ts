@@ -6,7 +6,9 @@ export type TaskStatus = "pending" | "done";
 export interface User {
   id: string;
   email: string;
-  name: string;
+  first_name: string;
+  last_name: string; // may be empty: then it's left out of `name`
+  name: string; // "First Last"
   /** May be a house I've since left; the UI then falls back to my first house. */
   last_household_id: string | null;
 }
@@ -26,6 +28,12 @@ export interface Member extends MemberBrief {
   role: Role;
   is_active: boolean;
   has_account: boolean;
+  /** added: by name only · invited: an email invite is waiting · joined: has an account */
+  status: "added" | "invited" | "joined";
+  first_name: string; // from their account; empty until they join
+  last_name: string;
+  email: string | null; // their account's once joined, else what an admin added
+  phone: string | null;
 }
 
 export interface Household {
@@ -395,4 +403,29 @@ export interface HouseholdSetup {
   groceries: SetupGrocery[];
   bills: SetupBill[];
   currency: string;
+}
+
+// --- Invites by email ---------------------------------------------------------------------------
+
+export interface EmailInvite {
+  id: string;
+  email: string;
+  invited_by: MemberBrief | null;
+  created_at: string;
+  last_sent_at: string | null; // null: saved, but not emailed (no email service set up)
+  can_cancel: boolean;
+}
+
+export interface EmailInviteResults {
+  // sent: emailed now · saved: kept, but emailing isn't set up · member: already in the house
+  results: { email: string; status: "sent" | "saved" | "member" }[];
+  link: string;
+  email_enabled: boolean;
+}
+
+export interface MyInvite {
+  household_name: string;
+  invite_code: string;
+  invited_by: string | null;
+  created_at: string;
 }

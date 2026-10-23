@@ -5,7 +5,9 @@ import Foundation
 struct User: Codable, Identifiable, Hashable {
     let id: UUID
     let email: String
-    let name: String
+    let firstName: String
+    let lastName: String  // may be empty: then it's left out of `name`
+    let name: String  // "First Last"
     /// The house the app opens on. May be one I've since left; then fall back to my first.
     var lastHouseholdId: UUID?
 }
@@ -24,12 +26,26 @@ struct MemberBrief: Codable, Identifiable, Hashable {
     let displayName: String
 }
 
+/// added: by name only · invited: an email invite is waiting · joined: has an account
+enum MemberStatus: String, Codable {
+    case added, invited, joined
+    var label: String { rawValue.capitalized }
+}
+
 struct Member: Codable, Identifiable, Hashable {
     let id: UUID
     let displayName: String
     let role: Role
     let isActive: Bool
     let hasAccount: Bool
+    let status: MemberStatus
+    let firstName: String  // from their account; empty until they join
+    let lastName: String
+    let email: String?  // their account's once joined, else what an admin added
+    let phone: String?
+
+    /// "Beatrice Smith" from their account (an empty last name is left out).
+    var fullName: String { [firstName, lastName].filter { !$0.isEmpty }.joined(separator: " ") }
 
     var brief: MemberBrief { MemberBrief(id: id, displayName: displayName) }
 }
@@ -544,4 +560,55 @@ struct HouseholdSetup: Encodable {
     let groceries: [SetupGrocery]
     let bills: [SetupBill]
     let currency: String
+}
+
+// MARK: - Invites
+
+struct EmailInvite: Decodable, Identifiable, Hashable {
+    let id: UUID
+    let email: String
+    let invitedBy: MemberBrief?
+    let createdAt: String
+    let lastSentAt: String?  // nil: saved, but not emailed (no email service set up)
+    let canCancel: Bool
+}
+
+struct EmailInviteResult: Decodable, Hashable {
+    let email: String
+    let status: String  // sent · saved (emailing isn't set up) · member (already in the house)
+}
+
+struct EmailInviteResults: Decodable {
+    let results: [EmailInviteResult]
+    let link: String
+    let emailEnabled: Bool
+}
+
+/// A house that invited my email and I haven't joined yet.
+struct MyInvite: Decodable, Identifiable, Hashable {
+    let householdName: String
+    let inviteCode: String
+    let invitedBy: String?
+    let createdAt: String
+    var id: String { inviteCode }
+}
+
+enum InviteLink {
+    /// The web app's join page (`/join/CODE`, or `?as=MEMBER` to match someone added by name).
+    static func url(code: String, member: Member? = nil) -> String {
+        let base = (Bundle.main.object(forInfoDictionaryKey: "WEB_BASE_URL") as? String) ?? "http://localhost:5173"
+        let link = "\(base)/join/\(code)"
+        return member.map { "\(link)?as=\($0.id.uuidString.lowercased())" } ?? link
+    }
+
+    static func message(house: String, code: String, member: Member? = nil) -> String {
+        let hi = member.map { "Hi \($0.displayName)! " } ?? "Hi! "
+        return "\(hi)Join our home “\(house)” on Roommates to share chores, groceries and bills: \(url(code: code, member: member))\n\n(Or sign up and enter invite code \(code).)"
+    }
+
+    /// An invite code from what someone pasted: the code itself, or a whole link ending in it.
+    static func code(from text: String) -> String {
+        let last = text.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "/").last.map(String.init) ?? ""
+        return (last.split(separator: "?").first.map(String.init) ?? "").uppercased()
+    }
 }
