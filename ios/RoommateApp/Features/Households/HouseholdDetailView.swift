@@ -2,13 +2,19 @@ import SwiftUI
 
 struct HouseholdDetailView: View {
     enum Tab: String, CaseIterable, Identifiable {
-        case today = "Today", activity = "Activity", report = "Report", schedule = "Schedule"
-        case people = "People", chores = "Chores"
+        case today = "Today", activity = "Activity", house = "House", chores = "Chores"
+        var id: Self { self }
+    }
+
+    /// 🏡 House: who's in the house, whose turn is when, and how everyone's doing. Mirrors web.
+    enum HousePart: String, CaseIterable, Identifiable {
+        case schedule = "Schedule", report = "Report", people = "People"
         var id: Self { self }
     }
 
     @State private var model: HouseholdViewModel
     @State private var tab: Tab = .today
+    @State private var housePart: HousePart = .schedule
 
     init(householdId: UUID) {
         _model = State(initialValue: HouseholdViewModel(householdId: householdId))
@@ -39,9 +45,18 @@ struct HouseholdDetailView: View {
             switch tab {
             case .today: TodaySection(model: model)
             case .activity: ActivitySection(model: model)
-            case .report: ReportTabSection(model: model)
-            case .schedule: ScheduleSection(model: model)
-            case .people: PeopleSection(model: model)
+            case .house:
+                Picker("House", selection: $housePart) {
+                    ForEach(HousePart.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+                switch housePart {
+                case .schedule: ScheduleSection(model: model)
+                case .report: ReportTabSection(model: model)
+                case .people: PeopleSection(model: model)
+                }
             case .chores: ChoresSection(model: model)
             }
         }
