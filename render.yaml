@@ -26,6 +26,8 @@ services:
         sync: false
       - key: RESEND_API_KEY # optional: emails invites through Resend; without it they're saved, not emailed
         sync: false
+      - key: BREVO_API_KEY # optional: emails through Brevo instead (wins if both are set)
+        sync: false
       - key: EMAIL_FROM # e.g. "Roommates <invites@yourdomain.com>" (a domain verified in Resend)
         sync: false
 
