@@ -612,3 +612,27 @@ enum InviteLink {
         return (last.split(separator: "?").first.map(String.init) ?? "").uppercased()
     }
 }
+
+// MARK: - House chat
+
+struct ChatMessage: Decodable, Identifiable, Hashable {
+    let id: UUID
+    let author: MemberBrief?  // nil if they left the house
+    let body: String  // "" once deleted
+    let createdAt: String
+    let editedAt: String?
+    let changedAt: String  // sent, edited or deleted, whichever is latest: poll after the newest
+    let deleted: Bool
+    let isMine: Bool
+    let canEdit: Bool
+    let canDelete: Bool
+}
+
+struct ChatPage: Decodable {
+    let messages: [ChatMessage]  // oldest first
+    let hasMore: Bool
+}
+
+struct ChatUnread: Decodable {
+    let count: Int
+}

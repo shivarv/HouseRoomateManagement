@@ -1,5 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useMatch, useNavigate } from "react-router";
+import { chatApi } from "../api/chat";
 import { useAuth } from "../features/auth/AuthContext";
 import { useHelpRequests } from "../features/help/hooks";
 import { useDefaultHousehold, useSwitchHousehold } from "../features/households/hooks";
@@ -20,6 +22,7 @@ const HOUSE_TABS = [
   { path: "activity", label: "📰 Activity" },
   { path: "house", label: "🏡 House" }, // Schedule, Report and People
   { path: "groceries", label: "🛒 Groceries" },
+  { path: "chat", label: "💬 Chat" },
 ] as const;
 
 const NEW_GUIDED = "__new-guided";
@@ -63,6 +66,14 @@ export function AppShell() {
   const waiting = (help.data ?? []).filter((r) => r.status === "open" && !r.is_mine).length;
   // On phones the tabs scroll sideways: keep the one I'm on in view.
   const nav = useRef<HTMLElement>(null);
+  // Unread chat messages in the house the tabs act on.
+  const unread = useQuery({
+    queryKey: ["chat-unread", house?.id],
+    queryFn: () => chatApi.unread(house!.id),
+    enabled: !!house,
+    refetchInterval: 20_000,
+  });
+  const chatUnread = unread.data?.count ?? 0;
   // Signed in but in no home yet: no tabs, just a nudge to create one or join one.
   const noHouse = !households.isLoading && (households.data?.length ?? 0) === 0;
   // A load or reload always starts on my default house: half-done "create" or "join" pages
@@ -139,7 +150,16 @@ export function AppShell() {
                 {base ? (
                   HOUSE_TABS.map((t) => (
                     <NavLink key={t.label} to={`${base}/${t.path}`} className={link}>
-                      {t.label}
+                      {t.path === "chat" && chatUnread > 0 ? (
+                        <span className="relative">
+                          {t.label}
+                          <span className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-fuchsia-600 px-1 text-[10px] font-bold text-white">
+                            {chatUnread > 99 ? "99+" : chatUnread}
+                          </span>
+                        </span>
+                      ) : (
+                        t.label
+                      )}
                     </NavLink>
                   ))
                 ) : (

@@ -202,3 +202,18 @@ The house gets exactly what was sent: the standard chores, quick-add items and b
 - Members have `status`: `added` (name only), `invited` (an email invite is waiting for their email), `joined` (has an account), plus optional `email` and `phone`. Admins set those with `PATCH /members/{id}` (`""` clears; a joined member's email comes from their account → 400).
 - Joining with a plain link or code claims the name-only member whose `email` matches the account's email.
 - Invite links are `{WEB_URL}/join/{code}`, or `?as={member_id}` to match a specific name-only member.
+
+## Chat (one group chat per house)
+
+Clients poll: load the latest page, then ask every few seconds for what's new or changed with `after=<newest changed_at>`. Messages are 1–2000 characters; deleting keeps the message as "Message deleted".
+
+| Method | Path | Who | Description |
+| ------ | ---- | --- | ----------- |
+| GET    | `/households/{id}/chat?before=&after=&limit=50` | member | `{ messages (oldest first), has_more }`. `before`: page back from a `created_at`. `after`: messages sent, edited or deleted since then |
+| POST   | `/households/{id}/chat` | member | `{ body }` → 201. Also marks the chat read for me |
+| PATCH  | `/chat-messages/{id}` | the author | `{ body }`. Not once deleted (400) |
+| DELETE | `/chat-messages/{id}` | the author or an admin | Soft delete; returns the message (`deleted: true`, `body: ""`) |
+| POST   | `/households/{id}/chat/read` | member | I've read everything up to now |
+| GET    | `/households/{id}/chat/unread` | member | `{ count }`: others' messages since I last read |
+
+Each message: `{ id, author, body, created_at, edited_at, changed_at, deleted, is_mine, can_edit, can_delete }`.

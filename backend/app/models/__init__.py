@@ -1,4 +1,5 @@
 from app.models.bill import Bill, BillAmount, BillPayment
+from app.models.chat import ChatMessage, ChatRead
 from app.models.chore import (
     ActivityEvent,
     Chore,
@@ -18,6 +19,8 @@ __all__ = [
     "Bill",
     "BillAmount",
     "BillPayment",
+    "ChatMessage",
+    "ChatRead",
     "Chore",
     "ChoreLog",
     "ChoreRotationMember",
