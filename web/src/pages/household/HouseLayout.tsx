@@ -8,7 +8,7 @@ const section = ({ isActive }: { isActive: boolean }) =>
       : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
   }`;
 
-/** 🏡 House: who's in the house, whose turn is when, and how everyone's doing. */
+/** 🏡 House: who's in the house, whose turn is when, how everyone's doing, and a dashboard of it all. */
 export function HouseLayout() {
   const household = useCurrentHousehold();
   return (
@@ -16,6 +16,9 @@ export function HouseLayout() {
       <nav className="flex flex-wrap items-center gap-1">
         <NavLink to="schedule" className={section}>
           🗓️ Schedule
+        </NavLink>
+        <NavLink to="dashboard" className={section}>
+          📈 Dashboard
         </NavLink>
         <NavLink to="report" className={section}>
           📊 Report

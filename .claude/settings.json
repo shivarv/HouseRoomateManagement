@@ -112,7 +112,10 @@
       "Bash(grep -n '>Add a roommate<' src/features/households/InvitePanel.tsx)",
       "Bash(sed -i '' 's|<h2 className=\"font-semibold\">Add a roommate</h2>|<h2 className=\"font-semibold\">Invite roommates</h2>|' src/features/households/InvitePanel.tsx)",
       "Bash(sed -i '' 's|^ \\\\* Add a roommate: their email gets the invite| * Invite roommates: their email gets the invite|' src/features/households/InvitePanel.tsx)",
-      "Bash(sed -i '' 's|    assert any\\(to == \"bea@example.com\" and house\\\\[\"invite_code\"\\\\] in text for to, _, text in sent\\)|    assert any\\(to == \"bea@example.com\" and \"/invite/\" in text for to, _, text in sent\\)|' tests/test_verification.py)"
+      "Bash(sed -i '' 's|    assert any\\(to == \"bea@example.com\" and house\\\\[\"invite_code\"\\\\] in text for to, _, text in sent\\)|    assert any\\(to == \"bea@example.com\" and \"/invite/\" in text for to, _, text in sent\\)|' tests/test_verification.py)",
+      "Bash(sed -n 300,400p Core/Models/Models.swift)",
+      "Bash(sed -n 455,510p Core/Models/Models.swift)",
+      "Bash(grep -n \"struct ReportMonths\\\\|enum BillStatus\\\\|enum BillFrequency\\\\|enum PayerMode\" -A6 Core/Models/Models.swift)"
     ]
   }
 }

@@ -26,7 +26,7 @@ function useNotices() {
 type Filter = "all" | "mine";
 
 /**
- * 🔔 Notifications: everything asked in my houses, with Ask for help on top. "All" is the feed:
+ * 🙋 Ask favours: every favour asked in my houses, with "Ask a favour" on top. "All" is the feed:
  * others' requests can be marked done, my own only withdrawn. "Mine" is what I asked for, where I
  * can also edit them and mark them done.
  */
@@ -73,11 +73,11 @@ export function NotificationsPage() {
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageTitle title="Notifications" subtitle="What your roommates need, and what you've asked for. Help out, then mark it done." />
-        {!noHouse && !asking && !editing && <Button onClick={() => setAsking(true)}>🙋 Ask for help</Button>}
+        <PageTitle title="Ask favours" subtitle="Favours your roommates need, and the ones you've asked for. Help out, then mark it done." />
+        {!noHouse && !asking && !editing && <Button onClick={() => setAsking(true)}>🙋 Ask a favour</Button>}
       </div>
       <ErrorText error={help.error} />
-      {noHouse && <Empty>Join a household first, then you can ask your roommates for help.</Empty>}
+      {noHouse && <Empty>Join a household first, then you can ask your roommates for a favour.</Empty>}
       {(asking || editing) && households.data && (
         <div className="mb-8">
           <HelpForm
@@ -101,10 +101,10 @@ export function NotificationsPage() {
           <div className="space-y-8">
             <section className="space-y-3">
               <h2 className="section-title">
-                {filter === "mine" ? "Waiting for help" : "Needs a hand"} · {open.length}
+                {filter === "mine" ? "Waiting for someone" : "Favours asked"} · {open.length}
               </h2>
               {open.length === 0 ? (
-                <Empty>{filter === "mine" ? "Nothing open. Use “🙋 Ask for help” when you need a hand." : "Nobody needs help right now 🎉"}</Empty>
+                <Empty>{filter === "mine" ? "Nothing open. Use “🙋 Ask a favour” when you need a hand." : "No favours asked right now 🎉"}</Empty>
               ) : (
                 open.map(card)
               )}

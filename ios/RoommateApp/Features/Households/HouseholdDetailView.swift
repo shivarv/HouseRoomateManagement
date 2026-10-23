@@ -8,7 +8,7 @@ struct HouseholdDetailView: View {
 
     /// 🏡 House: who's in the house, whose turn is when, and how everyone's doing. Mirrors web.
     enum HousePart: String, CaseIterable, Identifiable {
-        case schedule = "Schedule", report = "Report", people = "People"
+        case dashboard = "Dashboard", schedule = "Schedule", report = "Report", people = "People"
         var id: Self { self }
     }
 
@@ -16,7 +16,6 @@ struct HouseholdDetailView: View {
     @State private var tab: Tab = .today
     @Environment(\.dismiss) private var dismiss
     @State private var housePart: HousePart = .schedule
-    @State private var inviting = false
 
     init(householdId: UUID) {
         _model = State(initialValue: HouseholdViewModel(householdId: householdId))
@@ -55,6 +54,7 @@ struct HouseholdDetailView: View {
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
                 switch housePart {
+                case .dashboard: DashboardSection(householdId: model.householdId)
                 case .schedule: ScheduleSection(model: model)
                 case .report: ReportTabSection(model: model)
                 case .people: PeopleSection(model: model)
@@ -63,11 +63,6 @@ struct HouseholdDetailView: View {
         }
         .navigationTitle(model.detail?.name ?? "Household")
         .toolbar {
-            if model.detail != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { inviting = true } label: { Label("Invite roommates", systemImage: "person.badge.plus") }
-                }
-            }
             // Admin pages live in Settings, apart from the everyday tabs (also under Profile → Sign out).
             if model.isAdmin {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -80,9 +75,6 @@ struct HouseholdDetailView: View {
             }
         }
         .overlay { if model.detail == nil && model.isLoading { ProgressView() } }
-        .sheet(isPresented: $inviting, onDismiss: { Task { await model.load() } }) {
-            if let detail = model.detail { InviteSheet(house: detail) }
-        }
         .refreshable { await model.load() }
         .task { await model.load() }
     }
@@ -256,16 +248,18 @@ private struct PeopleSection: View {
     }
 
     var body: some View {
-        Section {
-            Button { inviting = true } label: { Label("Invite roommates", systemImage: "envelope.badge.person.crop") }
-                .bold()
-        } footer: {
-            Text("Enter their email: they get an invite, log in or sign up from it, and join. Or share the house link.")
+        // Inviting is for admins only (like web Settings → Roommates).
+        if model.isAdmin {
+            Section {
+                Button { inviting = true } label: { Label("Invite roommates", systemImage: "envelope.badge.person.crop") }
+                    .bold()
+            } footer: {
+                Text("Admins only. Enter their email: they get an invite, log in or sign up from it, and join. Or share the house link.")
+            }
+            .sheet(isPresented: $inviting, onDismiss: { Task { await loadInvites(); await model.load() } }) {
+                if let detail = model.detail { InviteSheet(house: detail) }
+            }
         }
-        .sheet(isPresented: $inviting, onDismiss: { Task { await loadInvites(); await model.load() } }) {
-            if let detail = model.detail { InviteSheet(house: detail) }
-        }
-        .task { await loadInvites() }
 
         Section("\(model.detail?.members.count ?? 0) people") {
             ForEach(model.detail?.members ?? []) { member in
@@ -284,6 +278,7 @@ private struct PeopleSection: View {
                 }
             }
         }
+        .task { await loadInvites() }
         .confirmationDialog(
             "Remove \(pendingRemoval?.displayName ?? "")?",
             isPresented: Binding(get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } }),

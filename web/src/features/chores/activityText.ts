@@ -85,9 +85,9 @@ export function activityText(e: ActivityEvent): ActivityLine {
     case "swap_expired":
       return { icon: "⌛", kind: "swap", parts: ["Nobody took ", who(e.subject), "'s ", chore, ...turnDay] };
     case "help_requested":
-      return { icon: "🙋", kind: "help", parts: [who(e.actor), ` asked for help: “${e.detail ?? "something"}”`] };
+      return { icon: "🙋", kind: "help", parts: [who(e.actor), ` asked a favour: “${e.detail ?? "something"}”`] };
     case "help_updated":
-      return { icon: "✏️", kind: "help", parts: [who(e.actor), ` edited their help request: “${e.detail ?? ""}”`] };
+      return { icon: "✏️", kind: "help", parts: [who(e.actor), ` edited their favour: “${e.detail ?? ""}”`] };
     case "help_done":
       return {
         icon: "💪",
@@ -95,9 +95,9 @@ export function activityText(e: ActivityEvent): ActivityLine {
         parts: [who(e.actor), " helped ", who(e.subject), `: “${e.detail ?? "a request"}” is done`],
       };
     case "help_reopened":
-      return { icon: "↩️", kind: "help", parts: [who(e.actor), ` reopened the help request “${e.detail ?? ""}”`] };
+      return { icon: "↩️", kind: "help", parts: [who(e.actor), ` reopened the favour “${e.detail ?? ""}”`] };
     case "help_withdrawn":
-      return { icon: "🗑", kind: "help", parts: [who(e.actor), ` withdrew their help request “${e.detail ?? ""}”`] };
+      return { icon: "🗑", kind: "help", parts: [who(e.actor), ` withdrew their favour “${e.detail ?? ""}”`] };
     case "shopping_added":
       return { icon: "🛒", kind: "shopping", parts: [who(e.actor), ` added “${e.detail ?? "something"}” to the shopping list`] };
     case "shopping_bought":

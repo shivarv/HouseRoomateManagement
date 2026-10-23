@@ -18,6 +18,7 @@ import { PeopleTab } from "./pages/household/PeopleTab";
 import { RemindersTab } from "./pages/household/RemindersTab";
 import { BillSettingsPage } from "./pages/household/BillSettings";
 import { HistoryTab, ReportTab } from "./pages/household/ReportTab";
+import { DashboardTab } from "./pages/household/DashboardTab";
 import { ScheduleTab } from "./pages/household/ScheduleTab";
 import { HouseDetailsSettings, SettingsLayout } from "./pages/household/SettingsPages";
 import { RequireAuth } from "./routes/RequireAuth";
@@ -45,9 +46,9 @@ export default function App() {
         <Route path="households" element={<HouseholdsPage />} />
         <Route path="households/new" element={<AddHouseholdPage />} />
         <Route path="households/new/setup" element={<SetupWizardPage />} />
-        <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="notifications" element={<NotificationsPage />} /> {/* 🙋 Ask favours */}
         <Route path="profile" element={<ProfilePage />} />
-        {/* Help requests now live in Notifications ("Asked by me"). */}
+        {/* Help requests now live in Ask favours ("Asked by me"). */}
         <Route path="help" element={<Navigate to="/notifications?filter=mine" replace />} />
         <Route path="households/:householdId" element={<HouseholdLayout />}>
           {/* "Today" was merged into My day. */}
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="house" element={<HouseLayout />}>
             <Route index element={<Navigate to="schedule" replace />} />
             <Route path="schedule" element={<ScheduleTab />} />
+            <Route path="dashboard" element={<DashboardTab />} />
             <Route path="report" element={<ReportTab />} />
             <Route path="people" element={<PeopleTab />} />
           </Route>

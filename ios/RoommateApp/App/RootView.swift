@@ -33,11 +33,9 @@ struct MainTabView: View {
                 .tabItem { Label("Households", systemImage: "house") }
             ShoppingView()
                 .tabItem { Label("Groceries", systemImage: "cart") }
-            NotificationsView(model: notifications, scope: .everyone)
-                .tabItem { Label("Notifications", systemImage: "bell") }
+            NotificationsView(model: notifications)
+                .tabItem { Label("Favours", systemImage: "hand.raised") }
                 .badge(notifications.waitingCount)
-            NotificationsView(model: notifications, scope: .mine)
-                .tabItem { Label("Help", systemImage: "hand.raised") }
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person.crop.circle") }
         }

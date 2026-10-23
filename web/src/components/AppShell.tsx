@@ -5,6 +5,7 @@ import { chatApi } from "../api/chat";
 import { useAuth } from "../features/auth/AuthContext";
 import { useHelpRequests } from "../features/help/hooks";
 import { useDefaultHousehold, useSwitchHousehold } from "../features/households/hooks";
+import { avatarColor } from "../lib/avatar";
 import { unsavedChanges } from "../lib/unsavedChanges";
 import type { Household } from "../types/api";
 import { WelcomePage } from "../pages/WelcomePage";
@@ -125,7 +126,7 @@ export function AppShell() {
             {user && (
               <NavLink
                 to="/profile"
-                className="hidden h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-sky-400 to-indigo-500 text-sm font-semibold text-white shadow-sm transition hover:ring-2 hover:ring-indigo-300 sm:flex"
+                className={`hidden h-8 w-8 items-center justify-center rounded-full bg-linear-to-br ${avatarColor(user.name)} text-sm font-semibold text-white shadow-sm transition hover:ring-2 hover:ring-indigo-300 sm:flex`}
                 title={`${user.name} · your profile`}
               >
                 {user.name.slice(0, 1).toUpperCase()}
@@ -139,7 +140,7 @@ export function AppShell() {
         {noHouse && (
           // No home yet: the tabs are there to show what's coming, but locked until I create or join one.
           <nav aria-label="Tabs (create or join a home first)" className="mx-auto flex max-w-4xl snap-x gap-1 overflow-x-auto px-4 py-2 [scrollbar-width:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden">
-            {["☀️ My day", ...HOUSE_TABS.map((t) => t.label), "🔔 Notifications"].map((label) => (
+            {["☀️ My day", ...HOUSE_TABS.map((t) => t.label), "🙋 Ask favours"].map((label) => (
               <span
                 key={label}
                 aria-disabled="true"
@@ -182,9 +183,9 @@ export function AppShell() {
                     Households
                   </NavLink>
                 )}
-                <NavLink to="/notifications" className={link} title="Notifications and help requests">
+                <NavLink to="/notifications" className={link} title="Favours you and your roommates asked for">
                   <span className="relative">
-                    🔔 Notifications
+                    🙋 Ask favours
                     {waiting > 0 && (
                       <span className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-fuchsia-600 px-1 text-[10px] font-bold text-white">
                         {waiting}

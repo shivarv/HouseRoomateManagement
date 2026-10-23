@@ -46,13 +46,14 @@ export function HouseholdLayout() {
   if (!household.data) return <ErrorText error={household.error ?? "Household not found"} />;
   const h = household.data;
 
-  const tab = TABS[pathname.split("/")[3] ?? ""] ?? TABS.reminders;
+  const segment = pathname.split("/")[3] ?? "";
+  const tab = TABS[segment] ?? TABS.reminders;
   const multiHouse = (households.data?.length ?? 0) > 1;
 
   return (
     <>
-      {/* Like My day's header: what this tab is for, in this house. */}
-      <div className="relative mb-8 overflow-hidden rounded-3xl bg-linear-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-6 text-white shadow-xl shadow-indigo-500/20 sm:p-8">
+      {/* Like My day's header: what this tab is for, in this house. Chat skips it: the chat fills the screen (its own header names the house). */}
+      <div className={`relative mb-8 overflow-hidden rounded-3xl ${segment === "chat" ? "hidden" : ""} bg-linear-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-6 text-white shadow-xl shadow-indigo-500/20 sm:p-8`}>
         <div className="pointer-events-none absolute -right-12 -top-16 h-56 w-56 rounded-full bg-white/15 blur-2xl" />
         <div className="pointer-events-none absolute -bottom-24 left-10 h-48 w-48 rounded-full bg-sky-300/30 blur-2xl" />
         <div className="relative">
