@@ -1,7 +1,7 @@
 import Foundation
 
 extension APIClient {
-    private struct MemberBody: Encodable { let displayName: String }
+    private struct MemberBody: Encodable { let displayName: String; let email: String?; let phone: String? }
     private struct RoleBody: Encodable { let role: Role }
     private struct ContactBody: Encodable { let email: String; let phone: String }  // "" clears
     private struct EmailsBody: Encodable { let emails: [String] }
@@ -30,8 +30,9 @@ extension APIClient {
     }
 
 
-    func addMember(householdId: UUID, displayName: String) async throws -> Member {
-        try await send("POST", "/households/\(householdId)/members", body: MemberBody(displayName: displayName))
+    /// A name plus an email or phone (at least one). An email gets the invite right away.
+    func addMember(householdId: UUID, displayName: String, email: String?, phone: String?) async throws -> MemberAdded {
+        try await send("POST", "/households/\(householdId)/members", body: MemberBody(displayName: displayName, email: email, phone: phone))
     }
 
     /// An email and phone for someone who hasn't joined yet ("" clears them).

@@ -15,7 +15,7 @@ def _setup_house(client, headers) -> dict:
     house = res.json()
     for name in ROOMMATES:
         res = client.post(
-            f"{API}/households/{house['id']}/members", json={"display_name": name}, headers=headers
+            f"{API}/households/{house['id']}/members", json={"display_name": name, "phone": "+1 617 555 0100"}, headers=headers
         )
         assert res.status_code == 201, res.text
     return house

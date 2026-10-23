@@ -13,6 +13,14 @@ from app.services.errors import BadRequest, Conflict, Forbidden, NotFound
 INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
+def reset_invite_code(db: Session, me: HouseholdMember) -> Household:
+    """A new shared code: every old shared link and code stops working."""
+    me.household.invite_code = _new_invite_code(db)
+    activity.record(db, me.household_id, "invite_code_reset", me)
+    db.commit()
+    return me.household
+
+
 def _new_invite_code(db: Session) -> str:
     while True:
         code = "".join(secrets.choice(INVITE_ALPHABET) for _ in range(8))
@@ -153,11 +161,15 @@ def add_member(
     display_name: str,
     user_id: uuid.UUID | None = None,
     actor: HouseholdMember | None = None,
+    email: str | None = None,
+    phone: str | None = None,
 ) -> HouseholdMember:
     member = HouseholdMember(
         household_id=household.id,
         display_name=display_name,
         user_id=user_id,
+        email=email,
+        phone=phone,
         role="member",
         is_active=True,
     )
@@ -168,6 +180,19 @@ def add_member(
         activity.record(db, household.id, "member_added", actor, subject_id=member.id)
     db.commit()
     return member
+
+
+def email_in_house(household: Household, address: str) -> bool:
+    address = address.lower()
+    return any(
+        m.is_active and address in {m.email, m.user.email.lower() if m.user else None}
+        for m in household.members
+    )
+
+
+def personal_link(member: HouseholdMember) -> str:
+    """Opening it signed in (after sign-up) takes over this person's spot."""
+    return f"{invites.link(member.household.invite_code)}?as={member.id}"
 
 
 def deactivate_member(db: Session, member: HouseholdMember, acting: HouseholdMember) -> None:
@@ -219,6 +244,15 @@ def accept_invite(
     user.last_household_id = household.id
     db.commit()
     return member
+
+
+def accept_invite_link(db: Session, token: str, user: User) -> HouseholdMember:
+    """Join with a private invite link. Checked when joining, not just when the page opened: the
+    invite must still be pending and unexpired, and be for this (confirmed) account's email."""
+    row = invites.find_open(db, token)
+    if row.email != user.email.lower():
+        raise NotFound(invites.EXPIRED)  # someone else's invite: don't say whose, or that it's valid
+    return accept_invite(db, row.household, user, member_id=None, display_name=None)
 
 
 def invited_emails(db: Session, household_id: uuid.UUID) -> set[str]:

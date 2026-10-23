@@ -53,7 +53,7 @@ export function useAcceptInvite() {
 export function useAddMember(householdId: string) {
   const invalidate = useInvalidateEverything();
   return useMutation({
-    mutationFn: (displayName: string) => householdsApi.addMember(householdId, displayName),
+    mutationFn: (person: { display_name: string; email?: string; phone?: string }) => householdsApi.addMember(householdId, person),
     onSuccess: invalidate,
   });
 }

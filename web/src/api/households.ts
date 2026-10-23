@@ -1,4 +1,4 @@
-import type { EmailInvite, EmailInviteResults, Household, HouseholdDetail, HouseholdSetup, InvitePreview, Member, MyInvite, SetupTemplate } from "../types/api";
+import type { EmailInvite, EmailInviteResults, Household, HouseholdDetail, HouseholdSetup, InviteLinkPublic, InvitePreview, Member, MemberAdded, MyInvite, SetupTemplate } from "../types/api";
 import { api } from "./client";
 
 export const householdsApi = {
@@ -18,16 +18,19 @@ export const householdsApi = {
   cancelInvite: (id: string) => api<void>(`/email-invites/${id}`, { method: "DELETE" }),
   /** Houses that invited my email and I haven't joined yet. */
   myInvites: () => api<MyInvite[]>("/me/invites"),
+  /** A private (emailed) invite link. 404 once it's cancelled, used or expired. No sign-in needed. */
+  inviteLink: (token: string) => api<InviteLinkPublic>(`/invite-links/${encodeURIComponent(token)}`),
+  acceptInviteLink: (token: string) => api<Household>(`/invite-links/${encodeURIComponent(token)}/accept`, { method: "POST" }),
+  /** Admins: a new shared code; every old shared link and code stops working. */
+  resetInviteCode: (householdId: string) => api<Household>(`/households/${householdId}/invite-code`, { method: "POST" }),
   setupTemplate: () => api<SetupTemplate>("/households/setup/template"),
   setup: (body: HouseholdSetup) => api<Household>("/households/setup", { method: "POST", body }),
   update: (id: string, changes: { name?: string; address?: string; timezone?: string }) =>
     api<Household>(`/households/${id}`, { method: "PATCH", body: changes }),
 
-  addMember: (householdId: string, displayName: string) =>
-    api<Member>(`/households/${householdId}/members`, {
-      method: "POST",
-      body: { display_name: displayName },
-    }),
+  /** Name plus an email or phone (at least one). An email gets the invite right away. */
+  addMember: (householdId: string, person: { display_name: string; email?: string; phone?: string }) =>
+    api<MemberAdded>(`/households/${householdId}/members`, { method: "POST", body: person }),
   /** `email: ""` / `phone: ""` clear them. A joined member's email comes from their account. */
   updateMember: (memberId: string, changes: { display_name?: string; role?: Member["role"]; email?: string; phone?: string }) =>
     api<Member>(`/members/${memberId}`, { method: "PATCH", body: changes }),

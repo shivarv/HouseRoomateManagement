@@ -2,6 +2,8 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+NEXT_PATH = r"^/([^/\\\s]\S*)?$"  # a path on our own site: no other hosts
+
 
 def _clean(value: str | None) -> str | None:
     return " ".join(value.split()) if isinstance(value, str) else value
@@ -15,6 +17,8 @@ class RegisterIn(BaseModel):
     last_name: str | None = Field(default=None, max_length=50)
     name: str | None = Field(default=None, max_length=100)
     password: str = Field(min_length=8, max_length=64)
+    # Where the verification link should land afterwards, e.g. "/join/CODE" (a path in the web app).
+    next: str | None = Field(default=None, max_length=300, pattern=NEXT_PATH)
 
     _strip = field_validator("first_name", "last_name", "name", mode="before")(_clean)
 
@@ -57,10 +61,29 @@ class VerifyEmailIn(BaseModel):
     token: str = Field(min_length=10, max_length=2000)
 
 
-class VerificationSent(BaseModel):
+class RegisterOut(BaseModel):
+    """Signed up, not signed in: the link we emailed confirms the address and signs them in."""
+
+    email: str
     sent: bool  # handed to the email service
-    email_enabled: bool  # False: no email service set up, so nothing can be sent yet
-    already_verified: bool
+    email_enabled: bool  # False: no email service set up, so the link is only in the server log
+
+
+class VerifyEmailOut(BaseModel):
+    user: UserOut
+    # Only the first time the link is opened: it signs them in. Later opens just confirm.
+    access_token: str | None = None
+
+
+class ResendVerificationIn(BaseModel):
+    email: EmailStr
+    next: str | None = Field(default=None, max_length=300, pattern=NEXT_PATH)
+
+
+class ResendVerificationOut(BaseModel):
+    """The same answer whether or not the account exists, so this can't be used to find accounts."""
+
+    email_enabled: bool
 
 
 class LastHouseholdIn(BaseModel):

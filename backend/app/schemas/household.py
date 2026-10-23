@@ -2,7 +2,9 @@ import uuid
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+
+PHONE = r"^[0-9+()\-\s]*$"
 
 
 def _validate_timezone(value: str) -> str:
@@ -35,7 +37,29 @@ class MemberOut(MemberBrief):
 
 
 class MemberCreate(BaseModel):
+    """Someone who hasn't signed up yet: a name, and an email or phone to invite them with."""
+
     display_name: str = Field(min_length=1, max_length=100)
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=32, pattern=PHONE)
+
+    @field_validator("email", "phone", mode="before")
+    @classmethod
+    def _blank_is_none(cls, value):
+        return (value.strip() or None) if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def _reachable(self):
+        if not self.email and not self.phone:
+            raise ValueError("Add an email or phone number so they can be invited")
+        return self
+
+
+class MemberAdded(BaseModel):
+    member: MemberOut
+    emailed: bool  # the invite email was handed to the email service
+    email_enabled: bool
+    link: str  # their personal invite link (to send on WhatsApp)
 
 
 class MemberUpdate(BaseModel):
@@ -44,7 +68,7 @@ class MemberUpdate(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=100)
     role: Literal["admin", "member"] | None = None
     email: EmailStr | Literal[""] | None = None
-    phone: str | None = Field(default=None, max_length=32, pattern=r"^[0-9+()\-\s]*$")
+    phone: str | None = Field(default=None, max_length=32, pattern=PHONE)
 
 
 class HouseholdCreate(BaseModel):

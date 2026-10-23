@@ -6,7 +6,7 @@ from tests.test_last_household import _create
 
 def test_email_invites_are_saved_shown_to_the_invited_person_and_settled_on_join(client, monkeypatch):
     sent = []
-    monkeypatch.setattr(email, "send", lambda to, subject, text: sent.append((to, subject, text)) or False)
+    monkeypatch.setattr(email, "deliver", lambda to, subject, text: sent.append((to, subject, text)) or email.NOT_SET_UP)
     ann = register(client, "ann@example.com", "Ann")
     maple = _create(client, ann, "Maple")
 
@@ -19,12 +19,12 @@ def test_email_invites_are_saved_shown_to_the_invited_person_and_settled_on_join
     body = res.json()
     # No email service: saved, not sent. Duplicates collapse; members are skipped.
     assert body["results"] == [
-        {"email": "bea@example.com", "status": "saved"},
-        {"email": "ann@example.com", "status": "member"},
+        {"email": "bea@example.com", "status": "saved", "reason": None},
+        {"email": "ann@example.com", "status": "member", "reason": None},
     ]
     assert body["link"].endswith(f"/join/{maple['invite_code']}") and body["email_enabled"] is False
     invite_mails = [m for m in sent if "Confirm your email" not in m[1]]  # sign-up sends a verification email too
-    assert invite_mails and invite_mails[0][0] == "bea@example.com" and maple["invite_code"] in invite_mails[0][2]
+    assert invite_mails and invite_mails[0][0] == "bea@example.com" and "/invite/" in invite_mails[0][2]
 
     pending = client.get(f"{API}/households/{maple['id']}/email-invites", headers=ann).json()
     assert [p["email"] for p in pending] == ["bea@example.com"] and pending[0]["last_sent_at"] is None
@@ -40,7 +40,7 @@ def test_email_invites_are_saved_shown_to_the_invited_person_and_settled_on_join
 
 
 def test_sent_invites_are_marked_and_only_admins_or_the_sender_cancel(client, monkeypatch):
-    monkeypatch.setattr(email, "send", lambda to, subject, text: True)
+    monkeypatch.setattr(email, "deliver", lambda to, subject, text: None)
     ann = register(client, "ann@example.com", "Ann")
     maple = _create(client, ann, "Maple")
     cy = register(client, "cy@example.com", "Cy")

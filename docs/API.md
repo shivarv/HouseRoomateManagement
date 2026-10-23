@@ -15,12 +15,12 @@ Status: **implemented** for health, auth, households, members, chores and tasks.
 
 | Method | Path             | Auth | Description                         |
 | ------ | ---------------- | ---- | ----------------------------------- |
-| POST   | `/auth/register` | No   | Create account                      |
-| POST   | `/auth/login`    | No   | Returns `{ access_token, token_type }` |
+| POST   | `/auth/register` | No   | Create account `{ email, first_name, last_name?, password, next? }` → `{ email, sent, email_enabled }`. **Doesn't sign in**: we email a link (`{WEB_URL}/verify-email?token=…&next=…`) that confirms the address; `next` is a path on our site to land on afterwards (e.g. `/join/CODE`) |
+| POST   | `/auth/login`    | No   | Returns `{ access_token, token_type, user }`. **403** until the email is confirmed |
 | GET    | `/auth/me`       | Yes  | Current user, incl. `last_household_id` (house the apps open on) |
 | PUT    | `/auth/me/last-household` | Yes | `{ household_id }` — remember the house I switched to (404 if not a member). Also set automatically on create / join |
-| POST   | `/auth/verify-email` | No | `{ token }` from the link we email at sign-up (`{WEB_URL}/verify-email?token=…`, valid 3 days, tied to the address) → the user, now `email_verified`. Opening it twice is fine; a bad/expired link is 400 |
-| POST   | `/auth/me/verification` | Yes | Email the verification link again → `{ sent, email_enabled, already_verified }`. Without an email service the link is only logged |
+| POST   | `/auth/verify-email` | No | `{ token }` from the emailed link (valid 3 days, tied to the address) → `{ user, access_token }`. The first open confirms and signs in; later opens return `access_token: null` (a forwarded email can't be used to get in). Bad/expired link: 400 |
+| POST   | `/auth/resend-verification` | No | `{ email, next? }` → `{ email_enabled }`: emails the link again if that account exists and isn't confirmed. Same answer either way. Without an email service the link is only logged |
 
 ## Households
 
@@ -39,8 +39,8 @@ Status: **implemented** for health, auth, households, members, chores and tasks.
 | Method | Path                         | Description                      |
 | ------ | ---------------------------- | -------------------------------- |
 | GET    | `/households/{id}/members`   | List people in the house         |
-| POST   | `/households/{id}/members`   | Add a person `{ display_name }`  |
-| PATCH  | `/members/{member_id}`       | Rename / change role (admin)     |
+| POST   | `/households/{id}/members`   | Admin: add someone who hasn't signed up `{ display_name, email?, phone? }` — **an email or phone is required**. An email gets the invite right away (409 if someone in the house has it). → `{ member, emailed, email_enabled, link }` (`link`: their personal `/join/CODE?as=MEMBER`, for WhatsApp) |
+| PATCH  | `/members/{member_id}`       | Admin: rename, change role, email/phone. **Only verified members can be made admin** (400); someone who hasn't joined keeps an email or phone (400) |
 | DELETE | `/members/{member_id}`       | Remove from house + all rotations (admin) |
 
 ## Chores & tasks (round-robin rotation)
@@ -194,10 +194,13 @@ The house gets exactly what was sent: the standard chores, quick-add items and b
 | Method | Path | Who | Description |
 | ------ | ---- | --- | ----------- |
 | GET    | `/invites/{code}/public` | anyone (no sign-in) | `{ household_name, people }`, for an invite link's landing page. Names need sign-in (`GET /invites/{code}`) |
-| POST   | `/households/{id}/email-invites` | member | `{ emails: [...] }` (1–20). Each is saved as pending and emailed when `RESEND_API_KEY` is set → `{ results: [{ email, status: sent \| saved \| member }], link, email_enabled }` |
+| POST   | `/households/{id}/email-invites` | member | `{ emails: [...] }` (1–20). Each is saved as pending and emailed (Brevo or Resend) with a **private link** `/invite/{token}` (no house code; valid 7 days; inviting again makes a new link and kills the old one) → `{ results: [{ email, status: sent \| saved \| failed \| member, reason }], link, email_enabled }`. `saved`: no email service; `failed` + `reason`: `bad_address` (check it), `unavailable` (service down — try later), `refused` (our setup — see server log) |
 | GET    | `/households/{id}/email-invites` | member | Pending email invites |
-| DELETE | `/email-invites/{id}` | admin or the sender | Cancel one |
-| GET    | `/me/invites` | me | Houses that invited my email and I haven't joined (`{ household_name, invite_code, invited_by }`) |
+| DELETE | `/email-invites/{id}` | admin or the sender | Cancel one: its private link stops working at once |
+| GET    | `/me/invites` | me | Pending, unexpired invites to my email for houses I'm not in (`{ household_name, invite_code, token, invited_by }`) |
+| GET    | `/invite-links/{token}` | none | What a private invite link shows: `{ household_name, people, email }`. Cancelled, used, expired or unknown: 404 "This invite has expired or was cancelled" |
+| POST   | `/invite-links/{token}/accept` | me | Join with it. Checked at join time: still pending and unexpired, and for my (confirmed) email — otherwise the same 404 |
+| POST   | `/households/{id}/invite-code` | admin | A new shared code: every old shared link and code stops working → the household |
 | PATCH  | `/auth/me` | me | `{ first_name, last_name? }`. Houses that called me by my old full name follow the new one |
 
 - Accounts have `first_name` and `last_name` (may be empty); `name` is "First Last" without an empty last name. Register takes `first_name` / `last_name` (older clients' single `name` is split).

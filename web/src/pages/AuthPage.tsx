@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import { authApi } from "../api/auth";
+import { ApiError } from "../api/client";
 import { Button, Card, ErrorText, Input } from "../components/ui";
 import { useAuth } from "../features/auth/AuthContext";
 
@@ -18,14 +19,23 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [checkEmail, setCheckEmail] = useState<{ email: string; emailEnabled: boolean } | null>(null);
+  const next = from === "/" ? undefined : from; // the emailed link lands back here (e.g. an invite)
 
-  const submit = useMutation({
-    mutationFn: () => (mode === "login" ? authApi.login(email, password) : authApi.register(firstName.trim(), lastName.trim(), email, password)),
+  const login = useMutation({
+    mutationFn: () => authApi.login(email, password),
     onSuccess: (res) => {
       signIn(res);
       navigate(from, { replace: true });
     },
   });
+  // Signing up doesn't sign in: we email a link that confirms the address and signs them in.
+  const register = useMutation({
+    mutationFn: () => authApi.register(firstName.trim(), lastName.trim(), email, password, next),
+    onSuccess: (res) => setCheckEmail({ email: res.email, emailEnabled: res.email_enabled }),
+  });
+  const submit = mode === "login" ? login : register;
+  const unconfirmed = mode === "login" && login.error instanceof ApiError && login.error.status === 403;
 
   if (user) return <Navigate to={from} replace />;
 
@@ -33,6 +43,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     e.preventDefault();
     submit.mutate();
   };
+  if (checkEmail) return <CheckEmail {...checkEmail} next={next} onBack={() => setCheckEmail(null)} />;
   const tab = (to: "login" | "register", label: string) => (
     <Link
       to={to === "login" ? "/login" : "/register"}
@@ -91,10 +102,12 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
             <ul className="space-y-1 text-xs text-slate-500">
               <li>✓ Use an email you'll remember — it's how you log in on any device.</li>
               <li>✓ At least 8 characters for the password.</li>
-              <li>✓ Next you'll create your home, or join one with a code or link.</li>
+              <li>✓ We'll email you a link to confirm it — that signs you in.</li>
+              <li>✓ Then you'll create your home, or join one with a code or link.</li>
             </ul>
           )}
           <ErrorText error={submit.error} />
+          {unconfirmed && <ResendLink email={email} next={next} />}
           <Button type="submit" className="w-full" disabled={submit.isPending}>
             {submit.isPending ? "One moment…" : mode === "login" ? "Log in" : state?.invite ? `Create account & join ${state.invite}` : "Create account"}
           </Button>
@@ -117,6 +130,46 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           )}
         </p>
       </Card>
+    </div>
+  );
+}
+
+/** After signing up: nothing to do here until they open the link we emailed. */
+function CheckEmail({ email, emailEnabled, next, onBack }: { email: string; emailEnabled: boolean; next?: string; onBack: () => void }) {
+  return (
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+      <div className="pointer-events-none absolute -left-24 top-10 h-80 w-80 rounded-full bg-indigo-400/30 blur-3xl" />
+      <div className="pointer-events-none absolute -right-20 bottom-0 h-96 w-96 rounded-full bg-fuchsia-400/30 blur-3xl" />
+      <Card className="relative w-full max-w-sm p-7 shadow-xl shadow-indigo-500/10">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-fuchsia-500 text-2xl shadow-lg shadow-indigo-500/30">
+          📧
+        </div>
+        <h1 className="text-2xl font-extrabold tracking-tight">Check your email</h1>
+        <p className="mt-2 text-sm text-slate-600">
+          We sent a link to <b>{email}</b>. Open it to confirm your email — it signs you in{next?.startsWith("/join/") ? " and takes you to your invite" : ""}.
+        </p>
+        {!emailEnabled && <p className="mt-2 text-sm text-amber-700">Email isn't set up on this server, so the link is in the server log.</p>}
+        <p className="mt-4 text-xs text-slate-500">Not there? Check spam, or send it again. The link works for 3 days.</p>
+        <div className="mt-4 space-y-2">
+          <ResendLink email={email} next={next} />
+          <Button variant="ghost" className="w-full" onClick={onBack}>
+            Use a different email
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function ResendLink({ email, next }: { email: string; next?: string }) {
+  const resend = useMutation({ mutationFn: () => authApi.resendVerification(email, next) });
+  return (
+    <div className="text-sm">
+      <Button variant="secondary" className="w-full" disabled={resend.isPending || !email} onClick={() => resend.mutate()}>
+        {resend.isPending ? "Sending…" : "Send the link again"}
+      </Button>
+      {resend.isSuccess && <p className="mt-1 text-center text-emerald-700">Sent — check your inbox (and spam).</p>}
+      <ErrorText error={resend.error} />
     </div>
   );
 }

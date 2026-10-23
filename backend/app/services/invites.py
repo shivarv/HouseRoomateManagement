@@ -1,9 +1,14 @@
 """Inviting people by email. The invite is saved (so the house sees it as pending and the invited
 person sees it once signed in) and emailed when an email service is set up.
+
+The email links to a private invite (/invite/{token}), not the house code: it works only while the
+invite is pending and unexpired, and only for the invited email. Cancelling it, or sending a new
+one, kills the old link.
 """
 
+import secrets
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,20 +21,43 @@ from app.services import email
 from app.services.errors import Forbidden, NotFound
 
 
+INVITE_DAYS = 7
+EXPIRED = "This invite has expired or was cancelled. Ask your roommate for a new one."
+
+
 def link(code: str) -> str:
+    """The house's shared link (anyone with it can join)."""
     return f"{settings.web_url.rstrip('/')}/join/{code}"
 
 
-def _message(me: HouseholdMember) -> tuple[str, str]:
+def private_link(token: str) -> str:
+    return f"{settings.web_url.rstrip('/')}/invite/{token}"
+
+
+def _new_link(row: HouseholdInvite) -> None:
+    """A fresh private link, good for INVITE_DAYS; any older link for this invite stops working."""
+    row.token = secrets.token_urlsafe(32)
+    row.expires_at = datetime.now(UTC) + timedelta(days=INVITE_DAYS)
+
+
+def _message(me: HouseholdMember, url: str) -> tuple[str, str]:
     house = me.household
     subject = f"{me.display_name} invited you to {house.name} on Roommates"
     text = (
         f"Hi!\n\n{me.display_name} invited you to join “{house.name}” on Roommates, to share chores, "
-        f"groceries and bills.\n\nJoin here: {link(house.invite_code)}\n\n"
-        f"New to Roommates? The link asks you to sign up first (a minute). Or sign up and enter "
-        f"invite code {house.invite_code}.\n"
+        f"groceries and bills.\n\nJoin here: {url}\n\n"
+        f"New to Roommates? The link asks you to sign up first (a minute) with this email address. "
+        f"It works for {INVITE_DAYS} days.\n"
     )
     return subject, text
+
+
+def find_open(db: Session, token: str) -> HouseholdInvite:
+    """A pending, unexpired invite, or the same "expired or cancelled" answer for anything else."""
+    row = db.scalar(select(HouseholdInvite).where(HouseholdInvite.token == token))
+    if row is None or row.accepted_at is not None or row.expires_at <= datetime.now(UTC):
+        raise NotFound(EXPIRED)
+    return row
 
 
 def invite(db: Session, me: HouseholdMember, emails: list[str]) -> EmailInviteResults:
@@ -41,7 +69,6 @@ def invite(db: Session, me: HouseholdMember, emails: list[str]) -> EmailInviteRe
             .where(HouseholdMember.household_id == house.id, HouseholdMember.is_active)
         )
     )
-    subject, text = _message(me)
     results = []
     for address in dict.fromkeys(e.strip().lower() for e in emails):  # in order, no repeats
         if address in member_emails:
@@ -57,10 +84,16 @@ def invite(db: Session, me: HouseholdMember, emails: list[str]) -> EmailInviteRe
         if row is None:
             row = HouseholdInvite(household_id=house.id, email=address, invited_by_id=me.id)
             db.add(row)
-        sent = email.send(address, subject, text)
-        if sent:
+        _new_link(row)  # inviting again sends a new link; the old one stops working
+        db.flush()
+        problem = email.deliver(address, *_message(me, private_link(row.token)))
+        if problem is None:
             row.last_sent_at = datetime.now(UTC)
-        results.append(EmailInviteResult(email=address, status="sent" if sent else "saved"))
+            results.append(EmailInviteResult(email=address, status="sent"))
+        elif problem == email.NOT_SET_UP:
+            results.append(EmailInviteResult(email=address, status="saved"))
+        else:
+            results.append(EmailInviteResult(email=address, status="failed", reason=problem))
     db.commit()
     return EmailInviteResults(results=results, link=link(house.invite_code), email_enabled=email.enabled())
 
@@ -98,13 +131,18 @@ def mine(db: Session, user: User) -> list[MyInvite]:
     }
     rows = db.scalars(
         select(HouseholdInvite)
-        .where(HouseholdInvite.email == user.email.lower(), HouseholdInvite.accepted_at.is_(None))
+        .where(
+            HouseholdInvite.email == user.email.lower(),
+            HouseholdInvite.accepted_at.is_(None),
+            HouseholdInvite.expires_at > datetime.now(UTC),
+        )
         .order_by(HouseholdInvite.created_at.desc())
     ).unique()
     return [
         MyInvite(
             household_name=r.household.name,
             invite_code=r.household.invite_code,
+            token=r.token,
             invited_by=r.invited_by.display_name if r.invited_by else None,
             created_at=r.created_at,
         )

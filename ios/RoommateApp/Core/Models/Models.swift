@@ -14,10 +14,19 @@ struct User: Codable, Identifiable, Hashable {
     var lastHouseholdId: UUID?
 }
 
-struct VerificationSent: Decodable {
+/// Signed up, not signed in: the emailed link confirms the address and signs them in (on the web).
+struct RegisterResponse: Decodable {
+    let email: String
     let sent: Bool
-    let emailEnabled: Bool  // false: no email service set up yet, so nothing can be sent
-    let alreadyVerified: Bool
+    let emailEnabled: Bool  // false: no email service set up, so the link is only in the server log
+}
+
+/// Adding someone who hasn't signed up: an email gets the invite right away.
+struct MemberAdded: Decodable {
+    let member: Member
+    let emailed: Bool
+    let emailEnabled: Bool
+    let link: String  // their personal invite link, for WhatsApp
 }
 
 struct TokenResponse: Decodable {

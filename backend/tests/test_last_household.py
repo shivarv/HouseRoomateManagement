@@ -1,6 +1,5 @@
-from datetime import UTC, datetime
 
-from tests.conftest import register
+from tests.conftest import register, sign_up
 from tests.test_chore_api import API
 
 
@@ -114,17 +113,13 @@ def test_invite_links_show_the_house_before_signing_in(client):
 
 
 def test_first_and_last_names(client):
-    res = client.post(
-        f"{API}/auth/register",
-        json={"email": "bea@example.com", "first_name": " Beatrice ", "last_name": "Smith", "password": "password123"},
-    )
-    assert res.status_code == 201
-    user = res.json()["user"]
+    res = sign_up(client, {"email": "bea@example.com", "first_name": " Beatrice ", "last_name": "Smith"})
+    user = res["user"]
     assert (user["first_name"], user["last_name"], user["name"]) == ("Beatrice", "Smith", "Beatrice Smith")
-    bea = {"Authorization": f"Bearer {res.json()['access_token']}"}
+    bea = {"Authorization": f"Bearer {res['access_token']}"}
     # Older clients send one name: it's split.
-    old = client.post(f"{API}/auth/register", json={"email": "cy@example.com", "name": "Cy Van Dyke", "password": "password123"})
-    assert (old.json()["user"]["first_name"], old.json()["user"]["last_name"]) == ("Cy", "Van Dyke")
+    old = sign_up(client, {"email": "cy@example.com", "name": "Cy Van Dyke"})
+    assert (old["user"]["first_name"], old["user"]["last_name"]) == ("Cy", "Van Dyke")
     assert client.post(f"{API}/auth/register", json={"email": "x@example.com", "password": "password123"}).status_code == 422
 
     house = _create(client, bea, "Maple")
@@ -138,11 +133,16 @@ def test_first_and_last_names(client):
 def test_members_have_status_email_and_phone(client, monkeypatch):
     from app.services import email
 
-    monkeypatch.setattr(email, "send", lambda *a: False)
+    monkeypatch.setattr(email, "deliver", lambda *a: email.NOT_SET_UP)
     ann = register(client, "ann@example.com", "Ann")
     house = _create(client, ann, "Maple")
-    bea = client.post(f"{API}/households/{house['id']}/members", json={"display_name": "Bea"}, headers=ann).json()
+    # A name alone isn't enough: they need an email or phone to be invited.
+    assert client.post(f"{API}/households/{house['id']}/members", json={"display_name": "Bea"}, headers=ann).status_code == 422
+    res = client.post(f"{API}/households/{house['id']}/members", json={"display_name": "Bea", "phone": "+1 617 555 0199"}, headers=ann)
+    assert res.status_code == 201
+    bea = res.json()["member"]
     assert bea["status"] == "added" and bea["email"] is None
+    assert res.json()["link"].endswith(f"/join/{house['invite_code']}?as={bea['id']}") and res.json()["emailed"] is False
 
     res = client.patch(f"{API}/members/{bea['id']}", json={"email": "Bea@Example.com", "phone": "+1 617 555 0100"}, headers=ann)
     assert res.status_code == 200 and res.json()["email"] == "bea@example.com" and res.json()["phone"] == "+1 617 555 0100"
@@ -150,32 +150,13 @@ def test_members_have_status_email_and_phone(client, monkeypatch):
 
     client.post(f"{API}/households/{house['id']}/email-invites", json={"emails": ["bea@example.com"]}, headers=ann)
     members = {m["display_name"]: m for m in client.get(f"{API}/households/{house['id']}", headers=ann).json()["members"]}
-    assert members["Ann"]["status"] == "joined" and members["Ann"]["email"] == "ann@example.com"
+    assert members["Ann"]["status"] == "verified" and members["Ann"]["email"] == "ann@example.com"
     assert members["Bea"]["status"] == "invited"
 
     # Bea signs up with that email and joins with the plain link: she's matched to "Bea".
     bea_user = register(client, "bea@example.com", "Beatrice")
     client.post(f"{API}/invites/{house['invite_code']}/accept", json={}, headers=bea_user)
     members = client.get(f"{API}/households/{house['id']}", headers=ann).json()["members"]
-    assert [(m["display_name"], m["status"]) for m in members] == [("Ann", "joined"), ("Bea", "joined")]
+    assert [(m["display_name"], m["status"]) for m in members] == [("Ann", "verified"), ("Bea", "verified")]
     me = next(m for m in members if m["display_name"] == "Bea")
     assert client.patch(f"{API}/members/{me['id']}", json={"email": "x@y.co"}, headers=ann).status_code == 400
-
-
-def test_existing_accounts_are_verified_new_ones_joined(client):
-    from app.db.session import SessionLocal
-    from app.models import User
-
-    ann = register(client, "ann@example.com", "Ann")
-    house = _create(client, ann, "Maple")
-    assert _me(client, ann)["email_verified"] is False
-    member = client.get(f"{API}/households/{house['id']}", headers=ann).json()["members"][0]
-    assert member["status"] == "joined"
-
-    # What migration 0015 does for accounts that already exist.
-    with SessionLocal() as db:
-        db.query(User).update({User.email_verified_at: datetime.now(UTC)})
-        db.commit()
-    assert _me(client, ann)["email_verified"] is True
-    member = client.get(f"{API}/households/{house['id']}", headers=ann).json()["members"][0]
-    assert member["status"] == "verified"

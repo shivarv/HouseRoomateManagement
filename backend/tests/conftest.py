@@ -55,9 +55,29 @@ def client():
     return TestClient(app)
 
 
-def register(client: TestClient, email: str, name: str) -> dict:
-    res = client.post(
-        "/api/v1/auth/register", json={"email": email, "name": name, "password": "password123"}
-    )
+def confirm_email(client: TestClient, email: str) -> dict:
+    """What opening the emailed link does: confirms the address and signs in. Returns the response."""
+    from sqlalchemy import select
+
+    from app.core.security import create_email_token
+    from app.db.session import SessionLocal
+    from app.models import User
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.email == email.lower()))
+        token = create_email_token(user.id, user.email)
+    res = client.post("/api/v1/auth/verify-email", json={"token": token})
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def sign_up(client: TestClient, body: dict) -> dict:
+    """Sign up and open the emailed link: `{access_token, user}`, like logging in."""
+    res = client.post("/api/v1/auth/register", json={"password": "password123", **body})
     assert res.status_code == 201, res.text
-    return {"Authorization": f"Bearer {res.json()['access_token']}"}
+    return confirm_email(client, body["email"])
+
+
+def register(client: TestClient, email: str, name: str) -> dict:
+    token = sign_up(client, {"email": email, "name": name})["access_token"]
+    return {"Authorization": f"Bearer {token}"}

@@ -9,10 +9,13 @@ from app.schemas.auth import (
     LoginIn,
     ProfileUpdate,
     RegisterIn,
+    RegisterOut,
+    ResendVerificationIn,
+    ResendVerificationOut,
     TokenOut,
     UserOut,
-    VerificationSent,
     VerifyEmailIn,
+    VerifyEmailOut,
 )
 from app.services import email, households, verification
 
@@ -27,14 +30,15 @@ def _token(user: User) -> TokenOut:
     return TokenOut(access_token=create_access_token(user.id), user=UserOut.model_validate(user))
 
 
-@router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=RegisterOut, status_code=status.HTTP_201_CREATED)
 def register(body: RegisterIn, db: DbSession):
-    email = body.email.lower()
-    if db.scalar(select(User.id).where(User.email == email)):
+    """Not signed in yet: the emailed link confirms the address and signs them in."""
+    address = body.email.lower()
+    if db.scalar(select(User.id).where(User.email == address)):
         raise HTTPException(status.HTTP_409_CONFLICT, "An account with this email already exists")
     first, last = body.first_name, body.last_name or ""
     user = User(
-        email=email,
+        email=address,
         first_name=first,
         last_name=last,
         name=full_name(first, last),
@@ -42,8 +46,8 @@ def register(body: RegisterIn, db: DbSession):
     )
     db.add(user)
     db.commit()
-    verification.send(user)  # a failed email doesn't fail sign-up; they can ask again
-    return _token(user)
+    sent = verification.send(user, body.next)  # a failed email doesn't fail sign-up; they can ask again
+    return RegisterOut(email=user.email, sent=sent, email_enabled=email.enabled())
 
 
 @router.post("/login", response_model=TokenOut)
@@ -51,6 +55,10 @@ def login(body: LoginIn, db: DbSession):
     user = db.scalar(select(User).where(User.email == body.email.lower()))
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Incorrect email or password")
+    if not user.email_verified:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Confirm your email first: open the link we sent you."
+        )
     return _token(user)
 
 
@@ -72,18 +80,22 @@ def update_profile(body: ProfileUpdate, db: DbSession, user: CurrentUser):
     return user
 
 
-@router.post("/verify-email", response_model=UserOut)
+@router.post("/verify-email", response_model=VerifyEmailOut)
 def verify_email(body: VerifyEmailIn, db: DbSession):
-    """No sign-in needed: the link in the email proves the address. Opening it twice is fine."""
-    return verification.verify(db, body.token)
+    """The link in the email proves the address. The first open also signs them in."""
+    user, first_time = verification.verify(db, body.token)
+    token = create_access_token(user.id) if first_time else None
+    return VerifyEmailOut(user=UserOut.model_validate(user), access_token=token)
 
 
-@router.post("/me/verification", response_model=VerificationSent)
-def resend_verification(user: CurrentUser):
-    """Send the verification email again."""
-    if user.email_verified_at is not None:
-        return VerificationSent(sent=False, email_enabled=email.enabled(), already_verified=True)
-    return VerificationSent(sent=verification.send(user), email_enabled=email.enabled(), already_verified=False)
+@router.post("/resend-verification", response_model=ResendVerificationOut)
+def resend_verification(body: ResendVerificationIn, db: DbSession):
+    """Send the link again (signed out: they can't sign in yet). Says nothing about whether the
+    account exists."""
+    user = db.scalar(select(User).where(User.email == body.email.lower()))
+    if user is not None and not user.email_verified:
+        verification.send(user, body.next)
+    return ResendVerificationOut(email_enabled=email.enabled())
 
 
 @router.put("/me/last-household", response_model=UserOut)

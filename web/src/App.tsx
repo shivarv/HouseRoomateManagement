@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from "react-router";
 import { AppShell } from "./components/AppShell";
 import { AuthPage } from "./pages/AuthPage";
-import { JoinPage } from "./pages/JoinPage";
+import { InviteLinkPage, JoinPage } from "./pages/JoinPage";
 import { AddHouseholdPage, HouseholdsPage } from "./pages/HouseholdsPage";
 import { MyDayPage } from "./pages/MyDayPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -30,6 +30,8 @@ export default function App() {
       <Route path="/register" element={<AuthPage mode="register" />} />
       {/* Invite links: work signed out (sign up or log in, then come back to join). */}
       <Route path="/join/:code" element={<JoinPage />} />
+      {/* The private link in an invite email: only while that invite is pending. */}
+      <Route path="/invite/:token" element={<InviteLinkPage />} />
       {/* The link in the verification email: works signed out too. */}
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route
