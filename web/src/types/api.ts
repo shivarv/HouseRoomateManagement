@@ -9,8 +9,16 @@ export interface User {
   first_name: string;
   last_name: string; // may be empty: then it's left out of `name`
   name: string; // "First Last"
+  /** Opened the link we emailed. Accounts from before verification count as verified. */
+  email_verified: boolean;
   /** May be a house I've since left; the UI then falls back to my first house. */
   last_household_id: string | null;
+}
+
+export interface VerificationSent {
+  sent: boolean;
+  email_enabled: boolean; // false: no email service set up yet, so nothing can be sent
+  already_verified: boolean;
 }
 
 export interface TokenResponse {
@@ -29,7 +37,7 @@ export interface Member extends MemberBrief {
   is_active: boolean;
   has_account: boolean;
   /** added: by name only · invited: an email invite is waiting · joined: has an account */
-  status: "added" | "invited" | "joined";
+  status: "added" | "invited" | "joined" | "verified";
   first_name: string; // from their account; empty until they join
   last_name: string;
   email: string | null; // their account's once joined, else what an admin added

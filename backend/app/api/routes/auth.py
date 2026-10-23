@@ -4,8 +4,17 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models import User
-from app.schemas.auth import LastHouseholdIn, LoginIn, ProfileUpdate, RegisterIn, TokenOut, UserOut
-from app.services import households
+from app.schemas.auth import (
+    LastHouseholdIn,
+    LoginIn,
+    ProfileUpdate,
+    RegisterIn,
+    TokenOut,
+    UserOut,
+    VerificationSent,
+    VerifyEmailIn,
+)
+from app.services import email, households, verification
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -33,6 +42,7 @@ def register(body: RegisterIn, db: DbSession):
     )
     db.add(user)
     db.commit()
+    verification.send(user)  # a failed email doesn't fail sign-up; they can ask again
     return _token(user)
 
 
@@ -60,6 +70,20 @@ def update_profile(body: ProfileUpdate, db: DbSession, user: CurrentUser):
             member.display_name = user.name
     db.commit()
     return user
+
+
+@router.post("/verify-email", response_model=UserOut)
+def verify_email(body: VerifyEmailIn, db: DbSession):
+    """No sign-in needed: the link in the email proves the address. Opening it twice is fine."""
+    return verification.verify(db, body.token)
+
+
+@router.post("/me/verification", response_model=VerificationSent)
+def resend_verification(user: CurrentUser):
+    """Send the verification email again."""
+    if user.email_verified_at is not None:
+        return VerificationSent(sent=False, email_enabled=email.enabled(), already_verified=True)
+    return VerificationSent(sent=verification.send(user), email_enabled=email.enabled(), already_verified=False)
 
 
 @router.put("/me/last-household", response_model=UserOut)

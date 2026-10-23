@@ -96,7 +96,10 @@
       "Bash(sed -n 69,140p Features/Households/HouseholdsView.swift)",
       "Bash(grep -n \"func updateMember\\\\|func renameMember\\\\|func setRole\\\\|struct RoleBody\\\\|MemberBody\" Core/Services/HouseholdService.swift)",
       "Bash(grep -n \"API_BASE_URL\" -A1 Resources/Info.plist)",
-      "Bash(grep -rn \"toggleAdmin\" Features/Households/HouseholdViewModel.swift)"
+      "Bash(grep -rn \"toggleAdmin\" Features/Households/HouseholdViewModel.swift)",
+      "Bash(git stash *)",
+      "Bash(grep -rlis \"neon.tech\" --include=\".env*\" .)",
+      "Bash(ls -a backend)"
     ]
   }
 }

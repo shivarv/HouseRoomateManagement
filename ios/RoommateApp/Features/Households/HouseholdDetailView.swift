@@ -312,7 +312,7 @@ private extension PeopleSection {
                     if member.id == model.detail?.myMemberId { Badge(text: "You") }
                     if member.role == .admin { Badge(text: "Admin", color: .accentColor) }
                     Badge(text: member.status.label,
-                          color: member.status == .joined ? .green : member.status == .invited ? .orange : .gray)
+                          color: member.status == .verified ? .green : member.status == .joined ? .accentColor : member.status == .invited ? .orange : .gray)
                 }
                 Text(contactLine(member))
                     .font(.caption).foregroundStyle(.secondary)
@@ -328,7 +328,8 @@ private func contactLine(_ m: Member) -> String {
     switch m.status {
     case .added: return "Added by name — invite them to join"
     case .invited: return "Invite sent — waiting for them to join"
-    case .joined: return "Has an account"
+    case .joined: return "Has an account — email not confirmed yet"
+    case .verified: return "Has an account with a confirmed email"
     }
 }
 

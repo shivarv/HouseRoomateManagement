@@ -23,7 +23,8 @@ def test_email_invites_are_saved_shown_to_the_invited_person_and_settled_on_join
         {"email": "ann@example.com", "status": "member"},
     ]
     assert body["link"].endswith(f"/join/{maple['invite_code']}") and body["email_enabled"] is False
-    assert sent and sent[0][0] == "bea@example.com" and maple["invite_code"] in sent[0][2]
+    invite_mails = [m for m in sent if "Confirm your email" not in m[1]]  # sign-up sends a verification email too
+    assert invite_mails and invite_mails[0][0] == "bea@example.com" and maple["invite_code"] in invite_mails[0][2]
 
     pending = client.get(f"{API}/households/{maple['id']}/email-invites", headers=ann).json()
     assert [p["email"] for p in pending] == ["bea@example.com"] and pending[0]["last_sent_at"] is None

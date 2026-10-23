@@ -29,3 +29,7 @@ class User(UUIDPrimaryKey, Timestamps, Base):
             name="fk_users_last_household_id",
         )
     )
+
+    @property
+    def email_verified(self) -> bool:
+        return self.email_verified_at is not None
