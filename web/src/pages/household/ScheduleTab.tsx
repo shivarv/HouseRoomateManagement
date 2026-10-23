@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Button, Empty, ErrorText, Loading } from "../../components/ui";
+import { Empty, ErrorText, Loading } from "../../components/ui";
 import { useSchedule } from "../../features/chores/hooks";
 import { formatDay } from "../../lib/format";
+import { subTab, subTabTray } from "../../lib/tabStyles";
 import { useCurrentHousehold } from "./HouseholdLayout";
 
 export function ScheduleTab() {
@@ -17,12 +18,15 @@ export function ScheduleTab() {
   return (
     <>
       <ErrorText error={schedule.error} />
-      <div className="mb-3 flex gap-2">
-        {[7, 14, 28].map((n) => (
-          <Button key={n} variant={n === days ? "primary" : "secondary"} onClick={() => setDays(n)}>
-            {n} days
-          </Button>
-        ))}
+      {/* Same tray and pills as the House tabs above, so the two rows line up. */}
+      <div className="mb-4 flex">
+        <div role="group" aria-label="How many days" className={subTabTray}>
+          {[7, 14, 28].map((n) => (
+            <button key={n} type="button" aria-pressed={n === days} className={subTab({ isActive: n === days })} onClick={() => setDays(n)}>
+              {n} days
+            </button>
+          ))}
+        </div>
       </div>
       <div className="overflow-x-auto rounded-2xl border border-white/70 bg-white/90 shadow-sm ring-1 ring-slate-900/5 backdrop-blur">
         <table className="w-full text-sm">
