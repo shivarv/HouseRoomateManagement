@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
+import { ApiError } from "../../api/client";
 import { householdsApi } from "../../api/households";
 import { Badge, Button, Card, ErrorText, Input } from "../../components/ui";
 import type { EmailInviteResults, HouseholdDetail } from "../../types/api";
@@ -77,8 +78,29 @@ export function InvitePanel({ house, onClose }: { house: HouseholdDetail; onClos
         <p className="mt-2 text-xs text-slate-500">
           Anyone with the link can join. The code <Badge tone="indigo">{house.invite_code}</Badge> works too.
         </p>
+        {house.my_role === "admin" && <ResetLink house={house} />}
       </div>
     </Card>
+  );
+}
+
+/** Admins: a new shared link when the old one reached the wrong people. Emailed invites keep working. */
+function ResetLink({ house }: { house: HouseholdDetail }) {
+  const queryClient = useQueryClient();
+  const reset = useMutation({
+    mutationFn: () => householdsApi.resetInviteCode(house.id),
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
+  const ask = () =>
+    confirm("Make a new link? The current link and code stop working right away — share the new one with anyone who still needs it.") &&
+    reset.mutate();
+  return (
+    <div className="mt-2">
+      <button className="text-xs font-semibold text-indigo-600 hover:underline disabled:opacity-50" disabled={reset.isPending} onClick={ask}>
+        {reset.isPending ? "Making a new link…" : reset.isSuccess ? "✓ New link made — old links no longer work" : "↻ Make a new link (stops the old one)"}
+      </button>
+      <ErrorText error={reset.error} />
+    </div>
   );
 }
 
@@ -103,7 +125,7 @@ function EmailInvites({ house }: { house: HouseholdDetail }) {
       queryClient.invalidateQueries({ queryKey: key });
     },
   });
-  const unsent = result?.results.filter((r) => r.status === "saved").map((r) => r.email) ?? [];
+  const unsent = result?.results.filter((r) => r.status === "saved" || r.status === "failed").map((r) => r.email) ?? [];
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -126,31 +148,49 @@ function EmailInvites({ house }: { house: HouseholdDetail }) {
         </Button>
       </form>
       {invalid.length > 0 && <ErrorText error={`Check ${invalid.join(", ")}: that isn't an email address.`} />}
-      <ErrorText error={send.error} />
+      <ErrorText
+        error={
+          send.error instanceof ApiError && (send.error.status >= 500 || send.error.status === 0)
+            ? "We couldn't reach the server, so nothing was sent. Check your connection and try again in a minute."
+            : send.error
+        }
+      />
 
       {result && (
         <div className="space-y-1 text-sm">
           {result.results.map((r) => (
-            <p key={r.email} className={r.status === "member" ? "text-slate-500" : "text-emerald-700"}>
-              {r.status === "sent" ? "✓ Emailed" : r.status === "saved" ? "✓ Invited (not emailed)" : "Already in the house:"} {r.email}
-            </p>
+            <InviteResultLine key={r.email} result={r} />
           ))}
           {unsent.length > 0 && (
-            <p className="rounded-xl bg-amber-50 px-3 py-2 text-amber-900 ring-1 ring-amber-100">
-              {result.email_enabled ? "The email couldn't be sent" : "Email isn't set up yet, so it wasn't sent"} — they'll still see the invite
-              when they sign up with that email.{" "}
-              <a className="font-semibold underline" href={emailUrl(house, inviteMessage(house), unsent.join(","))}>
-                Send it from your email app
-              </a>
+            <p className="text-slate-600">
+              You can also{" "}
+              <a className="font-semibold text-indigo-600 underline" href={emailUrl(house, inviteMessage(house), unsent.join(","))}>
+                send it from your own email app
+              </a>{" "}
+              or share the link below.
             </p>
           )}
         </div>
       )}
-
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
+  );
+}
+
+/** One address's outcome, in words the sender can act on. */
+function InviteResultLine({ result: r }: { result: EmailInviteResults["results"][number] }) {
+  if (r.status === "sent") return <p className="text-emerald-700">✓ Invite emailed to {r.email}</p>;
+  if (r.status === "member") return <p className="text-slate-500">{r.email} is already in the house.</p>;
+  const why =
+    r.status === "saved"
+      ? "Sending email isn't set up on this server yet."
+      : r.reason === "bad_address"
+        ? "That address doesn't look right — check for typos and invite again."
+        : r.reason === "unavailable"
+          ? "Our email service isn't responding right now. Try “Invite” again in a few minutes."
+          : "Our email service didn't accept it. Try again later; if it keeps happening, the app's email setup needs a look.";
+  return (
+    <p className="rounded-xl bg-amber-50 px-3 py-2 text-amber-900 ring-1 ring-amber-100">
+      <b>Couldn't email {r.email}.</b> {why}
+    </p>
   );
 }

@@ -13,6 +13,14 @@ from app.services.errors import BadRequest, Conflict, Forbidden, NotFound
 INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
+def reset_invite_code(db: Session, me: HouseholdMember) -> Household:
+    """A new shared code: every old shared link and code stops working."""
+    me.household.invite_code = _new_invite_code(db)
+    activity.record(db, me.household_id, "invite_code_reset", me)
+    db.commit()
+    return me.household
+
+
 def _new_invite_code(db: Session) -> str:
     while True:
         code = "".join(secrets.choice(INVITE_ALPHABET) for _ in range(8))
@@ -236,6 +244,15 @@ def accept_invite(
     user.last_household_id = household.id
     db.commit()
     return member
+
+
+def accept_invite_link(db: Session, token: str, user: User) -> HouseholdMember:
+    """Join with a private invite link. Checked when joining, not just when the page opened: the
+    invite must still be pending and unexpired, and be for this (confirmed) account's email."""
+    row = invites.find_open(db, token)
+    if row.email != user.email.lower():
+        raise NotFound(invites.EXPIRED)  # someone else's invite: don't say whose, or that it's valid
+    return accept_invite(db, row.household, user, member_id=None, display_name=None)
 
 
 def invited_emails(db: Session, household_id: uuid.UUID) -> set[str]:

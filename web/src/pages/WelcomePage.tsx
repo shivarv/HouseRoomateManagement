@@ -45,7 +45,7 @@ export function WelcomePage() {
                 <span className="block font-semibold text-emerald-900">{i.household_name}</span>
                 <span className="block text-sm text-emerald-800/80">{i.invited_by ? `${i.invited_by} invited you` : "You were invited"} to join.</span>
               </span>
-              <Button onClick={() => navigate(`/join/${i.invite_code}`)}>Join {i.household_name} →</Button>
+              <Button onClick={() => navigate(`/invite/${i.token}`)}>Join {i.household_name} →</Button>
             </div>
           ))}
         </div>

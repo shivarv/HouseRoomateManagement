@@ -194,10 +194,13 @@ The house gets exactly what was sent: the standard chores, quick-add items and b
 | Method | Path | Who | Description |
 | ------ | ---- | --- | ----------- |
 | GET    | `/invites/{code}/public` | anyone (no sign-in) | `{ household_name, people }`, for an invite link's landing page. Names need sign-in (`GET /invites/{code}`) |
-| POST   | `/households/{id}/email-invites` | member | `{ emails: [...] }` (1–20). Each is saved as pending and emailed when `RESEND_API_KEY` is set → `{ results: [{ email, status: sent \| saved \| member }], link, email_enabled }` |
+| POST   | `/households/{id}/email-invites` | member | `{ emails: [...] }` (1–20). Each is saved as pending and emailed (Brevo or Resend) with a **private link** `/invite/{token}` (no house code; valid 7 days; inviting again makes a new link and kills the old one) → `{ results: [{ email, status: sent \| saved \| failed \| member, reason }], link, email_enabled }`. `saved`: no email service; `failed` + `reason`: `bad_address` (check it), `unavailable` (service down — try later), `refused` (our setup — see server log) |
 | GET    | `/households/{id}/email-invites` | member | Pending email invites |
-| DELETE | `/email-invites/{id}` | admin or the sender | Cancel one |
-| GET    | `/me/invites` | me | Houses that invited my email and I haven't joined (`{ household_name, invite_code, invited_by }`) |
+| DELETE | `/email-invites/{id}` | admin or the sender | Cancel one: its private link stops working at once |
+| GET    | `/me/invites` | me | Pending, unexpired invites to my email for houses I'm not in (`{ household_name, invite_code, token, invited_by }`) |
+| GET    | `/invite-links/{token}` | none | What a private invite link shows: `{ household_name, people, email }`. Cancelled, used, expired or unknown: 404 "This invite has expired or was cancelled" |
+| POST   | `/invite-links/{token}/accept` | me | Join with it. Checked at join time: still pending and unexpired, and for my (confirmed) email — otherwise the same 404 |
+| POST   | `/households/{id}/invite-code` | admin | A new shared code: every old shared link and code stops working → the household |
 | PATCH  | `/auth/me` | me | `{ first_name, last_name? }`. Houses that called me by my old full name follow the new one |
 
 - Accounts have `first_name` and `last_name` (may be empty); `name` is "First Last" without an empty last name. Register takes `first_name` / `last_name` (older clients' single `name` is split).

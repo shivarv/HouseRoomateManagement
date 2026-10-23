@@ -441,7 +441,12 @@ export interface EmailInvite {
 
 export interface EmailInviteResults {
   // sent: emailed now · saved: kept, but emailing isn't set up · member: already in the house
-  results: { email: string; status: "sent" | "saved" | "member" }[];
+  results: {
+    email: string;
+    // saved: kept but email isn't set up · failed: kept but the email didn't go out (see reason)
+    status: "sent" | "saved" | "failed" | "member";
+    reason: "bad_address" | "unavailable" | "refused" | null;
+  }[];
   link: string;
   email_enabled: boolean;
 }
@@ -449,6 +454,7 @@ export interface EmailInviteResults {
 export interface MyInvite {
   household_name: string;
   invite_code: string;
+  token: string; // the private invite link: /invite/{token}
   invited_by: string | null;
   created_at: string;
 }
@@ -471,4 +477,11 @@ export interface ChatMessage {
 export interface ChatPage {
   messages: ChatMessage[]; // oldest first
   has_more: boolean;
+}
+
+/** What a private invite link shows before signing in. */
+export interface InviteLinkPublic {
+  household_name: string;
+  people: number;
+  email: string; // who it's for
 }

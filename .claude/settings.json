@@ -111,7 +111,8 @@
       "Bash(.venv/bin/python -m pytest -q tests/test_chat.py -x)",
       "Bash(grep -n '>Add a roommate<' src/features/households/InvitePanel.tsx)",
       "Bash(sed -i '' 's|<h2 className=\"font-semibold\">Add a roommate</h2>|<h2 className=\"font-semibold\">Invite roommates</h2>|' src/features/households/InvitePanel.tsx)",
-      "Bash(sed -i '' 's|^ \\\\* Add a roommate: their email gets the invite| * Invite roommates: their email gets the invite|' src/features/households/InvitePanel.tsx)"
+      "Bash(sed -i '' 's|^ \\\\* Add a roommate: their email gets the invite| * Invite roommates: their email gets the invite|' src/features/households/InvitePanel.tsx)",
+      "Bash(sed -i '' 's|    assert any\\(to == \"bea@example.com\" and house\\\\[\"invite_code\"\\\\] in text for to, _, text in sent\\)|    assert any\\(to == \"bea@example.com\" and \"/invite/\" in text for to, _, text in sent\\)|' tests/test_verification.py)"
     ]
   }
 }

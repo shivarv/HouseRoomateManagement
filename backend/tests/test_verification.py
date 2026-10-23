@@ -8,7 +8,7 @@ from tests.test_chore_api import API
 
 def _capture(monkeypatch):
     sent = []
-    monkeypatch.setattr(email, "send", lambda to, subject, text: sent.append((to, subject, text)) or True)
+    monkeypatch.setattr(email, "deliver", lambda to, subject, text: sent.append((to, subject, text)))  # None: sent
     return sent
 
 
@@ -88,7 +88,7 @@ def test_only_verified_people_can_be_admins_and_an_email_gets_the_invite(client,
     assert res.status_code == 201 and res.json()["emailed"] is True
     bea = res.json()["member"]
     assert bea["status"] == "invited" and bea["email"] == "bea@example.com"
-    assert any(to == "bea@example.com" and house["invite_code"] in text for to, _, text in sent)
+    assert any(to == "bea@example.com" and "/invite/" in text for to, _, text in sent)
     # The same email twice is refused.
     dup = client.post(f"{API}/households/{house['id']}/members", json={"display_name": "B", "email": "bea@example.com"}, headers=ann)
     assert dup.status_code == 409

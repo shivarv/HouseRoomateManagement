@@ -48,18 +48,45 @@ def _request(to: str, subject: str, text: str) -> tuple[str, urllib.request.Requ
     )
 
 
-def send(to: str, subject: str, text: str) -> bool:
+# Why an email didn't go out, for the people sending it (see deliver()).
+NOT_SET_UP = "not_set_up"  # no email service configured
+BAD_ADDRESS = "bad_address"  # the service says the address isn't valid
+UNAVAILABLE = "unavailable"  # the service is down, slow or rate-limiting: try again later
+REFUSED = "refused"  # the service turned it down for another reason (our setup): see the log
+
+
+def _reason(code: int, detail: str) -> str:
+    text = detail.lower()
+    # (Resend's test sender also says "invalid `to`" for any address but yours: that's our setup.)
+    if (
+        code in (400, 422)
+        and "email" in text
+        and ("invalid" in text or "not valid" in text)
+        and "testing" not in text
+    ):
+        return BAD_ADDRESS
+    if code == 429 or code >= 500:
+        return UNAVAILABLE
+    return REFUSED
+
+
+def deliver(to: str, subject: str, text: str) -> str | None:
+    """None when the email was handed to the service; otherwise why not (one of the codes above)."""
     if not enabled():
-        return False
+        return NOT_SET_UP
     service, request = _request(to, subject, text)
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
-            return 200 <= response.status < 300
+            return None if 200 <= response.status < 300 else UNAVAILABLE
     except urllib.error.HTTPError as e:
         # The service said no: log why (bad key, unverified sender, …).
         detail = e.read().decode(errors="replace")[:500]
         log.error("Couldn't send email to %s: %s %s %s", to, service, e.code, detail)
-        return False
-    except Exception:  # a failed email shouldn't fail the invite; it can be re-sent
+        return _reason(e.code, detail)
+    except Exception:  # unreachable or timed out; a failed email shouldn't fail the invite
         log.exception("Couldn't send email to %s", to)
-        return False
+        return UNAVAILABLE
+
+
+def send(to: str, subject: str, text: str) -> bool:
+    return deliver(to, subject, text) is None

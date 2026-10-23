@@ -17,7 +17,7 @@ from app.schemas.household import (
     MemberOut,
     MemberUpdate,
 )
-from app.schemas.invite import EmailInviteOut, EmailInviteResults, InviteEmails, MyInvite
+from app.schemas.invite import EmailInviteOut, EmailInviteResults, InviteEmails, InviteLinkPublic, MyInvite
 from app.schemas.setup import HouseholdSetup, SetupTemplate
 from app.services import email
 from app.services import households as svc
@@ -171,6 +171,34 @@ def cancel_invite(invite_id: uuid.UUID, db: DbSession, user: CurrentUser):
 def my_invites(db: DbSession, user: CurrentUser):
     """Houses that invited my email and I haven't joined: shown on the welcome screen."""
     return invite_svc.mine(db, user)
+
+
+@router.get("/invite-links/{token}", response_model=InviteLinkPublic)
+def invite_link_public(token: str, db: DbSession):
+    """No sign-in needed: the page a private invite link opens. Anything but a pending, unexpired
+    invite (cancelled, used, expired, made up) gets the same 404."""
+    row = invite_svc.find_open(db, token)
+    household = row.household
+    return InviteLinkPublic(
+        household_name=household.name,
+        people=sum(1 for m in household.members if m.is_active),
+        email=row.email,
+    )
+
+
+@router.post("/invite-links/{token}/accept", response_model=HouseholdOut)
+def accept_invite_link(token: str, db: DbSession, user: CurrentUser):
+    """Join with a private invite link: only while it's pending, and only as the invited email."""
+    member = svc.accept_invite_link(db, token, user)
+    return svc.household_out(member)
+
+
+@router.post("/households/{household_id}/invite-code", response_model=HouseholdOut)
+def reset_invite_code(household_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    """Admins: a new shared code. Every old shared link and code stops working."""
+    me = svc.require_membership(db, household_id, user, admin=True)
+    svc.reset_invite_code(db, me)
+    return svc.household_out(me)
 
 
 @router.get("/invites/{code}/public", response_model=InvitePublic)

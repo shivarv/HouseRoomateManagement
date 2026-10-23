@@ -1,6 +1,7 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
+import { ApiError } from "../api/client";
 import { householdsApi } from "../api/households";
 import { Button, Card, ErrorText, Loading } from "../components/ui";
 import { useAuth } from "../features/auth/AuthContext";
@@ -145,6 +146,82 @@ function BadLink({ error }: { error: unknown }) {
       <Link to="/" className="mt-6 block">
         <Button variant="secondary" className="w-full">
           Go to the app
+        </Button>
+      </Link>
+    </>
+  );
+}
+
+/**
+ * /invite/TOKEN — the private link in an invite email. It works only while that invite is pending
+ * and unexpired, and only for the invited email; the server checks again when they join.
+ */
+export function InviteLinkPage() {
+  const { token = "" } = useParams();
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const invite = useQuery({ queryKey: ["invite-link", token], queryFn: () => householdsApi.inviteLink(token), retry: false });
+  const join = useMutation({
+    mutationFn: () => householdsApi.acceptInviteLink(token),
+    onSuccess: (house) => {
+      queryClient.invalidateQueries();
+      lastHousehold.set(house.id);
+      navigate(`/households/${house.id}/reminders`, { replace: true });
+    },
+  });
+
+  if (loading || invite.isLoading) return <Frame><Loading /></Frame>;
+  const expired = !invite.data || (join.error instanceof ApiError && join.error.status === 404);
+  if (expired) return <Frame><ExpiredInvite signedIn={!!user} /></Frame>;
+  const i = invite.data!;
+  const state = { from: location.pathname, invite: i.household_name };
+  const wrongAccount = !!user && user.email.toLowerCase() !== i.email;
+
+  return (
+    <Frame>
+      <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">You're invited</p>
+      <h1 className="mt-1 text-2xl font-extrabold tracking-tight">Join {i.household_name}</h1>
+      <p className="mt-2 text-sm text-slate-600">
+        {i.people} {i.people === 1 ? "person lives" : "people live"} here. This invite is for <b>{i.email}</b>.
+      </p>
+      {!user ? (
+        <div className="mt-6 space-y-2">
+          <Link to="/register" state={state} className="block">
+            <Button className="w-full">Create an account to join</Button>
+          </Link>
+          <Link to="/login" state={state} className="block">
+            <Button variant="secondary" className="w-full">
+              I already have an account — log in
+            </Button>
+          </Link>
+          <p className="pt-2 text-xs text-slate-500">Use {i.email}: the invite only works for that address.</p>
+        </div>
+      ) : wrongAccount ? (
+        <p className="mt-6 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-100">
+          You're logged in as {user.email}. This invite only works for {i.email} — log out and use that account.
+        </p>
+      ) : (
+        <>
+          <Button className="mt-6 w-full" disabled={join.isPending} onClick={() => join.mutate()}>
+            {join.isPending ? "Joining…" : `Join ${i.household_name}`}
+          </Button>
+          <ErrorText error={join.error} />
+        </>
+      )}
+    </Frame>
+  );
+}
+
+function ExpiredInvite({ signedIn }: { signedIn: boolean }) {
+  return (
+    <>
+      <h1 className="text-2xl font-extrabold tracking-tight">This invite has expired</h1>
+      <p className="mt-2 text-sm text-slate-600">It was cancelled, already used, or is more than a week old. Ask your roommate to send a new one.</p>
+      <Link to={signedIn ? "/" : "/register"} className="mt-6 block">
+        <Button variant="secondary" className="w-full">
+          {signedIn ? "Go to the app" : "Sign up for Roommates"}
         </Button>
       </Link>
     </>
