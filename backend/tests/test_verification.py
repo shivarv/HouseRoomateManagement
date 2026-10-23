@@ -44,3 +44,23 @@ def test_resend_and_bad_links(client, monkeypatch):
     # A login token isn't a verification link.
     login_token = headers["Authorization"].split()[1]
     assert client.post(f"{API}/auth/verify-email", json={"token": login_token}).status_code == 400
+
+
+def test_resend_request_has_a_user_agent_and_errors_are_logged(monkeypatch, caplog):
+    import io
+    import urllib.error
+    import urllib.request
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "resend_api_key", "re_test")
+    seen = {}
+
+    def refuse(request, timeout):
+        seen["agent"] = request.get_header("User-agent")
+        raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, io.BytesIO(b'{"message":"domain not verified"}'))
+
+    monkeypatch.setattr(urllib.request, "urlopen", refuse)
+    assert email.send("bea@example.com", "Hi", "text") is False
+    assert seen["agent"] and "Python-urllib" not in seen["agent"]
+    assert "403" in caplog.text and "domain not verified" in caplog.text

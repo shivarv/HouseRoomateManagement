@@ -159,13 +159,15 @@ function EmailInvites({ house }: { house: HouseholdDetail }) {
         <div className="mt-2 space-y-1 text-sm">
           {result.results.map((r) => (
             <p key={r.email} className={r.status === "member" ? "text-slate-500" : "text-emerald-700"}>
-              {r.status === "sent" ? "✓ Emailed" : r.status === "saved" ? "✓ Invited" : "Already in the house:"} {r.email}
+              {r.status === "sent" ? "✓ Emailed" : r.status === "saved" ? "✓ Invited (not emailed)" : "Already in the house:"} {r.email}
             </p>
           ))}
           {unsent.length > 0 && (
             <p className="rounded-xl bg-amber-50 px-3 py-2 text-amber-900 ring-1 ring-amber-100">
-              Sending emails from the app isn't set up yet, so they weren't emailed — they'll see the invite when they sign up with that
-              email.{" "}
+              {result.email_enabled
+                ? "The email couldn't be sent (the server log says why)"
+                : "Sending emails from the app isn't set up yet, so they weren't emailed"}{" "}
+              — they'll still see the invite when they sign up with that email.{" "}
               <a
                 className="font-semibold underline"
                 href={`mailto:${unsent.join(",")}?subject=${encodeURIComponent(`Join ${house.name} on Roommates`)}&body=${encodeURIComponent(inviteMessage(house))}`}

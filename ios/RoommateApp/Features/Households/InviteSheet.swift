@@ -58,14 +58,14 @@ struct InviteSheet: View {
                     .disabled(parsed.isEmpty || !invalid.isEmpty || busy)
                     if let results {
                         ForEach(results.results, id: \.email) { r in
-                            Text("\(r.status == "sent" ? "✓ Emailed" : r.status == "saved" ? "✓ Invited" : "Already in the house:") \(r.email)")
+                            Text("\(r.status == "sent" ? "✓ Emailed" : r.status == "saved" ? "✓ Invited (not emailed)" : "Already in the house:") \(r.email)")
                                 .font(.footnote)
                                 .foregroundStyle(r.status == "member" ? .secondary : Color.green)
                         }
                         let unsent = results.results.filter { $0.status == "saved" }.map(\.email)
                         if !unsent.isEmpty, let url = emailURL(to: unsent, message) {
                             Link(destination: url) {
-                                Text("Emailing from the app isn't set up yet — they'll see the invite when they sign up with that email. Tap to send it from Mail.")
+                                Text("\(results.emailEnabled ? "The email couldn't be sent" : "Emailing from the app isn't set up yet") — they'll still see the invite when they sign up with that email. Tap to send it from Mail.")
                                     .font(.footnote)
                             }
                         }
