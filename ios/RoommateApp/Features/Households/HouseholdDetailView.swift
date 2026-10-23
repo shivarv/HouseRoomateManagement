@@ -23,19 +23,7 @@ struct HouseholdDetailView: View {
 
     var body: some View {
         List {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(Tab.allCases) { t in
-                        Button(t.rawValue) { tab = t }
-                            .font(.subheadline.weight(.medium))
-                            .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(tab == t ? Color.accentColor : Color.secondary.opacity(0.12), in: Capsule())
-                            .foregroundStyle(tab == t ? Color.white : Color.primary)
-                            .buttonStyle(.plain)
-                    }
-                }
-                .padding(.vertical, 4)
-            }
+            ChipTabs(items: Tab.allCases, selection: $tab)
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
 
@@ -47,10 +35,7 @@ struct HouseholdDetailView: View {
             case .today: TodaySection(model: model)
             case .activity: ActivitySection(model: model)
             case .house:
-                Picker("House", selection: $housePart) {
-                    ForEach(HousePart.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                ChipTabs(items: HousePart.allCases, selection: $housePart)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
                 switch housePart {

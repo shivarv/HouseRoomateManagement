@@ -30,12 +30,9 @@ struct HouseSettingsView: View {
 
     var body: some View {
         List {
-            Picker("Settings", selection: Binding(get: { section }, set: { next in
+            ChipTabs(items: Section.allCases, selection: Binding(get: { section }, set: { next in
                 if unsavedGroceries && next != .groceries { pendingSection = next } else { section = next }
-            })) {
-                ForEach(Section.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
+            }))
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
 
