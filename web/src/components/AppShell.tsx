@@ -136,6 +136,21 @@ export function AppShell() {
             </Button>
           </div>
         </div>
+        {noHouse && (
+          // No home yet: the tabs are there to show what's coming, but locked until I create or join one.
+          <nav aria-label="Tabs (create or join a home first)" className="mx-auto flex max-w-4xl snap-x gap-1 overflow-x-auto px-4 py-2 [scrollbar-width:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden">
+            {["☀️ My day", ...HOUSE_TABS.map((t) => t.label), "🔔 Notifications"].map((label) => (
+              <span
+                key={label}
+                aria-disabled="true"
+                title="Create or join a home first"
+                className="cursor-not-allowed select-none whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-medium text-slate-400 opacity-60"
+              >
+                🔒 {label}
+              </span>
+            ))}
+          </nav>
+        )}
         {!noHouse && (
           <div className="mx-auto flex max-w-4xl items-center">
             <div className="relative min-w-0 flex-1">
@@ -167,7 +182,7 @@ export function AppShell() {
                     Households
                   </NavLink>
                 )}
-                <NavLink to="/notifications" className={link} title="Help requests">
+                <NavLink to="/notifications" className={link} title="Notifications and help requests">
                   <span className="relative">
                     🔔 Notifications
                     {waiting > 0 && (
@@ -176,9 +191,6 @@ export function AppShell() {
                       </span>
                     )}
                   </span>
-                </NavLink>
-                <NavLink to="/help" className={link}>
-                  🙋 Help
                 </NavLink>
               </nav>
               <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-linear-to-l from-white/90 to-transparent md:hidden" />

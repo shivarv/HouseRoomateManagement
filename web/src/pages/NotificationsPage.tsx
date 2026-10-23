@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { ApiError } from "../api/client";
 import { Badge, Button, Empty, ErrorText, Loading, PageTitle } from "../components/ui";
 import { HelpForm } from "../features/help/HelpForm";
@@ -22,84 +23,60 @@ function useNotices() {
   return { notices, setNotice };
 }
 
+type Filter = "all" | "mine";
+
 /**
- * 🔔 Notifications: everything asked in my houses. Others' requests can be marked done;
- * my own only show Withdraw (editing and marking done live on Help requests).
+ * 🔔 Notifications: everything asked in my houses, with Ask for help on top. "All" is the feed:
+ * others' requests can be marked done, my own only withdrawn. "Mine" is what I asked for, where I
+ * can also edit them and mark them done.
  */
 export function NotificationsPage() {
   const households = useHouseholds();
   const help = useHelpRequests();
   const { notices, setNotice } = useNotices();
-
-  if (households.isLoading || help.isLoading) return <Loading />;
-  const all = help.data ?? [];
-  const open = all.filter((r) => r.status === "open");
-  const recentlyDone = all.filter((r) => r.status === "done");
-  const multiHouse = (households.data?.length ?? 0) > 1;
-  const card = (r: HelpRequest) => (
-    <HelpCard
-      key={r.id}
-      req={r}
-      inFeed
-      showHousehold={multiHouse}
-      notice={notices[r.id]}
-      setNotice={(n) => setNotice(r.id, n)}
-    />
-  );
-
-  return (
-    <>
-      <PageTitle title="Notifications" subtitle="What your roommates need, and what you've asked for. Help out, then mark it done." />
-      <ErrorText error={help.error} />
-      <div className="space-y-8">
-        <section className="space-y-3">
-          <h2 className="section-title">Needs a hand · {open.length}</h2>
-          {open.length === 0 ? <Empty>Nobody needs help right now 🎉</Empty> : open.map(card)}
-        </section>
-        {recentlyDone.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="section-title">Recently done</h2>
-            {recentlyDone.map(card)}
-          </section>
-        )}
-      </div>
-    </>
-  );
-}
-
-/** 🙋 Help requests: what I asked for and where each one stands, plus asking for something new. */
-export function HelpRequestsPage() {
-  const households = useHouseholds();
-  const help = useHelpRequests();
-  const { notices, setNotice } = useNotices();
+  const [params, setParams] = useSearchParams();
+  const filter: Filter = params.get("filter") === "mine" ? "mine" : "all";
   const [asking, setAsking] = useState(false);
   const [editing, setEditing] = useState<HelpRequest | null>(null);
 
   if (households.isLoading || help.isLoading) return <Loading />;
-  const mine = (help.data ?? []).filter((r) => r.is_mine);
-  const open = mine.filter((r) => r.status === "open");
-  const done = mine.filter((r) => r.status === "done");
+  const all = help.data ?? [];
+  const shown = filter === "mine" ? all.filter((r) => r.is_mine) : all;
+  const open = shown.filter((r) => r.status === "open");
+  const done = shown.filter((r) => r.status === "done");
   const multiHouse = (households.data?.length ?? 0) > 1;
   const noHouse = households.data?.length === 0;
+  const mineOpen = all.filter((r) => r.is_mine && r.status === "open").length;
   const card = (r: HelpRequest) => (
     <HelpCard
       key={r.id}
       req={r}
+      inFeed={filter === "all"}
       showHousehold={multiHouse}
-      onEdit={setEditing}
+      onEdit={filter === "mine" ? setEditing : undefined}
       notice={notices[r.id]}
       setNotice={(n) => setNotice(r.id, n)}
     />
+  );
+  const tab = (value: Filter, label: string) => (
+    <button
+      key={value}
+      onClick={() => setParams(value === "all" ? {} : { filter: value }, { replace: true })}
+      className={`rounded-xl px-3.5 py-1.5 text-sm font-semibold transition ${
+        filter === value ? "bg-linear-to-r from-indigo-500 to-fuchsia-500 text-white shadow-md shadow-indigo-500/30" : "text-slate-600 hover:bg-white/70"
+      }`}
+    >
+      {label}
+    </button>
   );
 
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageTitle title="Help requests" subtitle="What you asked for, and whether someone has done it." />
-        {!noHouse && !asking && !editing && <Button onClick={() => setAsking(true)}>+ Ask for help</Button>}
+        <PageTitle title="Notifications" subtitle="What your roommates need, and what you've asked for. Help out, then mark it done." />
+        {!noHouse && !asking && !editing && <Button onClick={() => setAsking(true)}>🙋 Ask for help</Button>}
       </div>
       <ErrorText error={help.error} />
-
       {noHouse && <Empty>Join a household first, then you can ask your roommates for help.</Empty>}
       {(asking || editing) && households.data && (
         <div className="mb-8">
@@ -116,22 +93,30 @@ export function HelpRequestsPage() {
       )}
 
       {!noHouse && (
-        <div className="space-y-8">
-          <section className="space-y-3">
-            <h2 className="section-title">Waiting for help · {open.length}</h2>
-            {open.length === 0 ? (
-              <Empty>Nothing open. Use “+ Ask for help” when you need a hand.</Empty>
-            ) : (
-              open.map(card)
-            )}
-          </section>
-          {done.length > 0 && (
+        <>
+          <div className="mb-6 inline-flex gap-1 rounded-2xl bg-slate-100/80 p-1">
+            {tab("all", "All")}
+            {tab("mine", mineOpen ? `Asked by me · ${mineOpen}` : "Asked by me")}
+          </div>
+          <div className="space-y-8">
             <section className="space-y-3">
-              <h2 className="section-title">Done · {done.length}</h2>
-              {done.map(card)}
+              <h2 className="section-title">
+                {filter === "mine" ? "Waiting for help" : "Needs a hand"} · {open.length}
+              </h2>
+              {open.length === 0 ? (
+                <Empty>{filter === "mine" ? "Nothing open. Use “🙋 Ask for help” when you need a hand." : "Nobody needs help right now 🎉"}</Empty>
+              ) : (
+                open.map(card)
+              )}
             </section>
-          )}
-        </div>
+            {done.length > 0 && (
+              <section className="space-y-3">
+                <h2 className="section-title">{filter === "mine" ? `Done · ${done.length}` : "Recently done"}</h2>
+                {done.map(card)}
+              </section>
+            )}
+          </div>
+        </>
       )}
     </>
   );
@@ -146,7 +131,7 @@ function HelpCard({
   setNotice,
 }: {
   req: HelpRequest;
-  /** On Notifications: my own requests can only be withdrawn there, not marked done. */
+  /** The "All" feed: my own requests can only be withdrawn there, not marked done. */
   inFeed?: boolean;
   showHousehold: boolean;
   onEdit?: (r: HelpRequest) => void;

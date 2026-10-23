@@ -6,7 +6,7 @@ import { AddHouseholdPage, HouseholdsPage } from "./pages/HouseholdsPage";
 import { MyDayPage } from "./pages/MyDayPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SetupWizardPage } from "./pages/SetupWizardPage";
-import { HelpRequestsPage, NotificationsPage } from "./pages/NotificationsPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
 import { ActivityTab } from "./pages/household/ActivityTab";
 import { ChatTab } from "./pages/household/ChatTab";
 import { ChoresTab } from "./pages/household/ChoresTab";
@@ -47,7 +47,8 @@ export default function App() {
         <Route path="households/new/setup" element={<SetupWizardPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="profile" element={<ProfilePage />} />
-        <Route path="help" element={<HelpRequestsPage />} />
+        {/* Help requests now live in Notifications ("Asked by me"). */}
+        <Route path="help" element={<Navigate to="/notifications?filter=mine" replace />} />
         <Route path="households/:householdId" element={<HouseholdLayout />}>
           {/* "Today" was merged into My day. */}
           <Route index element={<Navigate to="/" replace />} />
