@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { Outlet, useLocation, useOutletContext, useParams } from "react-router";
 import { ErrorText, Loading } from "../../components/ui";
-import { useHousehold, useHouseholds, useSwitchHousehold } from "../../features/households/hooks";
+import { useHousehold } from "../../features/households/hooks";
 import { lastHousehold } from "../../lib/lastHousehold";
 import type { HouseholdDetail } from "../../types/api";
 
@@ -33,8 +33,6 @@ const TABS: Record<string, { title: string; about: (house: string) => string }> 
 export function HouseholdLayout() {
   const { householdId = "" } = useParams();
   const household = useHousehold(householdId);
-  const households = useHouseholds();
-  const switchTo = useSwitchHousehold();
   const { pathname } = useLocation();
 
   // Remember this house (e.g. opened from a link) so the tabs open it next time.
@@ -48,7 +46,6 @@ export function HouseholdLayout() {
 
   const segment = pathname.split("/")[3] ?? "";
   const tab = TABS[segment] ?? TABS.reminders;
-  const multiHouse = (households.data?.length ?? 0) > 1;
 
   return (
     <>
@@ -58,22 +55,8 @@ export function HouseholdLayout() {
         <div className="pointer-events-none absolute -bottom-24 left-10 h-48 w-48 rounded-full bg-sky-300/30 blur-2xl" />
         <div className="relative">
           <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-white/75">
-            {multiHouse ? (
-              <select
-                aria-label="Switch household"
-                value={h.id}
-                onChange={(e) => switchTo(e.target.value)}
-                className="select-on-dark cursor-pointer rounded-lg bg-white/15 px-2 py-1 font-semibold text-white outline-none ring-1 ring-white/30 transition hover:bg-white/25 [&>option]:text-slate-900"
-              >
-                {households.data!.map((other) => (
-                  <option key={other.id} value={other.id}>
-                    {other.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span>🏠 {h.name}</span>
-            )}
+            {/* Which house: changed only from the house picker at the very top. */}
+            <span>🏠 {h.name}</span>
             <span>
               · 👥 {h.members.length} {h.members.length === 1 ? "person" : "people"}
             </span>

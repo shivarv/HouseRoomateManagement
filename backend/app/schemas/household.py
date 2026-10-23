@@ -102,6 +102,8 @@ class HouseholdOut(BaseModel):
     created_by_me: bool
     my_member_id: uuid.UUID
     my_role: Literal["admin", "member"]
+    # Why I can't delete this home (None: I can, unless it's my last home as admin)
+    delete_blocked: str | None = None
 
 
 class HouseholdDetail(HouseholdOut):

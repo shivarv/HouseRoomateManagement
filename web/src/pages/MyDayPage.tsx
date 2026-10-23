@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Card, Empty, ErrorText, Loading, PageTitle } from "../components/ui";
 import { useAuth } from "../features/auth/AuthContext";
@@ -6,7 +5,7 @@ import { OpenChoreCard } from "../features/chores/OpenChoreCard";
 import { SwapRequests } from "../features/chores/SwapRequests";
 import { TaskCard } from "../features/chores/TaskCard";
 import { useMySwaps, useMyTasksToday } from "../features/chores/hooks";
-import { useDefaultHousehold, useHousehold, useHouseholds, useSwitchHousehold } from "../features/households/hooks";
+import { useDefaultHousehold, useHousehold, useHouseholds } from "../features/households/hooks";
 import { ChoresTab } from "./household/ChoresTab";
 import { CurrentHouseholdProvider } from "./household/HouseholdLayout";
 import { formatDay, localIsoDate } from "../lib/format";
@@ -214,43 +213,14 @@ function dayWord(isoDate: string): string {
 }
 
 /** The house the tabs act on: name, switcher (if I'm in several), invite code, add another. */
+/** Which house My day is showing. Switched only from the house picker at the very top. */
 function HouseCard() {
-  const { households, house } = useDefaultHousehold();
-  const switchTo = useSwitchHousehold();
-  const [copied, setCopied] = useState(false);
+  const { house } = useDefaultHousehold();
   if (!house) return null;
-  const list = households.data ?? [];
-
-  const copyCode = async () => {
-    await navigator.clipboard?.writeText(house.invite_code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
   return (
     <div className="rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25 backdrop-blur">
-      <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-widest text-white/70">
-        🏠 Household
-      </div>
-      {list.length > 1 ? (
-        <select
-          aria-label="Switch household"
-          value={house.id}
-          onChange={(e) => switchTo(e.target.value)}
-          className="select-on-dark mt-0.5 cursor-pointer rounded-lg bg-white/10 py-0.5 pr-1 text-lg font-bold text-white outline-none ring-1 ring-white/30 transition hover:bg-white/20 [&>option]:text-slate-900"
-        >
-          {list.map((h) => (
-            <option key={h.id} value={h.id}>
-              {h.name}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <p className="text-lg font-bold">{house.name}</p>
-      )}
-      <button onClick={copyCode} title="Copy invite code" className="mt-0.5 text-xs text-white/80 transition hover:text-white">
-        {copied ? "Copied!" : <>Invite code <span className="font-mono font-semibold tracking-wider">{house.invite_code}</span></>}
-      </button>
+      <div className="text-[11px] font-medium uppercase tracking-widest text-white/70">🏠 Household</div>
+      <p className="text-lg font-bold">{house.name}</p>
     </div>
   );
 }

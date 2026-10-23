@@ -5,6 +5,10 @@ and `/openapi.json`. This file is the human-readable plan both clients build aga
 
 Status: **implemented** for health, auth, households, members, chores and tasks. Expenses are still planned.
 
+**Errors:** every response has an `X-Request-ID` header (`req_…`). An unexpected server error is a 500
+`{ detail: "Something went wrong on the server (ref req_…)", error_id }`; it's saved in `error_logs`
+(30 days) with the user, house and stack — read it with `python -m scripts.errors --id req_…`.
+
 ## Health
 
 | Method | Path      | Auth | Description              |
@@ -30,7 +34,7 @@ Status: **implemented** for health, auth, households, members, chores and tasks.
 | POST   | `/households`                         | Create household: `{ name, address, timezone? }`. `address` required. 409 if I already created a house with that name (case-insensitive; other people's houses don't count) |
 | GET    | `/households/{id}`                    | Household detail + members   |
 | PATCH  | `/households/{id}`                    | Change name / address / timezone (admin). Renaming follows the same per-creator uniqueness |
-| DELETE | `/households/{id}`                    | Admins: delete the home and everything in it, for everyone → 204. The last home you're an admin of can't be deleted (409) |
+| DELETE | `/households/{id}`                    | Admins: delete the home and everything in it, for everyone → 204. Allowed when nobody else with an account lives there, or another admin does; and the last home you're an admin of can't be deleted (409, with the reason). Every household carries `delete_blocked`: why it can't be deleted, or `null` |
 | GET    | `/invites/{code}`                     | Preview: household + names not yet claimed |
 | POST   | `/invites/{code}/accept`              | Join: `{ member_id }` claims a name, `{}` joins as new person |
 
