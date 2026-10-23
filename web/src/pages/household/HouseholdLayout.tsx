@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { Link, Outlet, useOutletContext, useParams } from "react-router";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { Outlet, useOutletContext, useParams, useSearchParams } from "react-router";
 import { ErrorText, Loading } from "../../components/ui";
+import { InvitePanel } from "../../features/households/InvitePanel";
 import { useHousehold, useHouseholds, useSwitchHousehold } from "../../features/households/hooks";
 import { lastHousehold } from "../../lib/lastHousehold";
 import type { HouseholdDetail } from "../../types/api";
@@ -11,6 +12,12 @@ export function HouseholdLayout() {
   const households = useHouseholds();
   const switchTo = useSwitchHousehold();
   const [copied, setCopied] = useState(false);
+  // Just created with the guided setup (?invite=1): start with the invite panel open.
+  const [params, setParams] = useSearchParams();
+  const [inviting, setInviting] = useState(params.get("invite") === "1");
+  useEffect(() => {
+    if (params.get("invite") === "1") setParams({}, { replace: true }); // a reload shouldn't reopen it
+  }, [params, setParams]);
 
   // Remember this house (e.g. opened from a link) so the tabs open it next time.
   useEffect(() => {
@@ -51,9 +58,6 @@ export function HouseholdLayout() {
               ) : (
                 <span>Household</span>
               )}
-              <Link to="/households/new" className="rounded-lg px-2 py-1 normal-case tracking-normal text-white/80 transition hover:bg-white/15 hover:text-white">
-                + New or join
-              </Link>
             </div>
             <h1 className="mt-1 text-3xl font-extrabold tracking-tight">{h.name}</h1>
             {h.address && <p className="mt-0.5 text-sm text-white/80">📍 {h.address}</p>}
@@ -72,23 +76,46 @@ export function HouseholdLayout() {
               </span>
             </div>
           </div>
-          <button
-            onClick={copyCode}
-            className="rounded-2xl bg-white/15 px-4 py-2 text-left ring-1 ring-white/30 backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/25"
-            title="Copy invite code"
-          >
-            <span className="block text-[11px] font-medium uppercase tracking-widest text-white/70">
-              {copied ? "Copied!" : "Invite code"}
-            </span>
-            <span className="font-mono text-lg font-semibold tracking-wider">{h.invite_code}</span>
-          </button>
+          <div className="flex flex-wrap items-stretch gap-2">
+            <button
+              onClick={copyCode}
+              className="rounded-2xl bg-white/15 px-4 py-2 text-left ring-1 ring-white/30 backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/25"
+              title="Copy invite code"
+            >
+              <span className="block text-[11px] font-medium uppercase tracking-widest text-white/70">
+                {copied ? "Copied!" : "Invite code"}
+              </span>
+              <span className="font-mono text-lg font-semibold tracking-wider">{h.invite_code}</span>
+            </button>
+            <button
+              onClick={() => setInviting((v) => !v)}
+              className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-indigo-700 shadow-md transition hover:-translate-y-0.5"
+            >
+              ✉️ Invite people
+            </button>
+          </div>
         </div>
       </div>
+      {inviting && (
+        <div className="mb-6">
+          <InvitePanel house={h} onClose={() => setInviting(false)} />
+        </div>
+      )}
       <Outlet context={h} />
     </>
   );
 }
 
+/** For house screens shown outside a house page (e.g. Chores inside My day). */
+const CurrentHousehold = createContext<HouseholdDetail | null>(null);
+
+export function CurrentHouseholdProvider({ household, children }: { household: HouseholdDetail; children: ReactNode }) {
+  return <CurrentHousehold.Provider value={household}>{children}</CurrentHousehold.Provider>;
+}
+
+/** The house a house screen is about: from a surrounding provider, else the house page's outlet. */
 export function useCurrentHousehold() {
-  return useOutletContext<HouseholdDetail>();
+  const provided = useContext(CurrentHousehold);
+  const fromPage = useOutletContext<HouseholdDetail>();
+  return provided ?? fromPage;
 }

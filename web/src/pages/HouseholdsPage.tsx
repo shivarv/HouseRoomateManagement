@@ -1,10 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { useState } from "react";
+import { Link, Navigate, useNavigate } from "react-router";
 import { householdsApi } from "../api/households";
 import { Button, Card, ErrorText, Input, Loading, PageTitle } from "../components/ui";
-import { useAcceptInvite, useCreateHousehold, useHouseholds } from "../features/households/hooks";
-import { browserTimezone } from "../lib/format";
+import { useAcceptInvite, useHouseholds } from "../features/households/hooks";
 import { lastHousehold } from "../lib/lastHousehold";
 
 /** /households: with a house, My day is home; with none, set one up. */
@@ -15,7 +14,7 @@ export function HouseholdsPage() {
   return <AddHouseholdPage />;
 }
 
-/** Create a new house or join one with an invite code (/households/new, or when I have none). */
+/** Create a new house (the guided setup) or join one with an invite code (/households/new, or when I have none). */
 export function AddHouseholdPage() {
   const households = useHouseholds();
   const hasHouses = (households.data?.length ?? 0) > 0;
@@ -27,45 +26,25 @@ export function AddHouseholdPage() {
       />
       <ErrorText error={households.error} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <CreateHousehold />
+        {/* Creating always goes through the guided setup, so every new house starts complete. */}
+        <Link
+          to="/households/new/setup"
+          className="card-hover flex flex-col rounded-2xl border border-indigo-200 bg-linear-to-br from-indigo-50 to-fuchsia-50 p-5 shadow-sm ring-1 ring-indigo-100"
+        >
+          <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-indigo-500 to-fuchsia-500 text-2xl text-white shadow-md">✨</span>
+          <span className="flex items-center gap-2 font-semibold text-indigo-900">
+            Create a new home <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Recommended</span>
+          </span>
+          <span className="mt-1 text-sm text-slate-600">
+            A few quick steps: your roommates, chores, groceries and bills, prefilled from a template. You'll be its admin.
+          </span>
+          <span className="mt-4 inline-flex w-fit items-center gap-1 rounded-xl bg-linear-to-r from-indigo-500 to-fuchsia-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-indigo-500/30">
+            Start setup →
+          </span>
+        </Link>
         <JoinHousehold />
       </div>
     </>
-  );
-}
-
-function CreateHousehold() {
-  const navigate = useNavigate();
-  const create = useCreateHousehold();
-  const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
-  const [timezone, setTimezone] = useState(browserTimezone());
-
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    create.mutate({ name, address, timezone }, { onSuccess: (h) => (lastHousehold.set(h.id), navigate("/")) });
-  };
-
-  return (
-    <Card>
-      <h2 className="mb-1 font-semibold">Create a household</h2>
-      <p className="mb-4 text-sm text-slate-500">Comes with Cooking, Clean hall and Dispose garbage.</p>
-      <form onSubmit={onSubmit} className="space-y-3">
-        <Input label="Name" placeholder="e.g. Maple Street House" value={name} onChange={(e) => setName(e.target.value)} required />
-        <Input
-          label="Address"
-          placeholder="e.g. 12 Maple Street, Boston, MA"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          required
-          maxLength={300}
-        />
-        <Input label="Timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} required />
-        <p className="text-xs text-slate-500">You can't have two houses with the same name.</p>
-        <ErrorText error={create.error} />
-        <Button type="submit" disabled={create.isPending}>Create</Button>
-      </form>
-    </Card>
   );
 }
 

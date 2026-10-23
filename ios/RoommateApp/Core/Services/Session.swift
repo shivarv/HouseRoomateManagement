@@ -40,6 +40,11 @@ final class Session {
         Task { _ = try? await client.setLastHousehold(id) }
     }
 
+    /// After editing my profile.
+    func updateUser(_ updated: User) {
+        user = updated
+    }
+
     func signOut() {
         client.token = nil
         user = nil

@@ -5,7 +5,9 @@ import Foundation
 struct User: Codable, Identifiable, Hashable {
     let id: UUID
     let email: String
-    let name: String
+    let firstName: String
+    let lastName: String  // may be empty: then it's left out of `name`
+    let name: String  // "First Last"
     /// The house the app opens on. May be one I've since left; then fall back to my first.
     var lastHouseholdId: UUID?
 }
@@ -24,12 +26,26 @@ struct MemberBrief: Codable, Identifiable, Hashable {
     let displayName: String
 }
 
+/// added: by name only · invited: an email invite is waiting · joined: has an account
+enum MemberStatus: String, Codable {
+    case added, invited, joined
+    var label: String { rawValue.capitalized }
+}
+
 struct Member: Codable, Identifiable, Hashable {
     let id: UUID
     let displayName: String
     let role: Role
     let isActive: Bool
     let hasAccount: Bool
+    let status: MemberStatus
+    let firstName: String  // from their account; empty until they join
+    let lastName: String
+    let email: String?  // their account's once joined, else what an admin added
+    let phone: String?
+
+    /// "Beatrice Smith" from their account (an empty last name is left out).
+    var fullName: String { [firstName, lastName].filter { !$0.isEmpty }.joined(separator: " ") }
 
     var brief: MemberBrief { MemberBrief(id: id, displayName: displayName) }
 }
@@ -461,12 +477,14 @@ struct Bill: Decodable, Identifiable, Hashable {
     let current: BillPeriod
 
     static let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    /// Stored as 31; the backend uses each month's own last day.
+    static let lastDay = 31
 
     var dueText: String {
         switch frequency {
         case .daily: "Every day"
         case .weekly: "Every \(Self.weekdays[max(0, min(6, dueDay - 1))])"
-        case .monthly: "Monthly on day \(dueDay)"
+        case .monthly: dueDay > 28 ? "Monthly on the last day" : "Monthly on day \(dueDay)"
         }
     }
 }
@@ -488,5 +506,109 @@ enum Money {
         guard !cleaned.isEmpty else { return nil }
         guard let value = Double(cleaned), value >= 0 else { return -1 }
         return Int((value * 100).rounded())
+    }
+}
+
+// MARK: - Guided set-up of a new house
+
+struct SetupChore: Codable, Hashable {
+    var name: String
+    var frequency: Frequency
+    var assignmentMode: AssignmentMode
+    var people: [String]? = nil  // who takes turns, by name; nil = everyone
+}
+
+struct SetupGrocery: Codable, Hashable {
+    var name: String
+    var categoryKey: String
+}
+
+struct SetupBill: Codable, Hashable {
+    var name: String
+    var icon: String
+    var payerMode: PayerMode
+    var payerName: String?  // payerMode .one: me or a roommate, by name
+    var frequency: BillFrequency
+    var dueDay: Int
+    var amountType: AmountType
+    var amountCents: Int?
+}
+
+struct SetupCategory: Decodable, Hashable, Identifiable {
+    let key: String
+    let label: String
+    let icon: String
+    var id: String { key }
+}
+
+/// Defaults to prefill the set-up with, up to `maxItems` of each.
+struct SetupTemplate: Decodable {
+    let maxItems: Int
+    let chores: [SetupChore]
+    let groceries: [SetupGrocery]
+    let bills: [SetupBill]
+    let categories: [SetupCategory]
+}
+
+/// Everything a new house starts with, created in one go.
+struct HouseholdSetup: Encodable {
+    let name: String
+    let address: String
+    let timezone: String
+    let roommates: [String]  // besides me
+    let chores: [SetupChore]
+    let groceries: [SetupGrocery]
+    let bills: [SetupBill]
+    let currency: String
+}
+
+// MARK: - Invites
+
+struct EmailInvite: Decodable, Identifiable, Hashable {
+    let id: UUID
+    let email: String
+    let invitedBy: MemberBrief?
+    let createdAt: String
+    let lastSentAt: String?  // nil: saved, but not emailed (no email service set up)
+    let canCancel: Bool
+}
+
+struct EmailInviteResult: Decodable, Hashable {
+    let email: String
+    let status: String  // sent · saved (emailing isn't set up) · member (already in the house)
+}
+
+struct EmailInviteResults: Decodable {
+    let results: [EmailInviteResult]
+    let link: String
+    let emailEnabled: Bool
+}
+
+/// A house that invited my email and I haven't joined yet.
+struct MyInvite: Decodable, Identifiable, Hashable {
+    let householdName: String
+    let inviteCode: String
+    let invitedBy: String?
+    let createdAt: String
+    var id: String { inviteCode }
+}
+
+enum InviteLink {
+    /// The web app's join page (`/join/CODE`, or `?as=MEMBER` to match someone added by name).
+    static func url(code: String, member: Member? = nil) -> String {
+        let base = (Bundle.main.object(forInfoDictionaryKey: "WEB_BASE_URL") as? String) ?? "http://localhost:5173"
+        let link = "\(base)/join/\(code)"
+        return member.map { "\(link)?as=\($0.id.uuidString.lowercased())" } ?? link
+    }
+
+    static func message(house: String, code: String, member: Member? = nil) -> String {
+        let hi = member.map { "Hi \($0.displayName)! " } ?? "Hi! "
+        return "\(hi)Join our home “\(house)” on Roommates to share chores, groceries and bills: \(url(code: code, member: member))\n\n(Or sign up and enter invite code \(code).)"
+    }
+
+    /// An invite code from what someone pasted: the code itself, or a whole link ending in it.
+    static func code(from text: String) -> String {
+        let last = text.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "/").last.map(String.init) ?? ""
+        return (last.split(separator: "?").first.map(String.init) ?? "").uppercased()
     }
 }

@@ -45,5 +45,11 @@ class HouseholdMember(UUIDPrimaryKey, Timestamps, Base):
     )
     role: Mapped[str] = mapped_column(String(16), default="member")  # 'admin' | 'member'
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Optional contact details an admin can add for someone who hasn't joined yet (to invite them,
+    # and later for notifications). Once they join, their account's email is used.
+    email: Mapped[str | None] = mapped_column(String(320))  # lowercased
+    phone: Mapped[str | None] = mapped_column(String(32))
 
     household: Mapped[Household] = relationship(back_populates="members")
+    # The account, once they've joined: their first and last name show in people lists.
+    user: Mapped["User | None"] = relationship("User", lazy="joined")  # noqa: F821

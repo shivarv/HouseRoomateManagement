@@ -10,10 +10,8 @@ struct RemindersView: View {
     var body: some View {
         NavigationStack {
             List {
-                if model.households.count > 1 {
-                    Picker("House", selection: $model.householdId) {
-                        ForEach(model.households) { Text($0.name).tag(Optional($0.id)) }
-                    }
+                if !model.households.isEmpty {
+                    HousePicker(households: model.households, selection: $model.householdId) { await model.load() }
                     .onChange(of: model.householdId) { _, id in
                         if let id { session.rememberHousehold(id) }
                         Task { await model.load() }

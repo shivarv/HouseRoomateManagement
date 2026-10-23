@@ -23,7 +23,8 @@ ADDRESS = "12 Demo Street"
 def _user(db, name: str, email: str) -> User:
     user = db.scalar(select(User).where(User.email == email))
     if user is None:
-        user = User(name=name, email=email, password_hash=hash_password(PASSWORD))
+        first, _, last = name.partition(" ")
+        user = User(name=name, first_name=first, last_name=last, email=email, password_hash=hash_password(PASSWORD))
         db.add(user)
         db.commit()
     return user

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.household import (
@@ -10,12 +10,17 @@ from app.schemas.household import (
     HouseholdUpdate,
     InviteAccept,
     InvitePreview,
+    InvitePublic,
     MemberBrief,
     MemberCreate,
     MemberOut,
     MemberUpdate,
 )
+from app.schemas.invite import EmailInviteOut, EmailInviteResults, InviteEmails, MyInvite
+from app.schemas.setup import HouseholdSetup, SetupTemplate
 from app.services import households as svc
+from app.services import invites as invite_svc
+from app.services import setup as setup_svc
 
 router = APIRouter(tags=["households"])
 
@@ -32,10 +37,26 @@ def create_household(body: HouseholdCreate, db: DbSession, user: CurrentUser):
     )
 
 
+@router.get("/households/setup/template", response_model=SetupTemplate)
+def setup_template(user: CurrentUser):
+    """Defaults to prefill the guided set-up with (up to `max_items` of each list)."""
+    return setup_svc.template()
+
+
+@router.post("/households/setup", response_model=HouseholdOut, status_code=status.HTTP_201_CREATED)
+def setup_household(body: HouseholdSetup, db: DbSession, user: CurrentUser):
+    """A new house with its people, chores, quick-add groceries and bills, all in one go.
+
+    Anyone signed in can do this; they become the new house's admin.
+    """
+    return svc.household_out(setup_svc.create(db, user, body))
+
+
 @router.get("/households/{household_id}", response_model=HouseholdDetail)
 def get_household(household_id: uuid.UUID, db: DbSession, user: CurrentUser):
     me = svc.require_membership(db, household_id, user)
-    members = [svc.member_out(m) for m in me.household.members if m.is_active]
+    invited = svc.invited_emails(db, household_id)
+    members = [svc.member_out(m, invited) for m in me.household.members if m.is_active]
     return HouseholdDetail(**svc.household_out(me).model_dump(), members=members)
 
 
@@ -48,10 +69,18 @@ def update_household(
     return svc.household_out(me)
 
 
+@router.delete("/households/{household_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_household(household_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    """Admins only, for everyone in it. Not the last home you're an admin of (409)."""
+    me = svc.require_membership(db, household_id, user, admin=True)
+    svc.delete_household(db, me, user)
+
+
 @router.get("/households/{household_id}/members", response_model=list[MemberOut])
 def list_members(household_id: uuid.UUID, db: DbSession, user: CurrentUser):
     me = svc.require_membership(db, household_id, user)
-    return [svc.member_out(m) for m in me.household.members if m.is_active]
+    invited = svc.invited_emails(db, household_id)
+    return [svc.member_out(m, invited) for m in me.household.members if m.is_active]
 
 
 @router.post(
@@ -72,8 +101,14 @@ def update_member(member_id: uuid.UUID, body: MemberUpdate, db: DbSession, user:
         member.display_name = body.display_name.strip()
     if body.role is not None and member.id != me.id:
         member.role = body.role
+    if body.email and member.user_id is not None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Their email comes from their account")
+    if body.email is not None and member.user_id is None:
+        member.email = body.email.lower() or None
+    if body.phone is not None:
+        member.phone = body.phone.strip() or None
     db.commit()
-    return svc.member_out(member)
+    return svc.member_out(member, svc.invited_emails(db, member.household_id))
 
 
 @router.delete("/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -81,6 +116,44 @@ def remove_member(member_id: uuid.UUID, db: DbSession, user: CurrentUser):
     member = svc.get_member(db, member_id)
     me = svc.require_membership(db, member.household_id, user, admin=True)
     svc.deactivate_member(db, member, acting=me)
+
+
+@router.post("/households/{household_id}/email-invites", response_model=EmailInviteResults)
+def invite_by_email(household_id: uuid.UUID, body: InviteEmails, db: DbSession, user: CurrentUser):
+    """Anyone in the house. Each address is saved as pending and emailed when email is set up."""
+    me = svc.require_membership(db, household_id, user)
+    return invite_svc.invite(db, me, [str(e) for e in body.emails])
+
+
+@router.get("/households/{household_id}/email-invites", response_model=list[EmailInviteOut])
+def pending_invites(household_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    me = svc.require_membership(db, household_id, user)
+    return invite_svc.pending(db, me)
+
+
+@router.delete("/email-invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_invite(invite_id: uuid.UUID, db: DbSession, user: CurrentUser):
+    row = invite_svc.get(db, invite_id)
+    me = svc.require_membership(db, row.household_id, user)
+    invite_svc.cancel(db, row, me)
+
+
+@router.get("/me/invites", response_model=list[MyInvite])
+def my_invites(db: DbSession, user: CurrentUser):
+    """Houses that invited my email and I haven't joined: shown on the welcome screen."""
+    return invite_svc.mine(db, user)
+
+
+@router.get("/invites/{code}/public", response_model=InvitePublic)
+def public_invite(code: str, db: DbSession):
+    """No sign-in needed: an invite link's landing page shows the house name and how many live there.
+
+    Names stay private until signed in (see GET /invites/{code}).
+    """
+    household = svc.find_by_invite(db, code)
+    return InvitePublic(
+        household_name=household.name, people=sum(1 for m in household.members if m.is_active)
+    )
 
 
 @router.get("/invites/{code}", response_model=InvitePreview)

@@ -66,8 +66,16 @@ export function useRemoveMember() {
 export function useUpdateMember() {
   const invalidate = useInvalidateEverything();
   return useMutation({
-    mutationFn: ({ id, display_name, role }: { id: string; display_name?: string; role?: "admin" | "member" }) =>
-      householdsApi.updateMember(id, { display_name, role }),
+    mutationFn: ({
+      id,
+      ...changes
+    }: {
+      id: string;
+      display_name?: string;
+      role?: "admin" | "member";
+      email?: string;
+      phone?: string;
+    }) => householdsApi.updateMember(id, changes),
     onSuccess: invalidate,
   });
 }
@@ -90,4 +98,10 @@ export function useSwitchHousehold() {
     lastHousehold.set(id);
     if (onHousePage) navigate(`/households/${id}/${match.params["*"] ?? ""}`);
   };
+}
+
+/** Deleting a house touches everything (lists, tasks, bills), so refetch all. */
+export function useDeleteHousehold() {
+  const invalidate = useInvalidateEverything();
+  return useMutation({ mutationFn: householdsApi.remove, onSuccess: invalidate });
 }

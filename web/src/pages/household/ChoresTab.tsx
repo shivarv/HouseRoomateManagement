@@ -116,10 +116,11 @@ function ChoreCard({ chore, isAdmin }: { chore: Chore; isAdmin: boolean }) {
         <Badge>{chore.frequency === "weekly" ? "Weekly" : "Daily"}</Badge>
         <Badge tone={isOpen ? "green" : "slate"}>{isOpen ? "Anyone" : "Rotation"}</Badge>
         {isOpen && chore.target_per_week && <Badge>{chore.target_per_week}× / week</Badge>}
+        {!isOpen && <WhoTakesTurns chore={chore} everyone={household.members} />}
         {!chore.is_active && <Badge tone="amber">Paused</Badge>}
         {isAdmin && mode === "view" && (
           <div className="ml-auto flex flex-wrap gap-2">
-            {!isOpen && <Button variant="secondary" onClick={() => setMode("order")}>Edit order</Button>}
+            {!isOpen && <Button variant="secondary" onClick={() => setMode("order")}>Edit people & order</Button>}
             <Button variant="secondary" onClick={() => setMode("settings")}>Settings</Button>
             <Button variant="ghost" disabled={update.isPending} onClick={() => update.mutate({ id: chore.id, is_active: !chore.is_active })}>
               {chore.is_active ? "Pause" : "Resume"}
@@ -163,6 +164,22 @@ function ChoreCard({ chore, isAdmin }: { chore: Chore; isAdmin: boolean }) {
           </ol>
         ))}
     </Card>
+  );
+}
+
+/** "👥 Everyone" · "👥 Everyone except Bea" · "👥 3 of 8 people": who's in the rotation. */
+function WhoTakesTurns({ chore, everyone }: { chore: Chore; everyone: MemberBrief[] }) {
+  const inIt = new Set(chore.rotation.map((m) => m.id));
+  const left = everyone.filter((m) => !inIt.has(m.id));
+  if (left.length === 0) return <Badge tone="green">👥 Everyone</Badge>;
+  const text =
+    left.length <= 2 && chore.rotation.length > left.length
+      ? `Everyone except ${left.map((m) => m.display_name).join(" & ")}`
+      : `${chore.rotation.length} of ${everyone.length} people`;
+  return (
+    <span title={`Not in it: ${left.map((m) => m.display_name).join(", ")}`}>
+      <Badge tone="amber">👥 {text}</Badge>
+    </span>
   );
 }
 

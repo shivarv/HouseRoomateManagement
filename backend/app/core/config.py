@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     jwt_secret: str = "change-me"
     access_token_expire_minutes: int = 60 * 24 * 7
+    # Where invite links in emails point (the web app).
+    web_url: str = "http://localhost:5173"
+    # Invite emails go out through Resend (https://resend.com) when a key is set; without one,
+    # invites are still saved and the web app opens the sender's own email app instead.
+    resend_api_key: str | None = None
+    email_from: str = "Roommates <onboarding@resend.dev>"
 
     @field_validator("database_url", "database_url_unpooled")
     @classmethod

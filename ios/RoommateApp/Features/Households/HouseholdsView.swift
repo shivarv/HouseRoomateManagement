@@ -31,7 +31,7 @@ struct HouseholdsView: View {
                     } description: {
                         Text("Create a household, or join one with an invite code from your house admin.")
                     } actions: {
-                        Button("Create household") { showCreate = true }.buttonStyle(.borderedProminent)
+                        Button("Create a new home") { showCreate = true }.buttonStyle(.borderedProminent)
                         Button("Join with code") { showJoin = true }
                     }
                 }
@@ -40,16 +40,18 @@ struct HouseholdsView: View {
             .navigationDestination(for: UUID.self) { HouseholdDetailView(householdId: $0) }
             .toolbar {
                 Menu {
-                    Button("Create household", systemImage: "plus") { showCreate = true }
+                    Button("Create a new home", systemImage: "sparkles") { showCreate = true }
                     Button("Join with invite code", systemImage: "person.badge.plus") { showJoin = true }
                 } label: {
                     Image(systemName: "plus")
                 }
             }
-            .sheet(isPresented: $showCreate) { CreateHouseholdSheet { Task { await load() } } }
+            // Creating always goes through the guided setup, so every new house starts complete.
+            .sheet(isPresented: $showCreate) { SetupWizardView { _ in Task { await load() } } }
             .sheet(isPresented: $showJoin) { JoinHouseholdSheet { Task { await load() } } }
             .refreshable { await load() }
             .task { await load() }
+            .onAppear { Task { await load() } }  // e.g. after a home was deleted in Settings
         }
     }
 
@@ -64,61 +66,8 @@ struct HouseholdsView: View {
     }
 }
 
-struct CreateHouseholdSheet: View {
-    var onCreated: () -> Void
-    @Environment(\.dismiss) private var dismiss
-    @Environment(Session.self) private var session
-    @State private var name = ""
-    @State private var address = ""
-    @State private var timezone = TimeZone.current.identifier
-    @State private var error: String?
-    @State private var isSaving = false
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Name, e.g. Maple Street House", text: $name)
-                    TextField("Address, e.g. 12 Maple St, Boston, MA", text: $address)
-                        .textContentType(.fullStreetAddress)
-                    TextField("Timezone", text: $timezone)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                } footer: {
-                    VStack(alignment: .leading) {
-                        Text("Comes with Cooking, Clean hall and Dispose garbage. Add your roommates next. You can't have two houses with the same name.")
-                        ErrorBanner(message: error)
-                    }
-                }
-            }
-            .navigationTitle("New household")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
-                        Task {
-                            isSaving = true
-                            defer { isSaving = false }
-                            do {
-                                let house = try await APIClient.shared.createHousehold(name: name, address: address, timezone: timezone)
-                                session.rememberHousehold(house.id)
-                                onCreated()
-                                dismiss()
-                            } catch {
-                                self.error = error.localizedDescription
-                            }
-                        }
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty
-                              || address.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
-                }
-            }
-        }
-    }
-}
-
 struct JoinHouseholdSheet: View {
+    var initialCode: String = ""
     var onJoined: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(Session.self) private var session
@@ -143,20 +92,23 @@ struct JoinHouseholdSheet: View {
                     }
                 } else {
                     Section {
-                        TextField("Invite code", text: $code)
+                        TextField("Invite code or link", text: $code)
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                         Button("Find household") { Task { await find() } }
                             .disabled(code.count < 4 || isBusy)
                     } footer: {
                         VStack(alignment: .leading) {
-                            Text("Ask your house admin for the 8-character code.")
+                            Text("Paste the link a roommate sent you, or the 8-character code.")
                             ErrorBanner(message: error)
                         }
                     }
                 }
             }
             .disabled(isBusy)
+            .task {
+                if !initialCode.isEmpty && preview == nil { code = initialCode; await find() }
+            }
             .navigationTitle("Join household")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -169,7 +121,8 @@ struct JoinHouseholdSheet: View {
         isBusy = true
         defer { isBusy = false }
         do {
-            preview = try await APIClient.shared.previewInvite(code: code.trimmingCharacters(in: .whitespaces).uppercased())
+            code = InviteLink.code(from: code)  // a whole link works too
+            preview = try await APIClient.shared.previewInvite(code: code)
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -180,7 +133,7 @@ struct JoinHouseholdSheet: View {
         isBusy = true
         defer { isBusy = false }
         do {
-            let house = try await APIClient.shared.acceptInvite(code: code.trimmingCharacters(in: .whitespaces).uppercased(), memberId: memberId)
+            let house = try await APIClient.shared.acceptInvite(code: InviteLink.code(from: code), memberId: memberId)
             session.rememberHousehold(house.id)
             onJoined()
             dismiss()

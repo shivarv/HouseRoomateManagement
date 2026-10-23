@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HouseholdDetailView: View {
     enum Tab: String, CaseIterable, Identifiable {
-        case today = "Today", activity = "Activity", house = "House", chores = "Chores"
+        case today = "Today", activity = "Activity", house = "House"  // chores live in My day
         var id: Self { self }
     }
 
@@ -14,7 +14,9 @@ struct HouseholdDetailView: View {
 
     @State private var model: HouseholdViewModel
     @State private var tab: Tab = .today
+    @Environment(\.dismiss) private var dismiss
     @State private var housePart: HousePart = .schedule
+    @State private var inviting = false
 
     init(householdId: UUID) {
         _model = State(initialValue: HouseholdViewModel(householdId: householdId))
@@ -57,23 +59,20 @@ struct HouseholdDetailView: View {
                 case .report: ReportTabSection(model: model)
                 case .people: PeopleSection(model: model)
                 }
-            case .chores: ChoresSection(model: model)
             }
         }
         .navigationTitle(model.detail?.name ?? "Household")
         .toolbar {
-            if let code = model.detail?.inviteCode {
+            if model.detail != nil {
                 ToolbarItem(placement: .topBarTrailing) {
-                    ShareLink(item: "Join our house on Roommates with invite code \(code)") {
-                        Label(code, systemImage: "person.badge.plus")
-                    }
+                    Button { inviting = true } label: { Label("Invite people", systemImage: "person.badge.plus") }
                 }
             }
             // Admin pages live in Settings, apart from the everyday tabs (also under Profile → Sign out).
             if model.isAdmin {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        HouseSettingsView(model: model)
+                        HouseSettingsView(model: model) { dismiss() }
                     } label: {
                         Label("Settings", systemImage: "gearshape")
                     }
@@ -81,6 +80,9 @@ struct HouseholdDetailView: View {
             }
         }
         .overlay { if model.detail == nil && model.isLoading { ProgressView() } }
+        .sheet(isPresented: $inviting, onDismiss: { Task { await model.load() } }) {
+            if let detail = model.detail { InviteSheet(house: detail) }
+        }
         .refreshable { await model.load() }
         .task { await model.load() }
     }
@@ -266,19 +268,12 @@ private struct PeopleSection: View {
 
         Section("\(model.detail?.members.count ?? 0) people") {
             ForEach(model.detail?.members ?? []) { member in
-                HStack {
-                    Text(String(member.displayName.prefix(1)).uppercased())
-                        .font(.subheadline.bold())
-                        .frame(width: 32, height: 32)
-                        .background(Color.accentColor.opacity(0.15), in: Circle())
-                    VStack(alignment: .leading) {
-                        HStack(spacing: 6) {
-                            Text(member.displayName)
-                            if member.id == model.detail?.myMemberId { Badge(text: "You") }
-                            if member.role == .admin { Badge(text: "Admin", color: .accentColor) }
-                        }
-                        Text(member.hasAccount ? "Has an account" : "No account yet")
-                            .font(.caption).foregroundStyle(.secondary)
+                Group {
+                    // Admins tap someone who hasn't joined to add their email / phone and invite them.
+                    if model.isAdmin && !member.hasAccount {
+                        NavigationLink { MemberContactView(model: model, member: member) } label: { memberRow(member) }
+                    } else {
+                        memberRow(member)
                     }
                 }
                 .swipeActions {
@@ -304,9 +299,117 @@ private struct PeopleSection: View {
     }
 }
 
+private extension PeopleSection {
+    func memberRow(_ member: Member) -> some View {
+        HStack {
+            Text(String(member.displayName.prefix(1)).uppercased())
+                .font(.subheadline.bold())
+                .frame(width: 32, height: 32)
+                .background(Color.accentColor.opacity(0.15), in: Circle())
+            VStack(alignment: .leading) {
+                HStack(spacing: 6) {
+                    Text(member.displayName)
+                    if member.id == model.detail?.myMemberId { Badge(text: "You") }
+                    if member.role == .admin { Badge(text: "Admin", color: .accentColor) }
+                    Badge(text: member.status.label,
+                          color: member.status == .joined ? .green : member.status == .invited ? .orange : .gray)
+                }
+                Text(contactLine(member))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// "Beatrice Smith · bea@example.com · +1 617…", or what their status means.
+private func contactLine(_ m: Member) -> String {
+    let parts = [m.fullName != m.displayName ? m.fullName : "", m.email ?? "", m.phone ?? ""].filter { !$0.isEmpty }
+    if !parts.isEmpty { return parts.joined(separator: " · ") }
+    switch m.status {
+    case .added: return "Added by name — invite them to join"
+    case .invited: return "Invite sent — waiting for them to join"
+    case .joined: return "Has an account"
+    }
+}
+
+/// Admins: an email and phone for someone who hasn't joined, and an email invite to them.
+private struct MemberContactView: View {
+    let model: HouseholdViewModel
+    let member: Member
+    @State private var email: String
+    @State private var phone: String
+    @State private var error: String?
+    @State private var note: String?
+    @State private var busy = false
+
+    init(model: HouseholdViewModel, member: Member) {
+        self.model = model
+        self.member = member
+        _email = State(initialValue: member.email ?? "")
+        _phone = State(initialValue: member.phone ?? "")
+    }
+
+    private var changed: Bool {
+        email.trimmingCharacters(in: .whitespaces) != (member.email ?? "") || phone.trimmingCharacters(in: .whitespaces) != (member.phone ?? "")
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("Email (optional)", text: $email)
+                    .keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                TextField("Phone (optional)", text: $phone).keyboardType(.phonePad)
+            } footer: {
+                Text("Used to invite them, and later for notifications. Once they join, their account's email is used.")
+            }
+            Section {
+                Button(busy ? "Saving…" : "Save") { Task { await save() } }.disabled(!changed || busy)
+                if !email.isEmpty {
+                    Button(member.status == .invited ? "Invite again" : "Send invite by email") { Task { await invite() } }
+                        .disabled(changed || busy)
+                }
+            } footer: {
+                VStack(alignment: .leading) {
+                    if let note { Text(note).foregroundStyle(.green) }
+                    ErrorBanner(message: error)
+                }
+            }
+        }
+        .navigationTitle(member.displayName)
+    }
+
+    private func save() async {
+        busy = true
+        defer { busy = false }
+        do {
+            _ = try await APIClient.shared.setContact(memberId: member.id, email: email.trimmingCharacters(in: .whitespaces),
+                                                      phone: phone.trimmingCharacters(in: .whitespaces))
+            error = nil
+            note = "Saved"
+            await model.load()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func invite() async {
+        busy = true
+        defer { busy = false }
+        do {
+            let res = try await APIClient.shared.emailInvites(householdId: model.householdId, emails: [email.trimmingCharacters(in: .whitespaces)])
+            note = res.emailEnabled ? "Invite emailed" : "Invited — they'll see it when they sign up with this email"
+            error = nil
+            await model.load()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
 // MARK: - Chores
 
-private struct ChoresSection: View {
+/// Every chore with its rotation; admins add and edit them. Shown in My day → Chores.
+struct ChoresSection: View {
     let model: HouseholdViewModel
     @State private var newChore = ""
     @State private var frequency: Frequency = .daily
@@ -325,6 +428,7 @@ private struct ChoresSection: View {
                             Badge(text: chore.frequency == .weekly ? "Weekly" : "Daily")
                             if chore.isOpen { Badge(text: "Anyone", color: .green) }
                             if !chore.isActive { Badge(text: "Paused", color: .orange) }
+                            if !chore.isOpen, let who = whoTakesTurns(chore) { Badge(text: who.text, color: who.everyone ? .green : .orange) }
                         }
                         Text(summary(chore))
                             .font(.caption)
@@ -358,6 +462,18 @@ private struct ChoresSection: View {
                 Text("Need it twice a day? Add two chores, e.g. \"Cooking – Lunch\" and \"Cooking – Dinner\".")
             }
         }
+    }
+
+    /// "👥 Everyone" · "👥 Everyone except Bea" · "👥 3 of 8": who's in the rotation.
+    private func whoTakesTurns(_ chore: Chore) -> (text: String, everyone: Bool)? {
+        guard let everyone = model.detail?.members, !everyone.isEmpty else { return nil }
+        let inIt = Set(chore.rotation.map(\.id))
+        let left = everyone.filter { !inIt.contains($0.id) }
+        if left.isEmpty { return ("👥 Everyone", true) }
+        if left.count <= 2 && chore.rotation.count > left.count {
+            return ("👥 Everyone except " + left.map(\.displayName).joined(separator: " & "), false)
+        }
+        return ("👥 \(chore.rotation.count) of \(everyone.count)", false)
     }
 
     private func summary(_ chore: Chore) -> String {

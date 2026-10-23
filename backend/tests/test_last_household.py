@@ -80,3 +80,81 @@ def test_address_is_required(client):
     assert client.post(f"{API}/households", json={"name": "Maple"}, headers=ann).status_code == 422
     res = client.post(f"{API}/households", json={"name": "Maple", "address": "   "}, headers=ann)
     assert res.status_code == 400
+
+
+def test_admins_delete_homes_but_not_their_last_one(client, fake_today):
+    ann = register(client, "ann@example.com", "Ann")
+    maple = _create(client, ann, "Maple")
+    # Only one home Ann runs: it can't go.
+    res = client.delete(f"{API}/households/{maple['id']}", headers=ann)
+    assert res.status_code == 409 and "last home" in res.text
+
+    oak = _create(client, ann, "Oak")
+    bea = register(client, "bea@example.com", "Bea")
+    client.post(f"{API}/invites/{oak['invite_code']}/accept", json={}, headers=bea)
+    assert client.delete(f"{API}/households/{oak['id']}", headers=bea).status_code == 403  # not an admin
+
+    assert client.delete(f"{API}/households/{oak['id']}", headers=ann).status_code == 204
+    assert [h["name"] for h in client.get(f"{API}/households", headers=ann).json()] == ["Maple"]
+    assert client.get(f"{API}/households", headers=bea).json() == []  # gone for everyone
+    assert _me(client, ann)["last_household_id"] is None  # Oak was the one she'd opened last
+    # Maple is the last one again.
+    assert client.delete(f"{API}/households/{maple['id']}", headers=ann).status_code == 409
+
+
+def test_invite_links_show_the_house_before_signing_in(client):
+    ann = register(client, "ann@example.com", "Ann")
+    maple = _create(client, ann, "Maple")
+    res = client.get(f"{API}/invites/{maple['invite_code'].lower()}/public")  # no token
+    assert res.status_code == 200 and res.json() == {"household_name": "Maple", "people": 1}
+    assert client.get(f"{API}/invites/NOPE1234/public").status_code == 404
+    assert client.get(f"{API}/invites/{maple['invite_code']}").status_code == 401  # names need sign-in
+
+
+def test_first_and_last_names(client):
+    res = client.post(
+        f"{API}/auth/register",
+        json={"email": "bea@example.com", "first_name": " Beatrice ", "last_name": "Smith", "password": "password123"},
+    )
+    assert res.status_code == 201
+    user = res.json()["user"]
+    assert (user["first_name"], user["last_name"], user["name"]) == ("Beatrice", "Smith", "Beatrice Smith")
+    bea = {"Authorization": f"Bearer {res.json()['access_token']}"}
+    # Older clients send one name: it's split.
+    old = client.post(f"{API}/auth/register", json={"email": "cy@example.com", "name": "Cy Van Dyke", "password": "password123"})
+    assert (old.json()["user"]["first_name"], old.json()["user"]["last_name"]) == ("Cy", "Van Dyke")
+    assert client.post(f"{API}/auth/register", json={"email": "x@example.com", "password": "password123"}).status_code == 422
+
+    house = _create(client, bea, "Maple")
+    # Renaming myself: houses that use my old full name follow it.
+    res = client.patch(f"{API}/auth/me", json={"first_name": "Bea", "last_name": "Smith"}, headers=bea)
+    assert res.status_code == 200 and res.json()["name"] == "Bea Smith"
+    members = client.get(f"{API}/households/{house['id']}", headers=bea).json()["members"]
+    assert (members[0]["display_name"], members[0]["first_name"], members[0]["last_name"]) == ("Bea Smith", "Bea", "Smith")
+
+
+def test_members_have_status_email_and_phone(client, monkeypatch):
+    from app.services import email
+
+    monkeypatch.setattr(email, "send", lambda *a: False)
+    ann = register(client, "ann@example.com", "Ann")
+    house = _create(client, ann, "Maple")
+    bea = client.post(f"{API}/households/{house['id']}/members", json={"display_name": "Bea"}, headers=ann).json()
+    assert bea["status"] == "added" and bea["email"] is None
+
+    res = client.patch(f"{API}/members/{bea['id']}", json={"email": "Bea@Example.com", "phone": "+1 617 555 0100"}, headers=ann)
+    assert res.status_code == 200 and res.json()["email"] == "bea@example.com" and res.json()["phone"] == "+1 617 555 0100"
+    assert client.patch(f"{API}/members/{bea['id']}", json={"phone": "call me"}, headers=ann).status_code == 422
+
+    client.post(f"{API}/households/{house['id']}/email-invites", json={"emails": ["bea@example.com"]}, headers=ann)
+    members = {m["display_name"]: m for m in client.get(f"{API}/households/{house['id']}", headers=ann).json()["members"]}
+    assert members["Ann"]["status"] == "joined" and members["Ann"]["email"] == "ann@example.com"
+    assert members["Bea"]["status"] == "invited"
+
+    # Bea signs up with that email and joins with the plain link: she's matched to "Bea".
+    bea_user = register(client, "bea@example.com", "Beatrice")
+    client.post(f"{API}/invites/{house['invite_code']}/accept", json={}, headers=bea_user)
+    members = client.get(f"{API}/households/{house['id']}", headers=ann).json()["members"]
+    assert [(m["display_name"], m["status"]) for m in members] == [("Ann", "joined"), ("Bea", "joined")]
+    me = next(m for m in members if m["display_name"] == "Bea")
+    assert client.patch(f"{API}/members/{me['id']}", json={"email": "x@y.co"}, headers=ann).status_code == 400
