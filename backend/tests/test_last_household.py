@@ -94,6 +94,9 @@ def test_admins_delete_homes_but_not_their_last_one(client, fake_today):
     bea = register(client, "bea@example.com", "Bea")
     client.post(f"{API}/invites/{oak['invite_code']}/accept", json={}, headers=bea)
     assert client.delete(f"{API}/households/{oak['id']}", headers=bea).status_code == 403  # not an admin
+    # Bea lives there too, so Ann needs a second admin before she can delete it.
+    bea_member = next(m for m in client.get(f"{API}/households/{oak['id']}", headers=ann).json()["members"] if m["display_name"] == "Bea")
+    client.patch(f"{API}/members/{bea_member['id']}", json={"role": "admin"}, headers=ann)
 
     assert client.delete(f"{API}/households/{oak['id']}", headers=ann).status_code == 204
     assert [h["name"] for h in client.get(f"{API}/households", headers=ann).json()] == ["Maple"]
@@ -160,3 +163,22 @@ def test_members_have_status_email_and_phone(client, monkeypatch):
     assert [(m["display_name"], m["status"]) for m in members] == [("Ann", "verified"), ("Bea", "verified")]
     me = next(m for m in members if m["display_name"] == "Bea")
     assert client.patch(f"{API}/members/{me['id']}", json={"email": "x@y.co"}, headers=ann).status_code == 400
+
+
+def test_a_home_with_others_needs_another_admin_to_be_deleted(client):
+    ann = register(client, "ann@example.com", "Ann")
+    _create(client, ann, "Spare")  # so Maple isn't her last home
+    maple = _create(client, ann, "Maple")
+    mine = lambda: next(h for h in client.get(f"{API}/households", headers=ann).json() if h["id"] == maple["id"])  # noqa: E731
+    assert mine()["delete_blocked"] is None  # only her so far
+
+    bea = register(client, "bea@example.com", "Bea")
+    client.post(f"{API}/invites/{maple['invite_code']}/accept", json={}, headers=bea)
+    assert "only admin" in mine()["delete_blocked"]
+    res = client.delete(f"{API}/households/{maple['id']}", headers=ann)
+    assert res.status_code == 409 and "only admin" in res.json()["detail"]
+
+    bea_member = next(m for m in client.get(f"{API}/households/{maple['id']}", headers=ann).json()["members"] if m["display_name"] == "Bea")
+    client.patch(f"{API}/members/{bea_member['id']}", json={"role": "admin"}, headers=ann)
+    assert mine()["delete_blocked"] is None
+    assert client.delete(f"{API}/households/{maple['id']}", headers=ann).status_code == 204

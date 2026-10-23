@@ -107,11 +107,25 @@ def update_household(
     db.commit()
 
 
+def delete_blocked(me: HouseholdMember) -> str | None:
+    """Why I can't delete this home, or None. Admins only, and only when nobody else has an account
+    here, or someone else is an admin too (so the others aren't left without a say)."""
+    if me.role != "admin":
+        return "Only admins can delete a home."
+    others = [m for m in me.household.members if m.is_active and m.user_id and m.id != me.id]
+    if others and not any(m.role == "admin" for m in others):
+        return "Other people live here and you're the only admin. Make someone else an admin first."
+    return None
+
+
 def delete_household(db: Session, me: HouseholdMember, user: User) -> None:
     """An admin deletes a home and everything in it, for everyone.
 
-    You always keep at least one home you're an admin of, so the last one can't be deleted.
+    Allowed when nobody else has an account here, or another admin does (see delete_blocked). You
+    also always keep at least one home you're an admin of, so the last one can't be deleted.
     """
+    if reason := delete_blocked(me):
+        raise Conflict(reason)
     # Lock me, so two deletes at once can't both pass the check and leave me with none.
     db.execute(select(User.id).where(User.id == user.id).with_for_update())
     admin_of = [m for m in memberships(db, user) if m.role == "admin"]
@@ -299,4 +313,5 @@ def household_out(me: HouseholdMember) -> HouseholdOut:
         created_by_me=h.created_by_id is not None and h.created_by_id == me.user_id,
         my_member_id=me.id,
         my_role=me.role,
+        delete_blocked=delete_blocked(me),
     )

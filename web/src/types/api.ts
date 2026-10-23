@@ -66,6 +66,8 @@ export interface Household {
   address: string | null;
   timezone: string;
   invite_code: string;
+  /** Why I can't delete it (null: I can, unless it's my last home as admin). */
+  delete_blocked: string | null;
   my_member_id: string;
   my_role: Role;
   /** Names are unique per creator: I can't have two houses with the same name. */

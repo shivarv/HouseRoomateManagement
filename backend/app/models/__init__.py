@@ -9,6 +9,7 @@ from app.models.chore import (
     ChoreTask,
     HelpRequest,
 )
+from app.models.error_log import ErrorLog
 from app.models.household import Household, HouseholdMember
 from app.models.invite import HouseholdInvite
 from app.models.shopping import GroceryCategory, GroceryPreset, ShoppingItem
@@ -26,6 +27,7 @@ __all__ = [
     "ChoreRotationMember",
     "ChoreSwap",
     "ChoreTask",
+    "ErrorLog",
     "GroceryCategory",
     "GroceryPreset",
     "HelpRequest",

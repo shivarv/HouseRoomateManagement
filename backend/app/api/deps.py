@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core import logs
 from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models import User
@@ -25,6 +26,7 @@ def get_current_user(
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    logs.set_user(user.id)  # every log line from here on says who
     return user
 
 

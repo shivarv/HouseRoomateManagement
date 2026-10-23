@@ -57,6 +57,9 @@ function YourHomes() {
   const [typed, setTyped] = useState("");
   const mine = (households.data ?? []).filter((h) => h.my_role === "admin");
   const last = mine.length <= 1;
+  /** Why this home can't be deleted right now, or null. */
+  const blockedReason = (h: Household) =>
+    h.delete_blocked ?? (last ? "This is your only home as admin, so it can't be deleted. Set up another home you run first." : null);
 
   const onDelete = (h: Household) =>
     remove.mutate(h.id, {
@@ -73,7 +76,8 @@ function YourHomes() {
       <h2 className="mb-1 font-semibold">Your homes</h2>
       <p className="mb-4 text-sm text-slate-500">
         Homes you're an admin of. Deleting one removes it for everyone in it, with its chores, groceries, bills and
-        history. You always keep at least one, so the last one can't be deleted.
+        history. You can delete a home when nobody else lives there, or when someone else is an admin too — and you
+        always keep at least one home you run.
       </p>
       <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-100">
         {mine.map((h) => (
@@ -83,17 +87,20 @@ function YourHomes() {
               {h.address && <span className="text-xs text-slate-500">{h.address}</span>}
               {h.id === current.id && <Badge tone="indigo">Open now</Badge>}
               {confirming !== h.id && (
-                <Button
-                  variant="ghost"
-                  className="ml-auto text-red-600"
-                  disabled={last || remove.isPending}
-                  title={last ? "This is your last home as admin, so it can't be deleted" : undefined}
-                  onClick={() => (setConfirming(h.id), setTyped(""))}
-                >
-                  Delete…
-                </Button>
+                // A wrapper carries the reason: disabled buttons don't show tooltips in every browser.
+                <span className="ml-auto" title={blockedReason(h) ?? undefined}>
+                  <Button
+                    variant="ghost"
+                    className="text-red-600"
+                    disabled={!!blockedReason(h) || remove.isPending}
+                    onClick={() => (setConfirming(h.id), setTyped(""))}
+                  >
+                    {blockedReason(h) ? "🔒 Delete" : "Delete…"}
+                  </Button>
+                </span>
               )}
             </div>
+            {blockedReason(h) && confirming !== h.id && <p className="text-xs text-slate-500">{blockedReason(h)}</p>}
             {confirming === h.id && (
               <div className="flex flex-wrap items-center gap-2 rounded-xl bg-red-50 p-3 ring-1 ring-red-100">
                 <span className="text-sm text-red-800">
@@ -121,7 +128,6 @@ function YourHomes() {
           </li>
         ))}
       </ul>
-      {last && <p className="mt-3 text-xs text-slate-500">To delete this one, first set up another home you run.</p>}
       <ErrorText error={remove.error} />
     </Card>
   );

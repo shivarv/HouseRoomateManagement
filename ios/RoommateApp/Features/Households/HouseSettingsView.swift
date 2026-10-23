@@ -134,6 +134,11 @@ private struct YourHomesSection: View {
     private var mine: [Household] { households.filter { $0.myRole == .admin } }
     private var last: Bool { mine.count <= 1 }
 
+    /// Why a home can't be deleted right now, or nil. Mirrors web YourHomes.
+    private func blockedReason(_ house: Household) -> String? {
+        house.deleteBlocked ?? (last ? "This is your only home as admin, so it can't be deleted. Set up another home you run first." : nil)
+    }
+
     var body: some View {
         Section {
             ForEach(mine) { house in
@@ -144,20 +149,21 @@ private struct YourHomesSection: View {
                             if house.id == currentId { Badge(text: "Open now", color: .accentColor) }
                         }
                         if let address = house.address { Text(address).font(.caption).foregroundStyle(.secondary) }
+                        if let reason = blockedReason(house) {
+                            Label(reason, systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     Spacer()
-                    Button("Delete", role: .destructive) { typed = ""; pending = house }
+                    Button(blockedReason(house) == nil ? "Delete" : "Locked", role: .destructive) { typed = ""; pending = house }
                         .buttonStyle(.bordered)
-                        .disabled(last || deleting)
+                        .disabled(blockedReason(house) != nil || deleting)
                 }
             }
             ErrorBanner(message: error)
         } header: {
             Text("Your homes")
         } footer: {
-            Text(last
-                 ? "This is your last home as admin, so it can't be deleted. Set up another home you run first."
-                 : "Deleting a home removes it for everyone in it, with its chores, groceries, bills and history.")
+            Text("Deleting a home removes it for everyone in it, with its chores, groceries, bills and history. You can delete one when nobody else lives there, or when someone else is an admin too — and you always keep at least one home you run.")
         }
         .task { await load() }
         .alert("Delete \(pending?.name ?? "")?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } })) {

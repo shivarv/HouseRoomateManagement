@@ -78,6 +78,8 @@ struct Household: Codable, Identifiable, Hashable {
     let myRole: Role
     /// Names are unique per creator: I can't have two houses with the same name.
     let createdByMe: Bool?
+    /// Why I can't delete it (nil: I can, unless it's my last home as admin).
+    let deleteBlocked: String?
 }
 
 struct HouseholdDetail: Decodable {

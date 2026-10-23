@@ -190,5 +190,7 @@ def test_unexpected_crash_is_a_readable_500_with_cors(client, fake_today, monkey
         headers={**ann, "Origin": "http://localhost:5173"},
     )
     assert res.status_code == 500
-    assert res.json() == {"detail": "Something went wrong on the server"}
+    ref = res.json()["error_id"]
+    assert ref.startswith("req_") and res.json()["detail"] == f"Something went wrong on the server (ref {ref})"
+    assert res.headers["x-request-id"] == ref
     assert res.headers["access-control-allow-origin"] == "http://localhost:5173"
