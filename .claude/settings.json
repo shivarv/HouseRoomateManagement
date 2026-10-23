@@ -102,7 +102,16 @@
       "Bash(ls -a backend)",
       "Bash(sed -n 1,45p backend/app/core/config.py)",
       "Bash(sed -n 1,60p render.yaml)",
-      "Bash(grep -n \"email\\\\.\\\\|def \" backend/app/services/invites.py)"
+      "Bash(grep -n \"email\\\\.\\\\|def \" backend/app/services/invites.py)",
+      "Bash(grep -n \"def add_member\\\\|def update_member\\\\|def accept_invite\\\\|def member_out\\\\|def invited_emails\\\\|def remove_member\" app/services/households.py)",
+      "Bash(grep -n \"members\\\\b\\\\|/members\" app/api/routes/households.py)",
+      "Bash(grep -n \"def register\" -A10 backend/tests/conftest.py)",
+      "Bash(grep -rn \"auth/register\\\\|auth/login\" backend/tests)",
+      "Bash(grep -n \"NEXT_PATH =\" app/schemas/auth.py)",
+      "Bash(.venv/bin/python -m pytest -q tests/test_chat.py -x)",
+      "Bash(grep -n '>Add a roommate<' src/features/households/InvitePanel.tsx)",
+      "Bash(sed -i '' 's|<h2 className=\"font-semibold\">Add a roommate</h2>|<h2 className=\"font-semibold\">Invite roommates</h2>|' src/features/households/InvitePanel.tsx)",
+      "Bash(sed -i '' 's|^ \\\\* Add a roommate: their email gets the invite| * Invite roommates: their email gets the invite|' src/features/households/InvitePanel.tsx)"
     ]
   }
 }

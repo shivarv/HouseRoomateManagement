@@ -7,7 +7,6 @@ import { useHelpRequests } from "../features/help/hooks";
 import { useDefaultHousehold, useSwitchHousehold } from "../features/households/hooks";
 import { unsavedChanges } from "../lib/unsavedChanges";
 import type { Household } from "../types/api";
-import { VerifyEmailBanner } from "../features/auth/VerifyEmailBanner";
 import { WelcomePage } from "../pages/WelcomePage";
 import { Button } from "./ui";
 
@@ -206,7 +205,6 @@ export function AppShell() {
         )}
       </header>
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <VerifyEmailBanner />
         {noHouse && !pathname.startsWith("/households/new") && pathname !== "/profile" ? <WelcomePage /> : <Outlet />}
       </main>
     </div>

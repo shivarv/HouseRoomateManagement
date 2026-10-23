@@ -11,6 +11,7 @@ from app.schemas.household import (
     InviteAccept,
     InvitePreview,
     InvitePublic,
+    MemberAdded,
     MemberBrief,
     MemberCreate,
     MemberOut,
@@ -18,6 +19,7 @@ from app.schemas.household import (
 )
 from app.schemas.invite import EmailInviteOut, EmailInviteResults, InviteEmails, MyInvite
 from app.schemas.setup import HouseholdSetup, SetupTemplate
+from app.services import email
 from app.services import households as svc
 from app.services import invites as invite_svc
 from app.services import setup as setup_svc
@@ -85,12 +87,30 @@ def list_members(household_id: uuid.UUID, db: DbSession, user: CurrentUser):
 
 @router.post(
     "/households/{household_id}/members",
-    response_model=MemberOut,
+    response_model=MemberAdded,
     status_code=status.HTTP_201_CREATED,
 )
 def add_member(household_id: uuid.UUID, body: MemberCreate, db: DbSession, user: CurrentUser):
+    """Add someone who hasn't signed up, with an email or phone. An email gets the invite right away;
+    for a phone, the app offers their personal link on WhatsApp."""
     me = svc.require_membership(db, household_id, user, admin=True)
-    return svc.member_out(svc.add_member(db, me.household, body.display_name.strip(), actor=me))
+    address = body.email.lower() if body.email else None
+    if address and svc.email_in_house(me.household, address):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Someone in the house already has that email")
+    member = svc.add_member(
+        db, me.household, body.display_name.strip(), actor=me, email=address, phone=body.phone
+    )
+    emailed = False
+    if address:
+        results = invite_svc.invite(db, me, [address]).results
+        emailed = results[0].status == "sent"
+    db.refresh(member)
+    return MemberAdded(
+        member=svc.member_out(member, svc.invited_emails(db, household_id)),
+        emailed=emailed,
+        email_enabled=email.enabled(),
+        link=svc.personal_link(member),
+    )
 
 
 @router.patch("/members/{member_id}", response_model=MemberOut)
@@ -100,6 +120,10 @@ def update_member(member_id: uuid.UUID, body: MemberUpdate, db: DbSession, user:
     if body.display_name is not None:
         member.display_name = body.display_name.strip()
     if body.role is not None and member.id != me.id:
+        if body.role == "admin" and member.role != "admin" and not (member.user and member.user.email_verified):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Only people with a confirmed email can be admins"
+            )
         member.role = body.role
     if body.email and member.user_id is not None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Their email comes from their account")
@@ -107,6 +131,11 @@ def update_member(member_id: uuid.UUID, body: MemberUpdate, db: DbSession, user:
         member.email = body.email.lower() or None
     if body.phone is not None:
         member.phone = body.phone.strip() or None
+    if member.user_id is None and (body.email is not None or body.phone is not None):
+        if not member.email and not member.phone:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Keep an email or phone number so they can be invited"
+            )
     db.commit()
     return svc.member_out(member, svc.invited_emails(db, member.household_id))
 

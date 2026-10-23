@@ -2,59 +2,104 @@ import re
 
 from app.core.security import create_email_token
 from app.services import email
+from tests.conftest import register
 from tests.test_chore_api import API
 
 
-def _signup(client, monkeypatch, address="bea@example.com"):
+def _capture(monkeypatch):
     sent = []
-    monkeypatch.setattr(email, "send", lambda to, subject, text: sent.append((to, text)) or True)
-    res = client.post(
-        f"{API}/auth/register",
-        json={"email": address, "first_name": "Bea", "password": "password123"},
-    )
-    assert res.status_code == 201
-    return {"Authorization": f"Bearer {res.json()['access_token']}"}, res.json()["user"], sent
+    monkeypatch.setattr(email, "send", lambda to, subject, text: sent.append((to, subject, text)) or True)
+    return sent
+
+
+def _signup(client, address="bea@example.com", **extra):
+    body = {"email": address, "first_name": "Bea", "password": "password123", **extra}
+    return client.post(f"{API}/auth/register", json=body)
+
+
+def _login(client, address="bea@example.com"):
+    return client.post(f"{API}/auth/login", json={"email": address, "password": "password123"})
+
+
+def _link(text):
+    return re.search(r"verify-email\?token=(\S+)", text).group(0)
 
 
 def _token(text):
-    return re.search(r"verify-email\?token=(\S+)", text).group(1)
+    return re.search(r"token=([^&\s]+)", text).group(1)
 
 
-def test_sign_up_sends_a_link_that_verifies_the_email(client, monkeypatch):
-    headers, user, sent = _signup(client, monkeypatch)
-    assert user["email_verified"] is False
-    assert sent and sent[0][0] == "bea@example.com"
+def test_no_sign_in_until_the_emailed_link_is_opened(client, monkeypatch):
+    sent = _capture(monkeypatch)
+    res = _signup(client, next="/join/ABCD1234")
+    assert res.status_code == 201 and "access_token" not in res.json()
+    assert res.json()["email"] == "bea@example.com" and res.json()["sent"] is True
+    to, subject, text = sent[0]
+    assert to == "bea@example.com" and "Confirm your email" in subject
+    assert _link(text).endswith("&next=/join/ABCD1234")  # lands back on the invite
 
-    res = client.post(
-        f"{API}/auth/verify-email", json={"token": _token(sent[0][1])}
-    )  # no sign-in needed
-    assert res.status_code == 200 and res.json()["email_verified"] is True
-    assert client.get(f"{API}/auth/me", headers=headers).json()["email_verified"] is True
-    # Opening the link again is fine; asking for another says it's done.
-    assert (
-        client.post(f"{API}/auth/verify-email", json={"token": _token(sent[0][1])}).status_code
-        == 200
-    )
-    again = client.post(f"{API}/auth/me/verification", headers=headers).json()
-    assert again["already_verified"] is True and again["sent"] is False
+    assert _login(client).status_code == 403  # right password, email not confirmed
+
+    # The first open confirms and signs in.
+    first = client.post(f"{API}/auth/verify-email", json={"token": _token(text)})
+    assert first.status_code == 200 and first.json()["user"]["email_verified"] is True
+    headers = {"Authorization": f"Bearer {first.json()['access_token']}"}
+    assert client.get(f"{API}/auth/me", headers=headers).status_code == 200
+    # Opening it again only confirms: a forwarded email can't be used to get in.
+    again = client.post(f"{API}/auth/verify-email", json={"token": _token(text)})
+    assert again.status_code == 200 and again.json()["access_token"] is None
+    assert _login(client).status_code == 200
 
 
-def test_resend_and_bad_links(client, monkeypatch):
-    headers, user, sent = _signup(client, monkeypatch)
-    res = client.post(f"{API}/auth/me/verification", headers=headers).json()
-    assert res == {"sent": True, "email_enabled": email.enabled(), "already_verified": False}
-    assert len(sent) == 2
+def test_resend_works_signed_out_and_says_nothing_about_accounts(client, monkeypatch):
+    sent = _capture(monkeypatch)
+    _signup(client)
+    res = client.post(f"{API}/auth/resend-verification", json={"email": "Bea@Example.com", "next": "/join/X"})
+    assert res.status_code == 200 and len(sent) == 2 and "next=/join/X" in sent[1][2]
+    nobody = client.post(f"{API}/auth/resend-verification", json={"email": "nobody@example.com"})
+    assert nobody.status_code == 200 and nobody.json() == res.json() and len(sent) == 2
+    # Only paths on our own site.
+    bad = client.post(f"{API}/auth/resend-verification", json={"email": "bea@example.com", "next": "//evil.com"})
+    assert bad.status_code == 422
 
-    assert (
-        client.post(f"{API}/auth/verify-email", json={"token": "not-a-real-token"}).status_code
-        == 400
-    )
+
+def test_bad_links(client, monkeypatch):
+    _capture(monkeypatch)
+    _signup(client)
+    assert client.post(f"{API}/auth/verify-email", json={"token": "not-a-real-token"}).status_code == 400
     # A link for an address the account no longer has doesn't verify it.
-    stale = create_email_token(user["id"], "old@example.com")
+    from app.db.session import SessionLocal
+    from app.models import User
+
+    with SessionLocal() as db:
+        user_id = db.query(User.id).filter(User.email == "bea@example.com").scalar()
+    stale = create_email_token(user_id, "old@example.com")
     assert client.post(f"{API}/auth/verify-email", json={"token": stale}).status_code == 400
-    # A login token isn't a verification link.
-    login_token = headers["Authorization"].split()[1]
-    assert client.post(f"{API}/auth/verify-email", json={"token": login_token}).status_code == 400
+    # A sign-in token isn't a verification link.
+    ann = register(client, "ann@example.com", "Ann")
+    assert client.post(f"{API}/auth/verify-email", json={"token": ann["Authorization"].split()[1]}).status_code == 400
+
+
+def test_only_verified_people_can_be_admins_and_an_email_gets_the_invite(client, monkeypatch):
+    sent = _capture(monkeypatch)
+    ann = register(client, "ann@example.com", "Ann")
+    house = client.post(f"{API}/households", json={"name": "Maple", "address": "1 Maple Rd"}, headers=ann).json()
+    res = client.post(f"{API}/households/{house['id']}/members", json={"display_name": "Bea", "email": "Bea@Example.com"}, headers=ann)
+    assert res.status_code == 201 and res.json()["emailed"] is True
+    bea = res.json()["member"]
+    assert bea["status"] == "invited" and bea["email"] == "bea@example.com"
+    assert any(to == "bea@example.com" and house["invite_code"] in text for to, _, text in sent)
+    # The same email twice is refused.
+    dup = client.post(f"{API}/households/{house['id']}/members", json={"display_name": "B", "email": "bea@example.com"}, headers=ann)
+    assert dup.status_code == 409
+    # Not signed up yet: can't be made admin, and can't be left without an email or phone.
+    assert client.patch(f"{API}/members/{bea['id']}", json={"role": "admin"}, headers=ann).status_code == 400
+    assert client.patch(f"{API}/members/{bea['id']}", json={"email": ""}, headers=ann).status_code == 400
+
+    # Once she has signed up (confirmed) and joined, she can be.
+    bea_headers = register(client, "bea@example.com", "Bea")
+    client.post(f"{API}/invites/{house['invite_code']}/accept", json={}, headers=bea_headers)
+    assert client.patch(f"{API}/members/{bea['id']}", json={"role": "admin"}, headers=ann).json()["role"] == "admin"
 
 
 def test_resend_request_has_a_user_agent_and_errors_are_logged(monkeypatch, caplog):

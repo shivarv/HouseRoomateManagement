@@ -1,4 +1,4 @@
-import type { EmailInvite, EmailInviteResults, Household, HouseholdDetail, HouseholdSetup, InvitePreview, Member, MyInvite, SetupTemplate } from "../types/api";
+import type { EmailInvite, EmailInviteResults, Household, HouseholdDetail, HouseholdSetup, InvitePreview, Member, MemberAdded, MyInvite, SetupTemplate } from "../types/api";
 import { api } from "./client";
 
 export const householdsApi = {
@@ -23,11 +23,9 @@ export const householdsApi = {
   update: (id: string, changes: { name?: string; address?: string; timezone?: string }) =>
     api<Household>(`/households/${id}`, { method: "PATCH", body: changes }),
 
-  addMember: (householdId: string, displayName: string) =>
-    api<Member>(`/households/${householdId}/members`, {
-      method: "POST",
-      body: { display_name: displayName },
-    }),
+  /** Name plus an email or phone (at least one). An email gets the invite right away. */
+  addMember: (householdId: string, person: { display_name: string; email?: string; phone?: string }) =>
+    api<MemberAdded>(`/households/${householdId}/members`, { method: "POST", body: person }),
   /** `email: ""` / `phone: ""` clear them. A joined member's email comes from their account. */
   updateMember: (memberId: string, changes: { display_name?: string; role?: Member["role"]; email?: string; phone?: string }) =>
     api<Member>(`/members/${memberId}`, { method: "PATCH", body: changes }),

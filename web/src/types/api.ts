@@ -15,10 +15,25 @@ export interface User {
   last_household_id: string | null;
 }
 
-export interface VerificationSent {
+/** Signed up, not signed in: the emailed link confirms the address and signs them in. */
+export interface RegisterResponse {
+  email: string;
   sent: boolean;
-  email_enabled: boolean; // false: no email service set up yet, so nothing can be sent
-  already_verified: boolean;
+  email_enabled: boolean; // false: no email service set up, so the link is only in the server log
+}
+
+export interface VerifyEmailResponse {
+  user: User;
+  /** Only the first time the link is opened: it signs them in. */
+  access_token: string | null;
+}
+
+/** Adding someone who hasn't signed up: an email gets the invite right away. */
+export interface MemberAdded {
+  member: Member;
+  emailed: boolean;
+  email_enabled: boolean;
+  link: string; // their personal invite link, for WhatsApp
 }
 
 export interface TokenResponse {

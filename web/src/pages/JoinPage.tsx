@@ -60,7 +60,7 @@ function SignedOut({ code }: { code: string }) {
           </Button>
         </Link>
       </div>
-      <p className="mt-4 text-xs text-slate-500">New here? Signing up takes a minute: your name, email and a password.</p>
+      <p className="mt-4 text-xs text-slate-500">New here? Signing up takes a minute: your name, email and a password, then confirm your email from the link we send — it brings you back here to join.</p>
     </>
   );
 }

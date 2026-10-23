@@ -15,12 +15,12 @@ Status: **implemented** for health, auth, households, members, chores and tasks.
 
 | Method | Path             | Auth | Description                         |
 | ------ | ---------------- | ---- | ----------------------------------- |
-| POST   | `/auth/register` | No   | Create account                      |
-| POST   | `/auth/login`    | No   | Returns `{ access_token, token_type }` |
+| POST   | `/auth/register` | No   | Create account `{ email, first_name, last_name?, password, next? }` → `{ email, sent, email_enabled }`. **Doesn't sign in**: we email a link (`{WEB_URL}/verify-email?token=…&next=…`) that confirms the address; `next` is a path on our site to land on afterwards (e.g. `/join/CODE`) |
+| POST   | `/auth/login`    | No   | Returns `{ access_token, token_type, user }`. **403** until the email is confirmed |
 | GET    | `/auth/me`       | Yes  | Current user, incl. `last_household_id` (house the apps open on) |
 | PUT    | `/auth/me/last-household` | Yes | `{ household_id }` — remember the house I switched to (404 if not a member). Also set automatically on create / join |
-| POST   | `/auth/verify-email` | No | `{ token }` from the link we email at sign-up (`{WEB_URL}/verify-email?token=…`, valid 3 days, tied to the address) → the user, now `email_verified`. Opening it twice is fine; a bad/expired link is 400 |
-| POST   | `/auth/me/verification` | Yes | Email the verification link again → `{ sent, email_enabled, already_verified }`. Without an email service the link is only logged |
+| POST   | `/auth/verify-email` | No | `{ token }` from the emailed link (valid 3 days, tied to the address) → `{ user, access_token }`. The first open confirms and signs in; later opens return `access_token: null` (a forwarded email can't be used to get in). Bad/expired link: 400 |
+| POST   | `/auth/resend-verification` | No | `{ email, next? }` → `{ email_enabled }`: emails the link again if that account exists and isn't confirmed. Same answer either way. Without an email service the link is only logged |
 
 ## Households
 
@@ -39,8 +39,8 @@ Status: **implemented** for health, auth, households, members, chores and tasks.
 | Method | Path                         | Description                      |
 | ------ | ---------------------------- | -------------------------------- |
 | GET    | `/households/{id}/members`   | List people in the house         |
-| POST   | `/households/{id}/members`   | Add a person `{ display_name }`  |
-| PATCH  | `/members/{member_id}`       | Rename / change role (admin)     |
+| POST   | `/households/{id}/members`   | Admin: add someone who hasn't signed up `{ display_name, email?, phone? }` — **an email or phone is required**. An email gets the invite right away (409 if someone in the house has it). → `{ member, emailed, email_enabled, link }` (`link`: their personal `/join/CODE?as=MEMBER`, for WhatsApp) |
+| PATCH  | `/members/{member_id}`       | Admin: rename, change role, email/phone. **Only verified members can be made admin** (400); someone who hasn't joined keeps an email or phone (400) |
 | DELETE | `/members/{member_id}`       | Remove from house + all rotations (admin) |
 
 ## Chores & tasks (round-robin rotation)

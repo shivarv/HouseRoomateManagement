@@ -153,11 +153,15 @@ def add_member(
     display_name: str,
     user_id: uuid.UUID | None = None,
     actor: HouseholdMember | None = None,
+    email: str | None = None,
+    phone: str | None = None,
 ) -> HouseholdMember:
     member = HouseholdMember(
         household_id=household.id,
         display_name=display_name,
         user_id=user_id,
+        email=email,
+        phone=phone,
         role="member",
         is_active=True,
     )
@@ -168,6 +172,19 @@ def add_member(
         activity.record(db, household.id, "member_added", actor, subject_id=member.id)
     db.commit()
     return member
+
+
+def email_in_house(household: Household, address: str) -> bool:
+    address = address.lower()
+    return any(
+        m.is_active and address in {m.email, m.user.email.lower() if m.user else None}
+        for m in household.members
+    )
+
+
+def personal_link(member: HouseholdMember) -> str:
+    """Opening it signed in (after sign-up) takes over this person's spot."""
+    return f"{invites.link(member.household.invite_code)}?as={member.id}"
 
 
 def deactivate_member(db: Session, member: HouseholdMember, acting: HouseholdMember) -> None:

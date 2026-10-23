@@ -36,7 +36,7 @@ export function ProfilePage() {
           </div>
           <Input label="Email" value={user.email} disabled />
           <p className={`text-xs font-medium ${user.email_verified ? "text-emerald-600" : "text-amber-700"}`}>
-            {user.email_verified ? "✓ Email confirmed" : "Email not confirmed yet — check your inbox for our link (see the banner above)."}
+            {user.email_verified ? "✓ Email confirmed" : "Email not confirmed yet"}
           </p>
           <p className="text-xs text-slate-500">
             Homes that call you by your full name update with it; if a home renamed you (e.g. a nickname), that stays.

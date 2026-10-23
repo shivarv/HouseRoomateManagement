@@ -245,24 +245,37 @@ private struct ScheduleSection: View {
 private struct PeopleSection: View {
     let model: HouseholdViewModel
     @State private var newName = ""
+    @State private var newEmail = ""
+    @State private var newPhone = ""
+    @State private var adding = false
+    @State private var added: [MemberAdded] = []
     @State private var pendingRemoval: Member?
+
+    private func trimmed(_ text: String) -> String { text.trimmingCharacters(in: .whitespaces) }
+    private var canAdd: Bool { !trimmed(newName).isEmpty && !(trimmed(newEmail).isEmpty && trimmed(newPhone).isEmpty) && !adding }
 
     var body: some View {
         if model.isAdmin {
             Section {
-                HStack {
-                    TextField("Roommate's name", text: $newName)
-                    Button("Add") {
-                        let name = newName.trimmingCharacters(in: .whitespaces)
-                        newName = ""
-                        Task { await model.addMember(name) }
+                TextField("Name", text: $newName)
+                TextField("Email", text: $newEmail)
+                    .keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                TextField("Phone (+1 617…)", text: $newPhone).keyboardType(.phonePad)
+                Button(adding ? "Adding…" : "Add & invite") { Task { await add() } }
+                    .bold()
+                    .disabled(!canAdd)
+                ForEach(added, id: \.member.id) { result in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(addedLine(result)).font(.footnote).foregroundStyle(.green)
+                        if result.member.phone != nil || !result.emailed, let url = whatsappURL(result) {
+                            Link("💬 Send invite on WhatsApp", destination: url).font(.footnote.bold())
+                        }
                     }
-                    .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             } header: {
                 Text("Add a roommate")
             } footer: {
-                Text("New people join the end of every chore rotation. They can claim their name later with invite code \(model.detail?.inviteCode ?? "").")
+                Text("Add an email or a phone (or both) so we can invite them. They join the end of every chore rotation. Anyone can also join with the house code \(model.detail?.inviteCode ?? "").")
             }
         }
 
@@ -279,10 +292,13 @@ private struct PeopleSection: View {
                 .swipeActions {
                     if model.isAdmin && member.id != model.detail?.myMemberId {
                         Button("Remove", role: .destructive) { pendingRemoval = member }
-                        Button(member.role == .admin ? "Make member" : "Make admin") {
-                            Task { await model.toggleAdmin(member) }
+                        // Only people with a confirmed email can be admins.
+                        if member.role == .admin || member.status == .verified {
+                            Button(member.role == .admin ? "Make member" : "Make admin") {
+                                Task { await model.toggleAdmin(member) }
+                            }
+                            .tint(.indigo)
                         }
-                        .tint(.indigo)
                     }
                 }
             }
@@ -300,6 +316,30 @@ private struct PeopleSection: View {
 }
 
 private extension PeopleSection {
+    func add() async {
+        adding = true
+        defer { adding = false }
+        let email = trimmed(newEmail), phone = trimmed(newPhone)
+        if let result = await model.addMember(trimmed(newName), email: email.isEmpty ? nil : email, phone: phone.isEmpty ? nil : phone) {
+            added.insert(result, at: 0)
+            newName = ""; newEmail = ""; newPhone = ""
+        }
+    }
+
+    func addedLine(_ r: MemberAdded) -> String {
+        guard let email = r.member.email else { return "✓ \(r.member.displayName) added" }
+        if r.emailed { return "✓ \(r.member.displayName) added — invite emailed to \(email)" }
+        return "✓ \(r.member.displayName) added — " + (r.emailEnabled ? "the email couldn't be sent" : "email isn't set up, so it wasn't emailed")
+    }
+
+    /// WhatsApp to their number (digits only, with the country code) with their personal link.
+    func whatsappURL(_ r: MemberAdded) -> URL? {
+        let house = model.detail?.name ?? "our home"
+        let text = "Hi \(r.member.displayName)! Join “\(house)” on Roommates to share chores, groceries and bills: \(r.link)"
+        let digits = (r.member.phone ?? "").filter(\.isNumber)
+        return text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed).flatMap { URL(string: "https://wa.me/\(digits)?text=\($0)") }
+    }
+
     func memberRow(_ member: Member) -> some View {
         HStack {
             Text(String(member.displayName.prefix(1)).uppercased())
@@ -326,7 +366,7 @@ private func contactLine(_ m: Member) -> String {
     let parts = [m.fullName != m.displayName ? m.fullName : "", m.email ?? "", m.phone ?? ""].filter { !$0.isEmpty }
     if !parts.isEmpty { return parts.joined(separator: " · ") }
     switch m.status {
-    case .added: return "Added by name — invite them to join"
+    case .added: return "Not invited yet — add an email or phone to invite them"
     case .invited: return "Invite sent — waiting for them to join"
     case .joined: return "Has an account — email not confirmed yet"
     case .verified: return "Has an account with a confirmed email"
@@ -357,14 +397,15 @@ private struct MemberContactView: View {
     var body: some View {
         Form {
             Section {
-                TextField("Email (optional)", text: $email)
+                TextField("Email", text: $email)
                     .keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                TextField("Phone (optional)", text: $phone).keyboardType(.phonePad)
+                TextField("Phone", text: $phone).keyboardType(.phonePad)
             } footer: {
-                Text("Used to invite them, and later for notifications. Once they join, their account's email is used.")
+                Text("Keep an email or phone (at least one) so they can be invited. Once they join, their account's email is used.")
             }
             Section {
-                Button(busy ? "Saving…" : "Save") { Task { await save() } }.disabled(!changed || busy)
+                Button(busy ? "Saving…" : "Save") { Task { await save() } }
+                    .disabled(!changed || busy || (email.trimmingCharacters(in: .whitespaces).isEmpty && phone.trimmingCharacters(in: .whitespaces).isEmpty))
                 if !email.isEmpty {
                     Button(member.status == .invited ? "Invite again" : "Send invite by email") { Task { await invite() } }
                         .disabled(changed || busy)
