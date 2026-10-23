@@ -1,4 +1,4 @@
-import type { TokenResponse, User } from "../types/api";
+import type { TokenResponse, User, VerificationSent } from "../types/api";
 import { api } from "./client";
 
 export const authApi = {
@@ -13,6 +13,9 @@ export const authApi = {
   updateProfile: (firstName: string, lastName: string) =>
     api<User>("/auth/me", { method: "PATCH", body: { first_name: firstName, last_name: lastName } }),
   me: () => api<User>("/auth/me"),
+  /** The link from the email; works signed out. */
+  verifyEmail: (token: string) => api<User>("/auth/verify-email", { method: "POST", body: { token } }),
+  resendVerification: () => api<VerificationSent>("/auth/me/verification", { method: "POST" }),
   setLastHousehold: (householdId: string) =>
     api<User>("/auth/me/last-household", { method: "PUT", body: { household_id: householdId } }),
 };

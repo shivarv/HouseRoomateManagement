@@ -43,22 +43,24 @@ class LoginIn(BaseModel):
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    @model_validator(mode="before")
-    @classmethod
-    def _verified(cls, data):
-        verified_at = getattr(data, "email_verified_at", None)
-        if verified_at is not None:
-            return {**{k: getattr(data, k) for k in ("id", "email", "first_name", "last_name", "name", "last_household_id")}, "email_verified": True}
-        return data
-
     id: uuid.UUID
     email: str
     first_name: str
     last_name: str
     name: str  # "First Last"
-    email_verified: bool = False
+    email_verified: bool  # User.email_verified
     # May point at a house I've since left; clients fall back to my first house.
     last_household_id: uuid.UUID | None = None
+
+
+class VerifyEmailIn(BaseModel):
+    token: str = Field(min_length=10, max_length=2000)
+
+
+class VerificationSent(BaseModel):
+    sent: bool  # handed to the email service
+    email_enabled: bool  # False: no email service set up, so nothing can be sent yet
+    already_verified: bool
 
 
 class LastHouseholdIn(BaseModel):

@@ -28,3 +28,23 @@ def decode_access_token(token: str) -> uuid.UUID | None:
         return uuid.UUID(payload["sub"])
     except (jwt.PyJWTError, KeyError, ValueError):
         return None
+
+
+VERIFY_EMAIL_DAYS = 3
+
+
+def create_email_token(user_id: uuid.UUID, email: str) -> str:
+    """A link token proving the holder can read `email`. Tied to the address, so changing it voids old links."""
+    expires = datetime.now(UTC) + timedelta(days=VERIFY_EMAIL_DAYS)
+    payload = {"sub": str(user_id), "email": email.lower(), "purpose": "verify_email", "exp": expires}
+    return jwt.encode(payload, settings.jwt_secret, ALGORITHM)
+
+
+def decode_email_token(token: str) -> tuple[uuid.UUID, str] | None:
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+        if payload.get("purpose") != "verify_email":
+            return None
+        return uuid.UUID(payload["sub"]), payload["email"]
+    except (jwt.PyJWTError, KeyError, ValueError):
+        return None

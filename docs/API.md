@@ -19,6 +19,8 @@ Status: **implemented** for health, auth, households, members, chores and tasks.
 | POST   | `/auth/login`    | No   | Returns `{ access_token, token_type }` |
 | GET    | `/auth/me`       | Yes  | Current user, incl. `last_household_id` (house the apps open on) |
 | PUT    | `/auth/me/last-household` | Yes | `{ household_id }` — remember the house I switched to (404 if not a member). Also set automatically on create / join |
+| POST   | `/auth/verify-email` | No | `{ token }` from the link we email at sign-up (`{WEB_URL}/verify-email?token=…`, valid 3 days, tied to the address) → the user, now `email_verified`. Opening it twice is fine; a bad/expired link is 400 |
+| POST   | `/auth/me/verification` | Yes | Email the verification link again → `{ sent, email_enabled, already_verified }`. Without an email service the link is only logged |
 
 ## Households
 

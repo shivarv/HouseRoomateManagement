@@ -10,7 +10,8 @@ import { useCurrentHousehold } from "./HouseholdLayout";
 const STATUS = {
   added: { label: "Added", tone: "slate", hint: "Added by name — invite them to join" },
   invited: { label: "Invited", tone: "amber", hint: "Invite sent — waiting for them to join" },
-  joined: { label: "Joined", tone: "green", hint: "Has an account" },
+  joined: { label: "Joined", tone: "indigo", hint: "Has an account — email not confirmed yet" },
+  verified: { label: "Verified", tone: "green", hint: "Has an account with a confirmed email" },
 } as const;
 
 /** "Beatrice Smith" from their account (the last name is left out when empty). */

@@ -21,6 +21,7 @@ import { HistoryTab, ReportTab } from "./pages/household/ReportTab";
 import { ScheduleTab } from "./pages/household/ScheduleTab";
 import { HouseDetailsSettings, SettingsLayout } from "./pages/household/SettingsPages";
 import { RequireAuth } from "./routes/RequireAuth";
+import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 
 export default function App() {
   return (
@@ -29,6 +30,8 @@ export default function App() {
       <Route path="/register" element={<AuthPage mode="register" />} />
       {/* Invite links: work signed out (sign up or log in, then come back to join). */}
       <Route path="/join/:code" element={<JoinPage />} />
+      {/* The link in the verification email: works signed out too. */}
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route
         element={
           <RequireAuth>

@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from tests.conftest import register
 from tests.test_chore_api import API
 
@@ -158,3 +160,22 @@ def test_members_have_status_email_and_phone(client, monkeypatch):
     assert [(m["display_name"], m["status"]) for m in members] == [("Ann", "joined"), ("Bea", "joined")]
     me = next(m for m in members if m["display_name"] == "Bea")
     assert client.patch(f"{API}/members/{me['id']}", json={"email": "x@y.co"}, headers=ann).status_code == 400
+
+
+def test_existing_accounts_are_verified_new_ones_joined(client):
+    from app.db.session import SessionLocal
+    from app.models import User
+
+    ann = register(client, "ann@example.com", "Ann")
+    house = _create(client, ann, "Maple")
+    assert _me(client, ann)["email_verified"] is False
+    member = client.get(f"{API}/households/{house['id']}", headers=ann).json()["members"][0]
+    assert member["status"] == "joined"
+
+    # What migration 0015 does for accounts that already exist.
+    with SessionLocal() as db:
+        db.query(User).update({User.email_verified_at: datetime.now(UTC)})
+        db.commit()
+    assert _me(client, ann)["email_verified"] is True
+    member = client.get(f"{API}/households/{house['id']}", headers=ann).json()["members"][0]
+    assert member["status"] == "verified"

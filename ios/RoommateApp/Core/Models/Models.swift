@@ -8,8 +8,16 @@ struct User: Codable, Identifiable, Hashable {
     let firstName: String
     let lastName: String  // may be empty: then it's left out of `name`
     let name: String  // "First Last"
+    /// Opened the link we emailed. Accounts from before verification count as verified.
+    let emailVerified: Bool
     /// The house the app opens on. May be one I've since left; then fall back to my first.
     var lastHouseholdId: UUID?
+}
+
+struct VerificationSent: Decodable {
+    let sent: Bool
+    let emailEnabled: Bool  // false: no email service set up yet, so nothing can be sent
+    let alreadyVerified: Bool
 }
 
 struct TokenResponse: Decodable {
@@ -28,7 +36,7 @@ struct MemberBrief: Codable, Identifiable, Hashable {
 
 /// added: by name only · invited: an email invite is waiting · joined: has an account
 enum MemberStatus: String, Codable {
-    case added, invited, joined
+    case added, invited, joined, verified
     var label: String { rawValue.capitalized }
 }
 

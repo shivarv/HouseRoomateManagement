@@ -23,6 +23,11 @@ extension APIClient {
         try await get("/auth/me")
     }
 
+    /// Email the verification link again.
+    func resendVerification() async throws -> VerificationSent {
+        try await send("POST", "/auth/me/verification", body: Optional<String>.none)
+    }
+
     func setLastHousehold(_ householdId: UUID) async throws -> User {
         try await send("PUT", "/auth/me/last-household", body: LastHouseholdBody(householdId: householdId))
     }
