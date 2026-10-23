@@ -115,13 +115,6 @@ final class HouseholdViewModel {
         await perform { try await self.client.removeLog(log.id) }
     }
 
-    /// Nil when it failed (the error is shown).
-    func addMember(_ name: String, email: String?, phone: String?) async -> MemberAdded? {
-        var added: MemberAdded?
-        await perform { added = try await self.client.addMember(householdId: self.householdId, displayName: name, email: email, phone: phone) }
-        return added
-    }
-
     func removeMember(_ member: Member) async {
         await perform { try await self.client.removeMember(member.id) }
     }

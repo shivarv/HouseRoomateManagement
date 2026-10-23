@@ -6,7 +6,7 @@ from tests.test_last_household import _create
 
 def test_email_invites_are_saved_shown_to_the_invited_person_and_settled_on_join(client, monkeypatch):
     sent = []
-    monkeypatch.setattr(email, "deliver", lambda to, subject, text: sent.append((to, subject, text)) or email.NOT_SET_UP)
+    monkeypatch.setattr(email, "deliver", lambda to, subject, text, html=None: sent.append((to, subject, text)) or email.NOT_SET_UP)
     ann = register(client, "ann@example.com", "Ann")
     maple = _create(client, ann, "Maple")
 
@@ -40,7 +40,7 @@ def test_email_invites_are_saved_shown_to_the_invited_person_and_settled_on_join
 
 
 def test_sent_invites_are_marked_and_only_admins_or_the_sender_cancel(client, monkeypatch):
-    monkeypatch.setattr(email, "deliver", lambda to, subject, text: None)
+    monkeypatch.setattr(email, "deliver", lambda to, subject, text, html=None: None)
     ann = register(client, "ann@example.com", "Ann")
     maple = _create(client, ann, "Maple")
     cy = register(client, "cy@example.com", "Cy")

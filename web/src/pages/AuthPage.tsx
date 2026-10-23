@@ -43,7 +43,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     e.preventDefault();
     submit.mutate();
   };
-  if (checkEmail) return <CheckEmail {...checkEmail} next={next} onBack={() => setCheckEmail(null)} />;
+  if (checkEmail) return <CheckEmail {...checkEmail} next={next} invite={state?.invite} />;
   const tab = (to: "login" | "register", label: string) => (
     <Link
       to={to === "login" ? "/login" : "/register"}
@@ -135,7 +135,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
 }
 
 /** After signing up: nothing to do here until they open the link we emailed. */
-function CheckEmail({ email, emailEnabled, next, onBack }: { email: string; emailEnabled: boolean; next?: string; onBack: () => void }) {
+function CheckEmail({ email, emailEnabled, next, invite }: { email: string; emailEnabled: boolean; next?: string; invite?: string }) {
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
       <div className="pointer-events-none absolute -left-24 top-10 h-80 w-80 rounded-full bg-indigo-400/30 blur-3xl" />
@@ -146,15 +146,14 @@ function CheckEmail({ email, emailEnabled, next, onBack }: { email: string; emai
         </div>
         <h1 className="text-2xl font-extrabold tracking-tight">Check your email</h1>
         <p className="mt-2 text-sm text-slate-600">
-          We sent a link to <b>{email}</b>. Open it to confirm your email — it signs you in{next?.startsWith("/join/") ? " and takes you to your invite" : ""}.
+          Your account is created. We sent a link to <b>{email}</b> — open it and you'll be logged in
+          {invite ? <> and taken straight to <b>{invite}</b> to join</> : ""}. There's nothing else to do here.
         </p>
+        <p className="mt-2 text-sm text-slate-600">You can close this page.</p>
         {!emailEnabled && <p className="mt-2 text-sm text-amber-700">Email isn't set up on this server, so the link is in the server log.</p>}
-        <p className="mt-4 text-xs text-slate-500">Not there? Check spam, or send it again. The link works for 3 days.</p>
-        <div className="mt-4 space-y-2">
+        <p className="mt-4 text-xs text-slate-500">Not there after a few minutes? Check spam, or send it again. The link works for 3 days.</p>
+        <div className="mt-4">
           <ResendLink email={email} next={next} />
-          <Button variant="ghost" className="w-full" onClick={onBack}>
-            Use a different email
-          </Button>
         </div>
       </Card>
     </div>

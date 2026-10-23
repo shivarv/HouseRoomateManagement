@@ -8,7 +8,7 @@ from tests.test_chore_api import API
 
 def _capture(monkeypatch):
     sent = []
-    monkeypatch.setattr(email, "deliver", lambda to, subject, text: sent.append((to, subject, text)))  # None: sent
+    monkeypatch.setattr(email, "deliver", lambda to, subject, text, html=None: sent.append((to, subject, text)))  # None: sent
     return sent
 
 
@@ -173,3 +173,13 @@ def test_brevo_is_used_when_its_key_is_set(monkeypatch, caplog):
     monkeypatch.setattr(urllib.request, "urlopen", refuse)
     assert email.send("bea@example.com", "Hi", "text") is False
     assert "Brevo 400" in caplog.text and "sender not valid" in caplog.text
+
+
+def test_emails_have_a_clickable_link(client, monkeypatch):
+    sent = []
+    monkeypatch.setattr(email, "deliver", lambda to, subject, text, html=None: sent.append(html))
+    _signup(client)
+    url = re.search(r'href="([^"]+)"', sent[0]).group(1)
+    assert "/verify-email?token=" in url and sent[0].count(f'href="{url}"') == 2  # the button and the spelled-out link
+    assert ">Confirm my email</a>" in sent[0]
+    assert "<script" not in email.button_email(["<script>x</script>"], "Go", "https://x.test/?a=1&b=2")

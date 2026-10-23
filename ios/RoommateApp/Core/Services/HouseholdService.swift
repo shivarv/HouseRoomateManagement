@@ -58,6 +58,16 @@ extension APIClient {
         try await get("/me/invites")
     }
 
+    /// Join with a private (emailed) invite. 404 "expired or was cancelled" once it's cancelled, used or expired.
+    func acceptInviteLink(token: String) async throws -> Household {
+        try await send("POST", "/invite-links/\(token)/accept", body: Optional<String>.none)
+    }
+
+    /// Admins: a new shared code; every old shared link and code stops working.
+    func resetInviteCode(householdId: UUID) async throws -> Household {
+        try await send("POST", "/households/\(householdId)/invite-code", body: Optional<String>.none)
+    }
+
     func setRole(memberId: UUID, role: Role) async throws -> Member {
         try await send("PATCH", "/members/\(memberId)", body: RoleBody(role: role))
     }

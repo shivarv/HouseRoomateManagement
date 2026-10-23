@@ -34,7 +34,13 @@ def send(user: User, next_path: str | None = None) -> bool:
         f"Confirm your email for Roommates by opening this link:\n{url}\n\n"
         f"It works for {VERIFY_EMAIL_DAYS} days. If you didn't sign up, you can ignore this email.\n"
     )
-    sent = email.send(user.email, "Confirm your email for Roommates", text)
+    html = email.button_email(
+        [f"Hi {user.first_name or user.name}!", "Confirm your email for Roommates to finish signing up."],
+        "Confirm my email",
+        url,
+        f"It works for {VERIFY_EMAIL_DAYS} days. If you didn't sign up, you can ignore this email.",
+    )
+    sent = email.send(user.email, "Confirm your email for Roommates", text, html)
     if not sent:
         log.info("Email verification link for %s (not emailed): %s", user.email, url)
     return sent

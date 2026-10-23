@@ -592,7 +592,8 @@ struct EmailInvite: Decodable, Identifiable, Hashable {
 
 struct EmailInviteResult: Decodable, Hashable {
     let email: String
-    let status: String  // sent · saved (emailing isn't set up) · member (already in the house)
+    let status: String  // sent · saved (emailing isn't set up) · failed (see reason) · member (already in the house)
+    let reason: String?  // failed only: bad_address · unavailable (try later) · refused (our email setup)
 }
 
 struct EmailInviteResults: Decodable {
@@ -605,9 +606,10 @@ struct EmailInviteResults: Decodable {
 struct MyInvite: Decodable, Identifiable, Hashable {
     let householdName: String
     let inviteCode: String
+    let token: String  // the private invite: joins only while it's pending, and only as me
     let invitedBy: String?
     let createdAt: String
-    var id: String { inviteCode }
+    var id: String { token }
 }
 
 enum InviteLink {
