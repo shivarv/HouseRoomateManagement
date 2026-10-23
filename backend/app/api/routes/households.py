@@ -183,6 +183,7 @@ def invite_link_public(token: str, db: DbSession):
         household_name=household.name,
         people=sum(1 for m in household.members if m.is_active),
         email=row.email,
+        invited_by=row.invited_by.display_name if row.invited_by else None,
     )
 
 

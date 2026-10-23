@@ -36,7 +36,7 @@ export function PeopleTab({ manage = false }: { manage?: boolean }) {
 
   return (
     <div className="space-y-4">
-      <InvitePanel house={household} />
+      {isAdmin && <InvitePanel house={household} />}
 
       <ErrorText error={remove.error ?? update.error ?? cancel.error} />
       <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-white/70 bg-white/90 shadow-sm ring-1 ring-slate-900/5 backdrop-blur">

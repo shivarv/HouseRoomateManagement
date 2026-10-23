@@ -7,7 +7,7 @@ import { Button, Card, ErrorText, Input } from "../components/ui";
 import { useAuth } from "../features/auth/AuthContext";
 
 /** Where to go after signing in, and (from an invite link) which house is waiting. */
-type AuthState = { from?: string; invite?: string } | null;
+type AuthState = { from?: string; invite?: string; invitedBy?: string } | null;
 
 /** The start screen: log in or sign up, on one card. An invite link's house is shown on top. */
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
@@ -72,7 +72,8 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
 
         {state?.invite && (
           <div className="mb-4 rounded-xl bg-indigo-50 px-3 py-2 text-sm text-indigo-900 ring-1 ring-indigo-100">
-            🎉 You're invited to <b>{state.invite}</b>. {mode === "register" ? "Create your account" : "Log in"} and you'll join right after.
+            🎉 {state.invitedBy ? <><b>{state.invitedBy}</b> invited you</> : "You're invited"} to <b>{state.invite}</b>.{" "}
+            {mode === "register" ? "Create your account" : "Log in"} and you'll join right after.
           </div>
         )}
 
