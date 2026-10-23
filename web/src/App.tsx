@@ -8,6 +8,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { SetupWizardPage } from "./pages/SetupWizardPage";
 import { HelpRequestsPage, NotificationsPage } from "./pages/NotificationsPage";
 import { ActivityTab } from "./pages/household/ActivityTab";
+import { ChatTab } from "./pages/household/ChatTab";
 import { ChoresTab } from "./pages/household/ChoresTab";
 import { GroceriesTab } from "./pages/household/GroceriesTab";
 import { GrocerySettingsPage } from "./pages/household/GrocerySettings";
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="chores" element={<Navigate to="/?view=chores" replace />} />
           <Route path="groceries" element={<GroceriesTab />} />
           <Route path="reminders" element={<RemindersTab />} />
+          <Route path="chat" element={<ChatTab />} />
           {/* Admin-only configuration, kept apart from the everyday tabs. */}
           <Route path="settings" element={<SettingsLayout />}>
             <Route index element={<HouseDetailsSettings />} />

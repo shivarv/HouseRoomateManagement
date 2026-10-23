@@ -17,6 +17,8 @@ struct RootView: View {
 struct MainTabView: View {
     // Owned here so the tab badge stays current even when another tab is showing.
     @State private var notifications = NotificationsViewModel()
+    @State private var chat = ChatModel()
+    @Environment(Session.self) private var session
 
     var body: some View {
         TabView {
@@ -24,6 +26,9 @@ struct MainTabView: View {
                 .tabItem { Label("Today", systemImage: "checklist") }
             RemindersView()
                 .tabItem { Label("Reminders", systemImage: "calendar.badge.clock") }
+            ChatView(model: chat)
+                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+                .badge(chat.unread)
             HouseholdsView()
                 .tabItem { Label("Households", systemImage: "house") }
             ShoppingView()
@@ -40,6 +45,9 @@ struct MainTabView: View {
         .task {
             while !Task.isCancelled {
                 await notifications.load()
+                if chat.households.isEmpty { chat.households = (try? await APIClient.shared.households()) ?? [] }
+                if chat.householdId == nil { chat.householdId = session.preferredHousehold(in: chat.households) }
+                await chat.refreshUnread()
                 try? await Task.sleep(for: .seconds(60))
             }
         }

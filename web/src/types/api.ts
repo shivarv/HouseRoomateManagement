@@ -429,3 +429,23 @@ export interface MyInvite {
   invited_by: string | null;
   created_at: string;
 }
+
+// --- House chat -----------------------------------------------------------------------------------
+
+export interface ChatMessage {
+  id: string;
+  author: MemberBrief | null; // null if they left the house
+  body: string; // "" once deleted
+  created_at: string;
+  edited_at: string | null;
+  changed_at: string; // sent, edited or deleted, whichever is latest
+  deleted: boolean;
+  is_mine: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+}
+
+export interface ChatPage {
+  messages: ChatMessage[]; // oldest first
+  has_more: boolean;
+}
