@@ -1,5 +1,31 @@
 import SwiftUI
 
+extension View {
+    /// Keeps a tab on the one current house (the last picked, on any device): picking a house on
+    /// any tab moves every tab to it, like web's header picker. Put it on the tab's root view, not
+    /// on the picker, so tabs that aren't on screen follow too.
+    func followsCurrentHouse(_ selection: Binding<UUID?>) -> some View {
+        modifier(FollowsCurrentHouse(selection: selection))
+    }
+}
+
+private struct FollowsCurrentHouse: ViewModifier {
+    @Binding var selection: UUID?
+    @Environment(Session.self) private var session
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: session.user?.lastHouseholdId) { _, id in follow(id) }
+            .onAppear { follow(session.user?.lastHouseholdId) }
+            .onChange(of: selection) { _, id in if let id { session.rememberHousehold(id) } }
+    }
+
+    private func follow(_ id: UUID?) {
+        // Only once the tab has a house: before its first load, the tab picks for itself.
+        if let id, selection != nil, selection != id { selection = id }
+    }
+}
+
 /// The house a tab acts on, which also starts a new home. Mirrors the web header's dropdown:
 /// while "Create a new home" or "Join" is open it shows that choice; when the sheet closes it
 /// goes back to the previous house (or to the new one, once it's created).

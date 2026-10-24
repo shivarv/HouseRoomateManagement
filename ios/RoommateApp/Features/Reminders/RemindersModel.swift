@@ -19,6 +19,12 @@ final class RemindersModel {
 
     private let client = APIClient.shared
 
+    /// For one house, sharing that house's own model with the screen it's on.
+    init(house: HouseholdViewModel) {
+        self.house = house
+        self.householdId = house.householdId
+    }
+
     var isAdmin: Bool { house?.isAdmin ?? false }
     var members: [Member] { house?.detail?.members ?? [] }
     var myMemberId: UUID? { house?.detail?.myMemberId }

@@ -115,7 +115,16 @@
       "Bash(sed -i '' 's|    assert any\\(to == \"bea@example.com\" and house\\\\[\"invite_code\"\\\\] in text for to, _, text in sent\\)|    assert any\\(to == \"bea@example.com\" and \"/invite/\" in text for to, _, text in sent\\)|' tests/test_verification.py)",
       "Bash(sed -n 300,400p Core/Models/Models.swift)",
       "Bash(sed -n 455,510p Core/Models/Models.swift)",
-      "Bash(grep -n \"struct ReportMonths\\\\|enum BillStatus\\\\|enum BillFrequency\\\\|enum PayerMode\" -A6 Core/Models/Models.swift)"
+      "Bash(grep -n \"struct ReportMonths\\\\|enum BillStatus\\\\|enum BillFrequency\\\\|enum PayerMode\" -A6 Core/Models/Models.swift)",
+      "Bash(grep -n \"activityMonth\\\\|householdOpen\\\\|history:\\\\|months:\" web/src/api/*.ts)",
+      "Bash(grep -rn \"/activity\\\\|/open\\\\|history\" ios/RoommateApp/Core/Services/*.swift)",
+      "Bash(sed -n 55,66p web/src/api/chores.ts)",
+      "Bash(grep -rn \"activity\" ios/RoommateApp/Core/Services/*.swift)",
+      "Bash(sed -n 1,90p Features/Households/HouseSettingsView.swift)",
+      "Bash(grep -rn \"HouseholdsView\\\\|HouseholdDetailView\\(\\\\|AdminSettingsLinks\" --include=*.swift .)",
+      "Bash(grep -n \"struct AdminSettingsLinks\" -A40 Features/Profile/ProfileView.swift)",
+      "Bash(grep -rn \"HouseholdsView\\\\|HouseholdDetailView\\(\\\\|AdminSettingsLinks\\\\|onDeletedThisHouse\" .)",
+      "Bash(sed -n 88,140p Features/Households/HouseSettingsView.swift)"
     ]
   }
 }

@@ -118,10 +118,6 @@ struct ShoppingView: View {
             List {
                 if !model.households.isEmpty {
                     HousePicker(households: model.households, selection: $model.householdId) { await model.load() }
-                    .onChange(of: model.householdId) { _, id in
-                        if let id { session.rememberHousehold(id) }
-                        Task { await model.load() }
-                    }
                 }
                 addSection
                 ErrorBanner(message: model.error)
@@ -177,6 +173,8 @@ struct ShoppingView: View {
             }
             .refreshable { await model.load() }
             .task { await model.load(preferred: session.preferredHousehold) }
+            .followsCurrentHouse($model.householdId)
+            .onChange(of: model.householdId) { _, _ in Task { await model.load(preferred: session.preferredHousehold) } }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { Task { await model.load() } }
             }

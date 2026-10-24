@@ -2,38 +2,25 @@ import SwiftUI
 
 /// 🧾 Reminders: bills (loud when due), then today's turns, then chores anyone can do.
 /// Everything is for the current day, week or month, so yesterday's reminders give way to today's.
-struct RemindersView: View {
-    @State private var model = RemindersModel()
+/// A tab of the house screen (House → Reminders), like web.
+struct RemindersSections: View {
+    let model: RemindersModel
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(Session.self) private var session
 
     var body: some View {
-        NavigationStack {
-            List {
-                if !model.households.isEmpty {
-                    HousePicker(households: model.households, selection: $model.householdId) { await model.load() }
-                    .onChange(of: model.householdId) { _, id in
-                        if let id { session.rememberHousehold(id) }
-                        Task { await model.load() }
-                    }
-                }
-                ErrorBanner(message: model.error)
-
-                if model.hasLoaded && model.households.isEmpty {
-                    Text("Join a household first.").foregroundStyle(.secondary)
-                } else {
-                    billsSection
-                    turnsSection
-                    openSection
-                }
+        Group {
+            ErrorBanner(message: model.error)
+            if !model.hasLoaded {
+                ProgressView().frame(maxWidth: .infinity)
+            } else {
+                billsSection
+                turnsSection
+                openSection
             }
-            .navigationTitle("Reminders")
-            .refreshable { await model.load() }
-            .task { await model.load(preferred: session.preferredHousehold) }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active { Task { await model.load() } }
-            }
-            .overlay { if !model.hasLoaded { ProgressView() } }
+        }
+        .task { await model.load() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await model.load() } }
         }
     }
 
