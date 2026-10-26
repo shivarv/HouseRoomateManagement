@@ -102,7 +102,6 @@ function Wizard({ template }: { template: SetupTemplate }) {
   useUnsavedChangesGuard(touched && !create.isSuccess, LEAVE_PROMPT);
 
   const me = user?.name ?? "You";
-  const people = [me]; // others join through invites, and join every rotation as they do
 
   function payload(): HouseholdSetup {
     return {
@@ -116,7 +115,6 @@ function Wizard({ template }: { template: SetupTemplate }) {
       bills: bills.map((b) => ({
         ...b,
         name: b.name.trim(),
-        payer_name: b.payer_mode === "one" ? b.payer_name : null,
         due_day: b.frequency === "daily" ? 1 : b.due_day,
         amount_cents: b.amount_type === "fixed" ? b.amount_cents : null,
       })),
@@ -148,8 +146,6 @@ function Wizard({ template }: { template: SetupTemplate }) {
       case "Bills":
         if (bills.some((b) => !b.name.trim())) return "Every bill needs a name";
         if (duplicate(bills.map((b) => b.name))) return `Two bills are called “${duplicate(bills.map((b) => b.name))}”`;
-        if (bills.some((b) => b.payer_mode === "one" && !people.some((p) => p.toLowerCase() === b.payer_name?.toLowerCase())))
-          return "Pick who pays each “one person pays” bill";
         if (bills.some((b) => b.amount_type === "fixed" && b.amount_cents !== null && (!Number.isFinite(b.amount_cents) || b.amount_cents < 0)))
           return "Amounts must be numbers, like 60 or 1250.50";
         if (!/^[A-Za-z]{3}$/.test(currency.trim())) return "Currency is a 3-letter code, like USD or INR";
@@ -176,7 +172,7 @@ function Wizard({ template }: { template: SetupTemplate }) {
       setGroceries((g) => resize(g, counts.groceries, template.groceries, () => ({ name: "", category_key: "other" })));
       setBills((b) =>
         resize(b, counts.bills, template.bills, () => ({
-          name: "", icon: "🧾", payer_mode: "anyone", payer_name: null, frequency: "monthly", due_day: 1, amount_type: "fixed", amount_cents: null,
+          name: "", icon: "🧾", payer_mode: "anyone", frequency: "monthly", due_day: 1, amount_type: "fixed", amount_cents: null,
         })),
       );
     }
@@ -293,7 +289,7 @@ function Wizard({ template }: { template: SetupTemplate }) {
             ) : (
               <ul className="space-y-3">
                 {bills.map((b, i) => (
-                  <BillRow key={i} bill={b} people={people} onChange={(bill) => setBills(bills.map((x, j) => (j === i ? bill : x)))} />
+                  <BillRow key={i} bill={b} onChange={(bill) => setBills(bills.map((x, j) => (j === i ? bill : x)))} />
                 ))}
               </ul>
             )}
@@ -528,7 +524,7 @@ function Question({
   );
 }
 
-function BillRow({ bill, people, onChange }: { bill: SetupBill; people: string[]; onChange: (b: SetupBill) => void }) {
+function BillRow({ bill, onChange }: { bill: SetupBill; onChange: (b: SetupBill) => void }) {
   const [amount, setAmount] = useState(bill.amount_cents != null ? (bill.amount_cents / 100).toFixed(2) : "");
   const set = (patch: Partial<SetupBill>) => onChange({ ...bill, ...patch });
 
@@ -537,20 +533,10 @@ function BillRow({ bill, people, onChange }: { bill: SetupBill; people: string[]
       <div className="flex flex-wrap gap-2">
         <input className={`${fieldClass} w-16 text-center`} value={bill.icon} maxLength={16} onChange={(e) => set({ icon: e.target.value })} aria-label="Icon" />
         <input className={`${fieldClass} min-w-40 flex-1`} value={bill.name} maxLength={80} placeholder="e.g. WiFi" onChange={(e) => set({ name: e.target.value })} aria-label="Bill" />
-        <select className={`${fieldClass} w-48`} value={bill.payer_mode} onChange={(e) => set({ payer_mode: e.target.value as SetupBill["payer_mode"], payer_name: e.target.value === "one" ? (bill.payer_name ?? people[0]) : null })} aria-label="Who pays">
-          <option value="anyone">Anyone can pay</option>
-          <option value="everyone">Everyone pays a share</option>
-          <option value="one">One person pays</option>
+        <select className={`${fieldClass} w-48`} value={bill.payer_mode} onChange={(e) => set({ payer_mode: e.target.value as SetupBill["payer_mode"] })} aria-label="Who pays">
+          <option value="anyone">Anyone pays</option>
+          <option value="everyone">Split between everyone</option>
         </select>
-        {bill.payer_mode === "one" && (
-          <select className={`${fieldClass} w-40`} value={bill.payer_name ?? ""} onChange={(e) => set({ payer_name: e.target.value })} aria-label="Who pays it">
-            {people.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <select

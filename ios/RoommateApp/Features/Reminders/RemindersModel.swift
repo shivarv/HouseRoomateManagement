@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Observation
 
 /// 🧾 Reminders: what needs doing now, most important first — bills, then today's turns for a
@@ -19,10 +20,20 @@ final class RemindersModel {
 
     private let client = APIClient.shared
 
+    /// For one house, sharing that house's own model with the screen it's on.
+    init(house: HouseholdViewModel) {
+        self.house = house
+        self.householdId = house.householdId
+    }
+
     var isAdmin: Bool { house?.isAdmin ?? false }
     var members: [Member] { house?.detail?.members ?? [] }
     var myMemberId: UUID? { house?.detail?.myMemberId }
     var urgentCount: Int { bills.filter { $0.current.status == .overdue || $0.current.status == .due }.count }
+
+    /// For the Reminders tab: red with the overdue count, orange with the due-soon count, or a
+    /// green tick when nothing needs paying. Nothing until the bills have loaded.
+    var badge: ChipBadge? { BillsBadge.chip(for: bills, loaded: hasLoaded) }
 
     /// Mine first, then still to do before done.
     var tasks: [ChoreTask] {
@@ -61,9 +72,9 @@ final class RemindersModel {
         } catch {
             notices[bill.id] = error.localizedDescription
         }
+        let hadHistory = history[bill.id] != nil  // load() clears it
         await load()
-        if history[bill.id] == nil { return }
-        await loadHistory(bill)
+        if hadHistory { await loadHistory(bill) }
     }
 
     func pay(_ bill: Bill, for member: UUID? = nil, period: BillPeriod) async {
@@ -78,11 +89,38 @@ final class RemindersModel {
         await act(on: bill) { _ = try await self.client.setBillAmount(bill.id, cents: cents, period: period.period) }
     }
 
+    /// A variable bill in one go: its amount for the period (when it changed), then who paid it.
+    func payWithAmount(_ bill: Bill, cents: Int, for member: UUID? = nil, period: BillPeriod) async {
+        await act(on: bill) {
+            if cents != period.amountCents {
+                _ = try await self.client.setBillAmount(bill.id, cents: cents, period: period.period)
+            }
+            _ = try await self.client.payBill(bill.id, memberId: member, period: period.period)
+        }
+    }
+
     func loadHistory(_ bill: Bill) async {
         do {
             history[bill.id] = try await client.billHistory(bill.id)
         } catch {
             notices[bill.id] = error.localizedDescription
         }
+    }
+}
+
+/// How the house's bills look at a glance, for the tab badges.
+enum BillsBadge {
+    static func chip(for bills: [Bill], loaded: Bool) -> ChipBadge? {
+        guard loaded, !bills.isEmpty else { return nil }
+        let overdue = bills.filter { $0.current.status == .overdue }.count
+        let due = bills.filter { $0.current.status == .due }.count
+        if overdue > 0 { return ChipBadge(text: "\(overdue)", color: .red) }
+        if due > 0 { return ChipBadge(text: "\(due)", color: .orange) }
+        return ChipBadge(text: "✓", color: .green)
+    }
+
+    /// The House tab in the tab bar: how many bills are overdue or due soon (iOS draws it red).
+    static func needingPayment(_ bills: [Bill]) -> Int {
+        bills.filter { $0.current.status == .overdue || $0.current.status == .due }.count
     }
 }

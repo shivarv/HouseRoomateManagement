@@ -130,6 +130,12 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
             </>
           )}
         </p>
+        {mode === "register" && (
+          <p className="mt-3 text-center text-xs text-slate-400">
+            By creating an account you agree to our{" "}
+            <Link className="underline hover:text-indigo-600" to="/privacy">privacy policy</Link>.
+          </p>
+        )}
       </Card>
     </div>
   );

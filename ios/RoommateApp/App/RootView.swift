@@ -14,31 +14,52 @@ struct RootView: View {
     }
 }
 
+/// A tab with its own colour. The tab bar tints every icon alike unless the image keeps its
+/// original colours, so the symbol is coloured here as a UIImage.
+private struct TabIcon: View {
+    let title: String
+    let systemImage: String
+    let color: UIColor
+
+    var body: some View {
+        Label {
+            Text(title)
+        } icon: {
+            if let image = UIImage(systemName: systemImage)?.withTintColor(color, renderingMode: .alwaysOriginal) {
+                Image(uiImage: image)
+            } else {
+                Image(systemName: systemImage)
+            }
+        }
+    }
+}
+
 struct MainTabView: View {
     // Owned here so the tab badge stays current even when another tab is showing.
     @State private var notifications = NotificationsViewModel()
     @State private var chat = ChatModel()
+    /// Bills of the current house that are overdue or due soon, on the House tab.
+    @State private var billsDue = 0
     @Environment(Session.self) private var session
 
     var body: some View {
+        // Five tabs, so iOS never folds one into "More". Profile is the avatar at the top right.
         TabView {
             MyDayView()
-                .tabItem { Label("Today", systemImage: "checklist") }
-            RemindersView()
-                .tabItem { Label("Reminders", systemImage: "calendar.badge.clock") }
+                .tabItem { TabIcon(title: "Today", systemImage: "sun.max.fill", color: .systemOrange) }
+            HouseTabView()
+                .tabItem { TabIcon(title: "House", systemImage: "house.fill", color: UIColor(Brand.indigo)) }
+                .badge(billsDue)
             ChatView(model: chat)
-                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+                .tabItem { TabIcon(title: "Chat", systemImage: "bubble.left.and.bubble.right.fill", color: .systemTeal) }
                 .badge(chat.unread)
-            HouseholdsView()
-                .tabItem { Label("Households", systemImage: "house") }
             ShoppingView()
-                .tabItem { Label("Groceries", systemImage: "cart") }
+                .tabItem { TabIcon(title: "Groceries", systemImage: "cart.fill", color: .systemGreen) }
             NotificationsView(model: notifications)
-                .tabItem { Label("Favours", systemImage: "hand.raised") }
+                .tabItem { TabIcon(title: "Favours", systemImage: "hand.wave.fill", color: UIColor(Brand.fuchsia)) }
                 .badge(notifications.waitingCount)
-            ProfileView()
-                .tabItem { Label("Profile", systemImage: "person.crop.circle") }
         }
+        .tint(Brand.indigo)
         // New requests show up in the badge without visiting the tab.
         .task {
             while !Task.isCancelled {
@@ -46,6 +67,9 @@ struct MainTabView: View {
                 if chat.households.isEmpty { chat.households = (try? await APIClient.shared.households()) ?? [] }
                 if chat.householdId == nil { chat.householdId = session.preferredHousehold(in: chat.households) }
                 await chat.refreshUnread()
+                if let house = chat.householdId, let list = try? await APIClient.shared.bills(householdId: house) {
+                    billsDue = BillsBadge.needingPayment(list.bills)
+                }
                 try? await Task.sleep(for: .seconds(60))
             }
         }

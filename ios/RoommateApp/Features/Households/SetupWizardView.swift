@@ -72,7 +72,6 @@ private struct WizardSteps: View {
     @State private var confirmCancel = false
 
     private var max: Int { template.maxItems }
-    private var people: [String] { [me] }
 
     private var steps: [Step] { Step.allCases }
     private var index: Int { steps.firstIndex(of: step) ?? 0 }
@@ -266,16 +265,8 @@ private struct WizardSteps: View {
                     TextField("🧾", text: $bills[i].icon).frame(width: 44).multilineTextAlignment(.center)
                     TextField("Bill, e.g. WiFi", text: $bills[i].name)
                 }
-                Picker("Who pays", selection: Binding(get: { bills[i].payerMode }, set: { mode in
-                    bills[i].payerMode = mode
-                    bills[i].payerName = mode == .one ? (bills[i].payerName ?? me) : nil
-                })) {
+                Picker("Who pays", selection: $bills[i].payerMode) {
                     ForEach(PayerMode.allCases) { Text($0.label).tag($0) }
-                }
-                if bills[i].payerMode == .one {
-                    Picker("Person", selection: Binding(get: { bills[i].payerName ?? me }, set: { bills[i].payerName = $0 })) {
-                        ForEach(people, id: \.self) { Text($0).tag($0) }
-                    }
                 }
                 Picker("Repeats", selection: Binding(get: { bills[i].frequency }, set: { f in
                     bills[i].frequency = f
@@ -402,7 +393,7 @@ private struct WizardSteps: View {
         groceries = resize(groceries, to: groceryCount, defaults: template.groceries, name: \.name,
                            blank: SetupGrocery(name: "", categoryKey: "other"))
         bills = resize(bills, to: billCount, defaults: template.bills, name: \.name,
-                       blank: SetupBill(name: "", icon: "🧾", payerMode: .anyone, payerName: nil, frequency: .monthly, dueDay: 1, amountType: .fixed, amountCents: nil))
+                       blank: SetupBill(name: "", icon: "🧾", payerMode: .anyone, frequency: .monthly, dueDay: 1, amountType: .fixed, amountCents: nil))
         amounts = bills.indices.map { i in
             i < amounts.count ? amounts[i] : bills[i].amountCents.map { String(format: "%.2f", Double($0) / 100) } ?? ""
         }
@@ -434,7 +425,6 @@ private struct WizardSteps: View {
             bills: bills.indices.map { i in
                 var b = bills[i]
                 b.name = b.name.trimmingCharacters(in: .whitespaces)
-                b.payerName = b.payerMode == .one ? b.payerName : nil
                 b.dueDay = b.frequency == .daily ? 1 : b.dueDay
                 b.amountCents = b.amountType == .fixed ? Money.cents(amounts[i]) : nil
                 return b

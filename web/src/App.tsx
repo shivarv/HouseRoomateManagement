@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router";
 import { AppShell } from "./components/AppShell";
 import { AuthPage } from "./pages/AuthPage";
 import { InviteLinkPage, JoinPage } from "./pages/JoinPage";
+import { PrivacyPage, SupportPage } from "./pages/LegalPages";
 import { AddHouseholdPage, HouseholdsPage } from "./pages/HouseholdsPage";
 import { MyDayPage } from "./pages/MyDayPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -35,6 +36,9 @@ export default function App() {
       <Route path="/invite/:token" element={<InviteLinkPage />} />
       {/* The link in the verification email: works signed out too. */}
       <Route path="/verify-email" element={<VerifyEmailPage />} />
+      {/* Public: the App Store links these. */}
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/support" element={<SupportPage />} />
       <Route
         element={
           <RequireAuth>

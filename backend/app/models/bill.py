@@ -19,9 +19,10 @@ class Bill(UUIDPrimaryKey, Timestamps, Base):
       variable  each period's amount is entered when the bill comes (BillAmount: gas, electricity)
 
     payer_mode:
-      one       one person pays it (payer_id); anyone can still mark it paid for them
-      anyone    whoever pays first marks it paid for the period
-      everyone  each person pays their share; each one who has paid is counted
+      anyone    one payment settles the period: whoever pays first marks it paid for the house
+      everyone  split: each person pays their share; each one who has paid is counted
+
+    payer_id is no longer set: bills used to name one person who pays (payer_mode "one").
     """
 
     __tablename__ = "bills"
@@ -30,7 +31,7 @@ class Bill(UUIDPrimaryKey, Timestamps, Base):
     household_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(80))
     icon: Mapped[str] = mapped_column(String(16), default="🧾")
-    payer_mode: Mapped[str] = mapped_column(String(16), default="anyone")  # one | anyone | everyone
+    payer_mode: Mapped[str] = mapped_column(String(16), default="anyone")  # anyone | everyone
     payer_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("household_members.id", ondelete="SET NULL")
     )

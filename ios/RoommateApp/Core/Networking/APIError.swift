@@ -15,6 +15,11 @@ struct APIError: LocalizedError {
         if let first = (json?["detail"] as? [[String: Any]])?.first, let msg = first["msg"] as? String {
             return APIError(status: status, message: msg)
         }
-        return APIError(status: status, message: HTTPURLResponse.localizedString(forStatusCode: status).capitalized)
+        // The server itself had a problem (no message of its own): say so plainly.
+        switch status {
+        case 502, 503, 504: return APIError(status: status, message: "Roommates is waking up or busy. Pull down to try again in a moment.")
+        case 500...: return APIError(status: status, message: "Something went wrong on our side. Pull down to try again in a moment.")
+        default: return APIError(status: status, message: HTTPURLResponse.localizedString(forStatusCode: status).capitalized)
+        }
     }
 }

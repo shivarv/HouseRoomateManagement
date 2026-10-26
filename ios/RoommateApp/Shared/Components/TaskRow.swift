@@ -62,6 +62,7 @@ struct TaskRow: View {
             }
         }
         .padding(.vertical, 4)
+        .sensoryFeedback(.success, trigger: task.isDone) { _, done in done }
         .alert("Swap \(task.chore.name) · \(turnLabel)?", isPresented: $askingSwap) {
             TextField("Optional note, e.g. travelling", text: $note)
             Button("Send to the house") {

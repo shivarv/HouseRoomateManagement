@@ -90,9 +90,6 @@ def create(db: Session, user: User, body: HouseholdSetup) -> HouseholdMember:
             raise BadRequest(f"{c.name}: “{missing[0]}” isn't one of the people in the house")
         if len({p.lower() for p in c.people}) != len(c.people):
             raise BadRequest(f"{c.name}: someone is in the rotation twice")
-    for b in body.bills:
-        if b.payer_mode == "one" and b.payer_name.lower() not in names:
-            raise BadRequest(f"{b.name}: “{b.payer_name}” isn't one of the people in the house")
 
     household, admin = households.new_household(db, user, body.name, body.address, body.timezone)
     today = clock.today_in(household.timezone)
@@ -139,14 +136,12 @@ def create(db: Session, user: User, body: HouseholdSetup) -> HouseholdMember:
         )
 
     for position, b in enumerate(body.bills):
-        payer = by_name[b.payer_name.lower()] if b.payer_mode == "one" else None
         db.add(
             Bill(
                 household_id=household.id,
                 name=b.name,
                 icon=b.icon,
                 payer_mode=b.payer_mode,
-                payer_id=payer.id if payer else None,
                 frequency=b.frequency,
                 due_day=b.due_day,
                 amount_type=b.amount_type,

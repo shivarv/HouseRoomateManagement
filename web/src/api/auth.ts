@@ -14,6 +14,8 @@ export const authApi = {
   updateProfile: (firstName: string, lastName: string) =>
     api<User>("/auth/me", { method: "PATCH", body: { first_name: firstName, last_name: lastName } }),
   me: () => api<User>("/auth/me"),
+  /** For good: homes nobody else is in go with it; elsewhere a roommate takes over as admin. */
+  deleteAccount: () => api<void>("/auth/me", { method: "DELETE" }),
   /** The link from the email; works signed out. */
   verifyEmail: (token: string) => api<VerifyEmailResponse>("/auth/verify-email", { method: "POST", body: { token } }),
   /** Signed out. The answer is the same whether or not the account exists. */

@@ -7,6 +7,8 @@ import SwiftUI
 final class ChatModel {
     var households: [Household] = []
     var householdId: UUID?
+    /// The house's people, for the header.
+    var house: HouseholdDetail?
     var messages: [ChatMessage] = []
     var hasMore = false
     var unread = 0
@@ -25,7 +27,9 @@ final class ChatModel {
                 householdId = preferred(households)
             }
             guard let householdId else { return }
+            async let detail = client.household(householdId)
             let page = try await client.chatPage(householdId: householdId)
+            house = try? await detail
             messages = []
             since = nil
             merge(page.messages)
@@ -121,6 +125,9 @@ final class ChatModel {
     private func time(_ stamp: String) -> Date { DayFormat.timestamp(stamp) ?? .distantPast }
 }
 
+/// Mirrors web ChatTab.tsx: a header with who's in the house, messages grouped by person (others'
+/// with their avatar), mine in the app's gradient, and a "new messages" pill when scrolled up.
+/// Long-press a message to copy it, or edit or delete my own (admins can delete any).
 struct ChatView: View {
     let model: ChatModel
     @Environment(Session.self) private var session
@@ -128,7 +135,13 @@ struct ChatView: View {
     @State private var editing: ChatMessage?
     @State private var editText = ""
     @State private var pendingDelete: ChatMessage?
+    /// Whether the newest message is in view; if not, new ones count up in the pill instead.
+    @State private var atBottom = true
+    @State private var unseen = 0
     @FocusState private var composing: Bool
+
+    static let brand = LinearGradient(colors: [Color(red: 0.31, green: 0.27, blue: 0.9), Color(red: 0.49, green: 0.23, blue: 0.93)],
+                                      startPoint: .topLeading, endPoint: .bottomTrailing)  // indigo-600 → violet-600
 
     var body: some View {
         @Bindable var model = model
@@ -138,49 +151,87 @@ struct ChatView: View {
                     LazyVStack(spacing: 2) {
                         if model.hasMore {
                             Button("Load earlier messages") { Task { await model.loadOlder() } }
-                                .font(.footnote)
+                                .font(.caption.weight(.medium))
+                                .padding(.horizontal, 12).padding(.vertical, 5)
+                                .background(Color.secondary.opacity(0.12), in: Capsule())
+                                .buttonStyle(.plain)
                                 .padding(.vertical, 8)
                         }
-                        if model.hasLoaded && model.messages.isEmpty {
-                            ContentUnavailableView("Say hi to your house", systemImage: "bubble.left.and.bubble.right",
-                                                   description: Text("Everyone in the house sees these messages."))
-                                .padding(.top, 60)
-                        }
+                        if model.hasLoaded && model.messages.isEmpty { emptyState }
                         ForEach(Array(model.messages.enumerated()), id: \.element.id) { i, m in
                             let prev = i > 0 ? model.messages[i - 1] : nil
-                            if prev.map({ day($0.createdAt) != day(m.createdAt) }) ?? true {
+                            let next = i + 1 < model.messages.count ? model.messages[i + 1] : nil
+                            let newDay = prev.map { day($0.createdAt) != day(m.createdAt) } ?? true
+                            if newDay {
                                 Text(dayLabel(m.createdAt))
-                                    .font(.caption.weight(.semibold))
+                                    .font(.caption2.weight(.semibold))
                                     .foregroundStyle(.secondary)
-                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 10).padding(.vertical, 4)
+                                    .background(Color.secondary.opacity(0.12), in: Capsule())
+                                    .padding(.vertical, 10)
                             }
-                            bubble(m, showAuthor: !m.isMine && (prev?.author?.id != m.author?.id || prev.map { day($0.createdAt) != day(m.createdAt) } ?? true))
-                                .id(m.id)
+                            bubble(
+                                m,
+                                first: newDay || prev?.author?.id != m.author?.id,
+                                last: next.map { $0.author?.id != m.author?.id || day($0.createdAt) != day(m.createdAt) } ?? true
+                            )
+                            .id(m.id)
                         }
+                        Color.clear.frame(height: 1)
+                            .id("bottom")
+                            .onAppear { atBottom = true; unseen = 0 }
+                            .onDisappear { atBottom = false }
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .onChange(of: model.messages.last?.id) { _, last in
-                    if let last { withAnimation { proxy.scrollTo(last, anchor: .bottom) } }
+                .onChange(of: model.messages.last?.id) { old, _ in
+                    guard let last = model.messages.last else { return }
+                    // Follow along when I'm at the bottom or sent it myself; otherwise count it.
+                    if old == nil || atBottom || last.isMine {
+                        withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                    } else {
+                        unseen += 1
+                    }
                 }
-                .onAppear { if let last = model.messages.last?.id { proxy.scrollTo(last, anchor: .bottom) } }
+                .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+                .overlay(alignment: .bottom) {
+                    if unseen > 0 {
+                        Button {
+                            withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                            unseen = 0
+                        } label: {
+                            Text("↓ \(unseen) new \(unseen == 1 ? "message" : "messages")")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 14).padding(.vertical, 7)
+                                .background(Color.indigo, in: Capsule())
+                                .shadow(color: .indigo.opacity(0.3), radius: 8, y: 4)
+                        }
+                        .padding(.bottom, 10)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
             }
-            .safeAreaInset(edge: .bottom) { composer }
+            .safeAreaInset(edge: .top, spacing: 0) { header }
+            .safeAreaInset(edge: .bottom, spacing: 0) { composer }
+            .background { BrandBackground() }
             .navigationTitle("Chat")
             .navigationBarTitleDisplayMode(.inline)
+            .profileToolbar()
             .toolbar {
-                if !model.households.isEmpty {
+                if model.households.count > 1 {
                     ToolbarItem(placement: .principal) {
                         HousePicker(households: model.households, selection: $model.householdId) { await model.load() }
                             .pickerStyle(.menu)
                     }
                 }
             }
-            .onChange(of: model.householdId) { _, id in
-                if let id { session.rememberHousehold(id) }
-                Task { await model.load() }
+            .followsCurrentHouse($model.householdId)
+            .onChange(of: model.householdId) { _, _ in
+                unseen = 0
+                Task { await model.load(preferred: session.preferredHousehold) }
             }
             // While the chat is on screen: check for new messages every few seconds.
             .task {
@@ -209,59 +260,164 @@ struct ChatView: View {
         }
     }
 
+    // MARK: Header
+
+    /// The house at a glance: who's in this chat.
+    private var header: some View {
+        let members = (model.house?.members ?? []).filter(\.isActive)
+        let name = model.house?.name ?? model.households.first { $0.id == model.householdId }?.name ?? "Your house"
+        return HStack(spacing: 12) {
+            Text("💬")
+                .font(.title3)
+                .frame(width: 42, height: 42)
+                .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.3)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(name) chat").font(.headline.weight(.heavy)).lineLimit(1)
+                Text("👥 \(members.count) \(members.count == 1 ? "roommate" : "roommates") · messages stay in your house")
+                    .font(.caption).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            HStack(spacing: -8) {
+                ForEach(members.prefix(4)) { m in
+                    Avatar(name: m.displayName, size: 28).overlay(Circle().stroke(.white.opacity(0.7), lineWidth: 2))
+                }
+                if members.count > 4 {
+                    Text("+\(members.count - 4)")
+                        .font(.caption2.bold())
+                        .frame(width: 28, height: 28)
+                        .background(.white.opacity(0.25), in: Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.7), lineWidth: 2))
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background {
+            ZStack {
+                LinearGradient(colors: [Color(red: 0.31, green: 0.27, blue: 0.9), Color(red: 0.49, green: 0.23, blue: 0.93), Color(red: 0.75, green: 0.15, blue: 0.83)],
+                               startPoint: .leading, endPoint: .trailing)  // indigo → violet → fuchsia
+                Circle().fill(.white.opacity(0.2)).frame(width: 110).blur(radius: 24).offset(x: 140, y: -40)
+                Circle().fill(Color.cyan.opacity(0.3)).frame(width: 90).blur(radius: 24).offset(x: -10, y: 40)
+            }
+            .clipped()
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+        .background(.bar)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Text("💬")
+                .font(.title)
+                .frame(width: 56, height: 56)
+                .background(LinearGradient(colors: [.indigo, Color(red: 0.85, green: 0.27, blue: 0.94)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                            in: RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .indigo.opacity(0.3), radius: 10, y: 5)
+            Text("Say hi to your house").font(.headline)
+            Text("Everyone in \(model.house?.name ?? "the house") sees these messages.")
+                .font(.subheadline).foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.center)
+        .padding(.top, 80)
+    }
+
+    // MARK: Composer
+
     private var composer: some View {
-        VStack(spacing: 4) {
+        let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return VStack(spacing: 4) {
             if let error = model.error { ErrorBanner(message: error).padding(.horizontal) }
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("Message your house…", text: $text, axis: .vertical)
+                TextField("Message \(model.house?.name ?? "your house")…", text: $text, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($composing)
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 18))
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20))
+                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(composing ? Color.indigo.opacity(0.5) : Color.secondary.opacity(0.2)))
                 Button {
                     let draft = text
                     text = ""
                     Task { if !(await model.send(draft)) { text = draft } }
                 } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 30))
+                    Image(systemName: "paperplane.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 38, height: 38)
+                        .background(empty ? AnyShapeStyle(Color.secondary.opacity(0.35)) : AnyShapeStyle(Self.brand), in: Circle())
                 }
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.sending || model.householdId == nil)
+                .disabled(empty || model.sending || model.householdId == nil)
+                .animation(.easeOut(duration: 0.15), value: empty)
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
         .background(.bar)
     }
 
+    // MARK: A message
+
     @ViewBuilder
-    private func bubble(_ m: ChatMessage, showAuthor: Bool) -> some View {
-        VStack(alignment: m.isMine ? .trailing : .leading, spacing: 2) {
-            if showAuthor {
-                Text(m.author?.displayName ?? "Someone who left").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    .padding(.top, 8)
+    private func bubble(_ m: ChatMessage, first: Bool, last: Bool) -> some View {
+        let author = m.author?.displayName ?? "Someone who left"
+        HStack(alignment: .bottom, spacing: 8) {
+            if m.isMine {
+                Spacer(minLength: 48)
+            } else {
+                // Others' avatar once per run, at its last message; the space stays so the run lines up.
+                if last { Avatar(name: author, size: 28) } else { Color.clear.frame(width: 28, height: 1) }
             }
-            Text(m.deleted ? "Message deleted" : m.body)
-                .italic(m.deleted)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .foregroundStyle(m.deleted ? Color.secondary : m.isMine ? Color.white : Color.primary)
-                .background(m.deleted ? Color.secondary.opacity(0.1) : m.isMine ? Color.accentColor : Color.secondary.opacity(0.15),
-                            in: RoundedRectangle(cornerRadius: 18))
-                .contextMenu {
-                    if !m.deleted {
-                        Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = m.body }
-                    }
-                    if m.canEdit {
-                        Button("Edit", systemImage: "pencil") { editText = m.body; editing = m }
-                    }
-                    if m.canDelete {
-                        Button("Delete", systemImage: "trash", role: .destructive) { pendingDelete = m }
-                    }
+            VStack(alignment: m.isMine ? .trailing : .leading, spacing: 2) {
+                if first && !m.isMine {
+                    Text(author).font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 4)
                 }
-            Text(DayFormat.time(m.createdAt) + (m.editedAt != nil && !m.deleted ? " · edited" : ""))
-                .font(.caption2).foregroundStyle(.tertiary)
+                Text(m.deleted ? "Message deleted" : m.body)
+                    .italic(m.deleted)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .foregroundStyle(m.deleted ? Color.secondary : m.isMine ? Color.white : Color.primary)
+                    .background(background(m), in: shape(mine: m.isMine, first: first, last: last))
+                    .overlay {
+                        if m.deleted { shape(mine: m.isMine, first: first, last: last).strokeBorder(Color.secondary.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4])) }
+                    }
+                    .contextMenu {
+                        if !m.deleted {
+                            Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = m.body }
+                        }
+                        if m.canEdit {
+                            Button("Edit", systemImage: "pencil") { editText = m.body; editing = m }
+                        }
+                        if m.canDelete {
+                            Button("Delete", systemImage: "trash", role: .destructive) { pendingDelete = m }
+                        }
+                    }
+                if last {
+                    Text(DayFormat.time(m.createdAt) + (m.editedAt != nil && !m.deleted ? " · edited" : ""))
+                        .font(.caption2).foregroundStyle(.tertiary)
+                        .padding(.horizontal, 4)
+                }
+            }
+            if !m.isMine { Spacer(minLength: 48) }
         }
-        .frame(maxWidth: .infinity, alignment: m.isMine ? .trailing : .leading)
-        .padding(m.isMine ? .leading : .trailing, 48)
+        .padding(.top, first ? 8 : 0)
+    }
+
+    private func background(_ m: ChatMessage) -> AnyShapeStyle {
+        if m.deleted { return AnyShapeStyle(Color.clear) }
+        return m.isMine ? AnyShapeStyle(Self.brand) : AnyShapeStyle(Color(.secondarySystemBackground))
+    }
+
+    /// Rounded, with tighter corners where a run of messages joins up on the sender's side.
+    private func shape(mine: Bool, first: Bool, last: Bool) -> UnevenRoundedRectangle {
+        let big: CGFloat = 18, small: CGFloat = 6
+        return UnevenRoundedRectangle(
+            topLeadingRadius: !mine && !first ? small : big,
+            bottomLeadingRadius: !mine && !last ? small : big,
+            bottomTrailingRadius: mine && !last ? small : big,
+            topTrailingRadius: mine && !first ? small : big
+        )
     }
 
     private func day(_ timestamp: String) -> Date? {

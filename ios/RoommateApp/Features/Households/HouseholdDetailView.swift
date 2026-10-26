@@ -1,8 +1,55 @@
 import SwiftUI
 
-struct HouseholdDetailView: View {
+/// 🏡 The House tab: the current house's Reminders, Activity and House pages (chores live in Today),
+/// with the house picker on top. Mirrors web's house tabs.
+struct HouseTabView: View {
+    @Environment(Session.self) private var session
+    @State private var households: [Household] = []
+    @State private var householdId: UUID?
+    @State private var hasLoaded = false
+    @State private var error: String?
+    /// After my last home is gone, so the app can go back to the welcome screen.
+    var onNoHomes: () async -> Void = {}
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let householdId {
+                    HouseholdDetailView(householdId: householdId, onDeletedThisHouse: { Task { await load() } }) {
+                        HousePicker(households: households, selection: $householdId) { await load() }
+                    }
+                    .id(householdId)  // a new house, fresh pages
+                } else if hasLoaded {
+                    ContentUnavailableView("No household", systemImage: "house",
+                                           description: Text(error ?? "Create a home or join one with an invite code."))
+                } else {
+                    ProgressView()
+                }
+            }
+            .profileToolbar(settings: false)
+        }
+        .task { await load() }
+        .followsCurrentHouse($householdId)
+    }
+
+    private func load() async {
+        defer { hasLoaded = true }
+        do {
+            households = try await APIClient.shared.households()
+            if householdId == nil || !households.contains(where: { $0.id == householdId }) {
+                householdId = session.preferredHousehold(in: households)
+            }
+            error = nil
+            if households.isEmpty { await onNoHomes() }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+struct HouseholdDetailView<Header: View>: View {
     enum Tab: String, CaseIterable, Identifiable {
-        case today = "Today", activity = "Activity", house = "House"  // chores live in My day
+        case activity = "Activity", reminders = "Reminders", house = "House"
         var id: Self { self }
     }
 
@@ -13,26 +60,33 @@ struct HouseholdDetailView: View {
     }
 
     @State private var model: HouseholdViewModel
-    @State private var tab: Tab = .today
-    @Environment(\.dismiss) private var dismiss
+    @State private var reminders: RemindersModel
+    @State private var tab: Tab = .reminders
     @State private var housePart: HousePart = .schedule
+    private let onDeletedThisHouse: () -> Void
+    private let header: Header
 
-    init(householdId: UUID) {
-        _model = State(initialValue: HouseholdViewModel(householdId: householdId))
+    init(householdId: UUID, onDeletedThisHouse: @escaping () -> Void = {}, @ViewBuilder header: () -> Header) {
+        let model = HouseholdViewModel(householdId: householdId)
+        _model = State(initialValue: model)
+        _reminders = State(initialValue: RemindersModel(house: model))
+        self.onDeletedThisHouse = onDeletedThisHouse
+        self.header = header()
     }
 
     var body: some View {
         List {
-            ChipTabs(items: Tab.allCases, selection: $tab)
+            header
+            ChipTabs(items: Tab.allCases, selection: $tab) { $0 == .reminders ? reminders.badge : nil }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
 
-            if let error = model.error {
+            if let error = model.error, tab != .reminders {
                 ErrorBanner(message: error)
             }
 
             switch tab {
-            case .today: TodaySection(model: model)
+            case .reminders: RemindersSections(model: reminders)
             case .activity: ActivitySection(model: model)
             case .house:
                 ChipTabs(items: HousePart.allCases, selection: $housePart)
@@ -46,13 +100,15 @@ struct HouseholdDetailView: View {
                 }
             }
         }
-        .navigationTitle(model.detail?.name ?? "Household")
+        .brandBackground()
+        .navigationTitle(model.detail?.name ?? "House")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // Admin pages live in Settings, apart from the everyday tabs (also under Profile → Sign out).
             if model.isAdmin {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        HouseSettingsView(model: model) { dismiss() }
+                        HouseSettingsView(model: model, onDeletedThisHouse: onDeletedThisHouse)
                     } label: {
                         Label("Settings", systemImage: "gearshape")
                     }
@@ -60,56 +116,19 @@ struct HouseholdDetailView: View {
             }
         }
         .overlay { if model.detail == nil && model.isLoading { ProgressView() } }
-        .refreshable { await model.load() }
-        .task { await model.load() }
+        .refreshable {
+            if tab == .reminders { await reminders.load() } else { await model.load() }
+        }
+        .task { if tab != .reminders { await model.load() } }  // Reminders loads the house itself
+        .onChange(of: tab) { _, next in
+            if next != .reminders && model.detail == nil { Task { await model.load() } }
+        }
     }
 }
 
-// MARK: - Today
-
-private struct TodaySection: View {
-    let model: HouseholdViewModel
-
-    private var daily: [ChoreTask] { model.today.filter { !$0.isWeekly } }
-    private var weekly: [ChoreTask] { model.today.filter(\.isWeekly) }
-
-    var body: some View {
-        if model.today.isEmpty && model.open.isEmpty {
-            Text("No chores yet. Add people and chores first.").foregroundStyle(.secondary)
-        }
-        SwapRequestsSection(swaps: model.swaps) { swap in await model.acceptSwap(swap) }
-        if !daily.isEmpty {
-            Section(model.todayDate.map(DayFormat.long) ?? "Today") {
-                ForEach(daily) { row($0) }
-            }
-        }
-        if !weekly.isEmpty {
-            Section("This week") {
-                ForEach(weekly) { row($0) }
-            }
-        }
-        if !model.open.isEmpty {
-            Section("Anyone can do") {
-                ForEach(model.open) { item in
-                    OpenChoreRow(
-                        item: item, myMemberId: model.detail?.myMemberId,
-                        today: model.todayDate,
-                        onLog: { who in Task { await model.log(item, by: who) } },
-                        onRemove: { log in Task { await model.removeLog(log) } }
-                    )
-                }
-            }
-        }
-    }
-
-    private func row(_ task: ChoreTask) -> some View {
-        TaskRow(
-            task: task, members: model.members, myMemberId: model.detail?.myMemberId,
-            onDone: { who in Task { await model.complete(task, by: who) } },
-            onUndo: { Task { await model.reopen(task) } },
-            onAskSwap: { note in Task { await model.askForSwap(task, note: note) } },
-            onCancelSwap: { id in Task { await model.cancelSwap(id) } }
-        )
+extension HouseholdDetailView where Header == EmptyView {
+    init(householdId: UUID, onDeletedThisHouse: @escaping () -> Void = {}) {
+        self.init(householdId: householdId, onDeletedThisHouse: onDeletedThisHouse) { EmptyView() }
     }
 }
 

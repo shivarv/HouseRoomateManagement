@@ -138,6 +138,10 @@ export function activityText(e: ActivityEvent): ActivityLine {
       return { icon: "🚪", kind: "people", parts: [who(e.actor), " removed ", who(e.subject), " from the house"] };
     case "member_joined":
       return { icon: "🎉", kind: "people", parts: [who(e.subject), " joined the house"] };
+    case "member_left":
+      return { icon: "👋", kind: "people", parts: [who(e.subject), " deleted their account and left the house"] };
+    case "member_made_admin":
+      return { icon: "⭐️", kind: "people", parts: [who(e.subject), " is now an admin"] };
     case "invite_code_reset":
       return { icon: "🔑", kind: "people", parts: [who(e.actor), " made a new invite link (old links no longer work)"] };
     default:

@@ -69,67 +69,126 @@ struct AuthView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    Picker("", selection: $model.mode) {
+            ScrollView {
+                VStack(spacing: 22) {
+                    VStack(spacing: 12) {
+                        AppMark(size: 72)
+                        Text("Roommates")
+                            .font(.system(size: 38, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Brand.textGradient)
+                        Text("Chores, groceries and bills for your home, without the group-chat chaos.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.top, 36)
+
+                    Picker("", selection: $model.mode.animation(.snappy)) {
                         ForEach(AuthViewModel.Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     .onChange(of: model.mode) { _, _ in model.error = nil }
-                } footer: {
-                    Text("Chores, groceries and bills for your home, without the group-chat chaos.")
-                }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
 
-                Section {
-                    if model.mode == .register {
-                        TextField("First name", text: $model.firstName).textContentType(.givenName)
-                        TextField("Last name (optional)", text: $model.lastName).textContentType(.familyName)
-                    }
-                    TextField("Email", text: $model.email)
-                        .textContentType(.emailAddress)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    SecureField(model.mode == .register ? "Password (8+ characters)" : "Password", text: $model.password)
-                        .textContentType(model.mode == .login ? .password : .newPassword)
-                } footer: {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(spacing: 0) {
                         if model.mode == .register {
-                            Text("✓ Use an email you'll remember — it's how you log in on any device.")
-                            Text("✓ We'll email you a link to confirm it, then you log in.")
-                            Text("✓ Then you'll create your home, or join one with a code or link.")
+                            AuthField(systemImage: "person") {
+                                TextField("First name", text: $model.firstName).textContentType(.givenName)
+                            }
+                            Divider().padding(.leading, 48)
+                            AuthField(systemImage: "person.2") {
+                                TextField("Last name (optional)", text: $model.lastName).textContentType(.familyName)
+                            }
+                            Divider().padding(.leading, 48)
                         }
-                        ErrorBanner(message: model.error)
-                        if model.unconfirmed {
-                            Button("Send the confirmation link again") { Task { await model.resend() } }
-                                .font(.footnote.bold())
+                        AuthField(systemImage: "envelope") {
+                            TextField("Email", text: $model.email)
+                                .textContentType(.emailAddress)
+                                .keyboardType(.emailAddress)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
                         }
-                        if let note = model.resendNote { Text(note) }
+                        Divider().padding(.leading, 48)
+                        AuthField(systemImage: "lock") {
+                            SecureField(model.mode == .register ? "Password (8+ characters)" : "Password", text: $model.password)
+                                .textContentType(model.mode == .login ? .password : .newPassword)
+                                .onSubmit { if model.canSubmit { Task { await model.submit(session: session) } } }
+                        }
                     }
-                }
+                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
+                    .shadow(color: Brand.indigo.opacity(0.08), radius: 16, y: 6)
 
-                Section {
+                    if model.mode == .register || model.error != nil || model.resendNote != nil {
+                        VStack(alignment: .leading, spacing: 6) {
+                            if model.mode == .register {
+                                Label("Use an email you'll remember — it's how you log in on any device.", systemImage: "checkmark.circle.fill")
+                                Label("We'll email you a link to confirm it, then you log in.", systemImage: "checkmark.circle.fill")
+                                Label("Then you'll create your home, or join one with a code or link.", systemImage: "checkmark.circle.fill")
+                            }
+                            ErrorBanner(message: model.error)
+                            if model.unconfirmed {
+                                Button("Send the confirmation link again") { Task { await model.resend() } }
+                                    .font(.footnote.bold())
+                            }
+                            if let note = model.resendNote { Text(note) }
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .symbolRenderingMode(.hierarchical)
+                        .tint(Brand.indigo)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     Button {
                         Task { await model.submit(session: session) }
                     } label: {
-                        HStack {
-                            Spacer()
-                            if model.isLoading { ProgressView() } else {
-                                Text(model.mode == .login ? "Log in" : "Create account").bold()
-                            }
-                            Spacer()
+                        if model.isLoading { ProgressView().tint(.white) } else {
+                            Text(model.mode == .login ? "Log in" : "Create account")
                         }
                     }
+                    .buttonStyle(.brand)
                     .disabled(!model.canSubmit || model.isLoading)
+
+                    if model.mode == .register {
+                        Text("By creating an account you agree to our [privacy policy](\(WebLink.url("/privacy").absoluteString)).")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .tint(Brand.indigo)
+                            .multilineTextAlignment(.center)
+                    }
+                    if session.pendingLink?.isInvite == true {
+                        Label("Log in or sign up to open your invite.", systemImage: "envelope.open.fill")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(Brand.indigo)
+                    }
                 }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 24)
             }
-            .navigationTitle("🏠 Roommates")
+            .scrollDismissesKeyboard(.interactively)
+            .background { BrandBackground() }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(item: Binding(get: { model.checkEmail }, set: { if $0 == nil { model.checkEmail = nil } })) { sent in
                 CheckEmailView(sent: sent, model: model)
             }
         }
+    }
+}
+
+/// One row of the login card: a tinted icon, then the field.
+private struct AuthField<Field: View>: View {
+    let systemImage: String
+    @ViewBuilder let field: Field
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: systemImage)
+                .font(.body.weight(.medium))
+                .foregroundStyle(Brand.indigo)
+                .frame(width: 22)
+            field
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 15)
     }
 }
 

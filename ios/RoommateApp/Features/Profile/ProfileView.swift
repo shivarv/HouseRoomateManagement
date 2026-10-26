@@ -1,12 +1,24 @@
 import SwiftUI
 
+/// Opened from the avatar at the top right of every tab.
 struct ProfileView: View {
     @Environment(Session.self) private var session
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List {
                 if let user = session.user {
+                    Section {
+                        VStack(spacing: 8) {
+                            Avatar(name: user.name, size: 76)
+                            Text(user.name).font(.title2.bold())
+                            Text(user.email).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                    }
+                    .listRowBackground(Color.clear)
                     NameSection(user: user)
                     Section("Account") {
                         LabeledContent("Email", value: user.email)
@@ -15,17 +27,65 @@ struct ProfileView: View {
                         }
                     }
                 }
-                Section("Server") {
-                    Text(APIClient.shared.baseURL)
-                        .font(.footnote.monospaced())
-                        .foregroundStyle(.secondary)
+                Section("Help") {
+                    Link(destination: WebLink.url("/support")) {
+                        Label("Help & support", systemImage: "questionmark.circle")
+                    }
+                    Link(destination: WebLink.url("/privacy")) {
+                        Label("Privacy policy", systemImage: "hand.raised.circle")
+                    }
                 }
                 Section {
                     Button("Sign out", role: .destructive) { session.signOut() }
                 }
                 AdminSettingsLinks()
+                DeleteAccountSection()
             }
+            .brandBackground()
             .navigationTitle("Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+    }
+}
+
+/// Deleting my account, for good, after a confirmation that says what happens to my homes.
+private struct DeleteAccountSection: View {
+    @Environment(Session.self) private var session
+    @State private var confirming = false
+    @State private var deleting = false
+    @State private var error: String?
+
+    var body: some View {
+        Section {
+            Button(role: .destructive) { confirming = true } label: {
+                if deleting { ProgressView() } else { Text("Delete account") }
+            }
+            .disabled(deleting)
+        } footer: {
+            VStack(alignment: .leading) {
+                Text("Removes your account and email for good. Homes where you're the only one are deleted; in shared homes your past turns and payments stay under your name.")
+                ErrorBanner(message: error)
+            }
+        }
+        .alert("Delete your account?", isPresented: $confirming) {
+            Button("Delete account", role: .destructive) { Task { await delete() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This can't be undone. If you're the only admin of a shared home, the roommate who joined first becomes its admin.")
+        }
+    }
+
+    private func delete() async {
+        deleting = true
+        defer { deleting = false }
+        do {
+            try await APIClient.shared.deleteAccount()
+            session.signOut()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

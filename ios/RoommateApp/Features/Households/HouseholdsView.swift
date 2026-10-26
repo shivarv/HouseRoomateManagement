@@ -36,6 +36,7 @@ struct HouseholdsView: View {
                     }
                 }
             }
+            .brandBackground()
             .navigationTitle("Households")
             .navigationDestination(for: UUID.self) { HouseholdDetailView(householdId: $0) }
             .toolbar {
@@ -106,6 +107,7 @@ struct JoinHouseholdSheet: View {
                 }
             }
             .disabled(isBusy)
+            .brandBackground()
             .task {
                 if !initialCode.isEmpty && preview == nil { code = initialCode; await find() }
             }

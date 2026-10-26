@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useMatch, useNavigate } from "react-router";
+import { billsApi } from "../api/bills";
 import { chatApi } from "../api/chat";
 import { useAuth } from "../features/auth/AuthContext";
 import { useHelpRequests } from "../features/help/hooks";
@@ -15,8 +16,8 @@ import { Button } from "./ui";
 const link = mainTab;
 
 const HOUSE_TABS = [
-  { path: "reminders", label: "🧾 Reminders" },
   { path: "activity", label: "📰 Activity" },
+  { path: "reminders", label: "🧾 Reminders" },
   { path: "house", label: "🏡 House" }, // Schedule, Report and People
   { path: "groceries", label: "🛒 Groceries" },
   { path: "chat", label: "💬 Chat" },
@@ -71,6 +72,16 @@ export function AppShell() {
     refetchInterval: 20_000,
   });
   const chatUnread = unread.data?.count ?? 0;
+  // Bills at a glance on the Reminders tab: red if any is overdue, amber if any is due soon, else ✓.
+  const bills = useQuery({
+    queryKey: ["bills", house?.id, false],
+    queryFn: () => billsApi.list(house!.id),
+    enabled: !!house,
+    refetchInterval: 60_000,
+  });
+  const billList = bills.data?.bills ?? [];
+  const overdue = billList.filter((b) => b.current.status === "overdue").length;
+  const dueSoon = billList.filter((b) => b.current.status === "due").length;
   // Signed in but in no home yet: no tabs, just a nudge to create one or join one.
   const noHouse = !households.isLoading && (households.data?.length ?? 0) === 0;
   // A load or reload always starts on my default house: half-done "create" or "join" pages
@@ -162,7 +173,19 @@ export function AppShell() {
                 {base ? (
                   HOUSE_TABS.map((t) => (
                     <NavLink key={t.label} to={`${base}/${t.path}`} className={link}>
-                      {t.path === "chat" && chatUnread > 0 ? (
+                      {t.path === "reminders" && billList.length > 0 ? (
+                        <span className="relative">
+                          {t.label}
+                          <span
+                            className={`absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white ${
+                              overdue > 0 ? "bg-red-600" : dueSoon > 0 ? "bg-amber-500" : "bg-emerald-500"
+                            }`}
+                            title={overdue > 0 ? `${overdue} overdue` : dueSoon > 0 ? `${dueSoon} due soon` : "All bills are paid or not due yet"}
+                          >
+                            {overdue > 0 ? overdue : dueSoon > 0 ? dueSoon : "✓"}
+                          </span>
+                        </span>
+                      ) : t.path === "chat" && chatUnread > 0 ? (
                         <span className="relative">
                           {t.label}
                           <span className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-fuchsia-600 px-1 text-[10px] font-bold text-white">

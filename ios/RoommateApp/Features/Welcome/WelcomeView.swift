@@ -20,13 +20,17 @@ struct WelcomeView: View {
         NavigationStack {
             List {
                 Section {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Let's get you into a home").font(.title2.bold())
-                        Text("Roommates keeps chores, groceries and bills fair and in one place. Start your own home, or join the one your roommates set up.")
-                            .font(.subheadline).foregroundStyle(.secondary)
+                    HStack(alignment: .top, spacing: 14) {
+                        AppMark(size: 48)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Let's get you into a home").font(.title2.bold()).foregroundStyle(Brand.textGradient)
+                            Text("Roommates keeps chores, groceries and bills fair and in one place. Start your own home, or join the one your roommates set up.")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
                     }
                     .padding(.vertical, 4)
                 }
+                .listRowBackground(Color.clear)
 
                 if !invites.isEmpty {
                     Section("📬 You're invited") {
@@ -71,13 +75,17 @@ struct WelcomeView: View {
                     }
                 }
 
-                Section("How it works") {
+                Section {
                     Label("Set up your home: pick how many chores and bills. Everything is prefilled.", systemImage: "1.circle.fill")
                     Label("Invite your roommates on WhatsApp or email. They sign up and join.", systemImage: "2.circle.fill")
                     Label("Turns rotate on their own, bills remind you, and the grocery list stays shared.", systemImage: "3.circle.fill")
+                } header: {
+                    IconHeader(title: "How it works", systemImage: "lightbulb.fill", color: .orange)
                 }
                 .font(.subheadline)
+                .foregroundStyle(.primary, Brand.indigo)
             }
+            .brandBackground()
             .navigationTitle("Welcome, \(session.user?.firstName ?? "") 👋")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

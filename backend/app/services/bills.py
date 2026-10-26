@@ -209,7 +209,6 @@ def list_bills(
                 name=b.name,
                 icon=b.icon,
                 payer_mode=b.payer_mode,
-                payer=brief(b.payer),
                 frequency=b.frequency,
                 due_day=b.due_day,
                 amount_type=b.amount_type,
@@ -282,31 +281,18 @@ def seed(db: Session, household_id: uuid.UUID) -> None:
         )
 
 
-def _require_payer(db: Session, household_id: uuid.UUID, payer_id: uuid.UUID | None) -> uuid.UUID:
-    if payer_id is None:
-        raise BadRequest("Pick who pays this bill")
-    member = db.get(HouseholdMember, payer_id)
-    if member is None or member.household_id != household_id or not member.is_active:
-        raise BadRequest("That person isn't in this house")
-    return member.id
-
-
 def _check_due(frequency: str, due_day: int) -> None:
     if frequency == "weekly" and not 1 <= due_day <= 7:
         raise BadRequest("For weekly bills, pick a weekday (1 = Monday … 7 = Sunday)")
 
 
 def create(db: Session, me: HouseholdMember, fields: dict) -> Bill:
-    payer_id = None
-    if fields["payer_mode"] == "one":
-        payer_id = _require_payer(db, me.household_id, fields.get("payer_id"))
     count = db.scalar(select(func.count()).where(Bill.household_id == me.household_id)) or 0
     bill = Bill(
         household_id=me.household_id,
         name=fields["name"],
         icon=fields["icon"],
         payer_mode=fields["payer_mode"],
-        payer_id=payer_id,
         frequency=fields["frequency"],
         due_day=fields["due_day"],
         amount_type=fields["amount_type"],
@@ -324,7 +310,7 @@ def create(db: Session, me: HouseholdMember, fields: dict) -> Bill:
 
 
 def update(db: Session, bill: Bill, me: HouseholdMember, fields: dict) -> Bill:
-    """`fields` holds only what the client sent, so `null` can clear the amount or the payer."""
+    """`fields` holds only what the client sent, so `null` can clear the amount."""
     frequency = fields.get("frequency") or bill.frequency
     due_day = fields.get("due_day") or bill.due_day
     if frequency == "weekly" and "due_day" not in fields and due_day > 7:
@@ -340,12 +326,8 @@ def update(db: Session, bill: Bill, me: HouseholdMember, fields: dict) -> Bill:
         bill.amount_cents = None  # each period has its own amount
     if "note" in fields:
         bill.note = fields["note"] or None
-    mode = fields.get("payer_mode") or bill.payer_mode
-    if mode == "one":
-        bill.payer_id = _require_payer(db, bill.household_id, fields.get("payer_id", bill.payer_id))
-    else:
-        bill.payer_id = None
-    bill.payer_mode = mode
+    if fields.get("payer_mode") is not None:
+        bill.payer_mode = fields["payer_mode"]
     activity.record(db, bill.household_id, "bill_updated", me, detail=bill.name)
     db.commit()
     db.refresh(bill)

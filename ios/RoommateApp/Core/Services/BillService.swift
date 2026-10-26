@@ -5,7 +5,6 @@ struct BillFields: Encodable {
     var name: String
     var icon: String
     var payerMode: PayerMode
-    var payerId: UUID?
     var frequency: BillFrequency
     var dueDay: Int
     var amountType: AmountType
@@ -14,7 +13,7 @@ struct BillFields: Encodable {
     var note: String
 
     private enum CodingKeys: String, CodingKey {
-        case name, icon, payerMode, payerId, frequency, dueDay, amountType, amountCents, currency, note
+        case name, icon, payerMode, frequency, dueDay, amountType, amountCents, currency, note
     }
 
     func encode(to encoder: Encoder) throws {
@@ -22,7 +21,6 @@ struct BillFields: Encodable {
         try c.encode(name, forKey: .name)
         try c.encode(icon, forKey: .icon)
         try c.encode(payerMode, forKey: .payerMode)
-        try c.encode(payerId, forKey: .payerId)  // null when nobody's named
         try c.encode(frequency, forKey: .frequency)
         try c.encode(dueDay, forKey: .dueDay)
         try c.encode(amountType, forKey: .amountType)

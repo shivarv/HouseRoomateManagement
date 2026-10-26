@@ -135,6 +135,36 @@ def delete_household(db: Session, me: HouseholdMember, user: User) -> None:
     db.commit()
 
 
+def delete_account(db: Session, user: User) -> None:
+    """Deletes my account, for good.
+
+    A home where nobody else has an account goes with it. In the others my spot stays, by name and
+    without my account or contact details, so past turns and payments still read right; I leave
+    every rotation. If I was the only admin there, the roommate who joined first becomes admin.
+    """
+    db.execute(select(User.id).where(User.id == user.id).with_for_update())
+    for me in memberships(db, user):
+        household = me.household
+        others = [m for m in household.members if m.is_active and m.user_id and m.id != me.id]
+        if not others:
+            db.delete(household)  # members, chores, lists, bills and history go with it
+            continue
+        if me.role == "admin" and not any(m.role == "admin" for m in others):
+            successor = others[0]  # members are ordered by when they joined
+            successor.role = "admin"
+            activity.record(db, household.id, "member_made_admin", None, subject_id=successor.id)
+        me.is_active = False
+        me.user_id = None
+        me.role = "member"
+        me.email = None
+        me.phone = None
+        db.flush()
+        chores.remove_member_from_rotations(db, me, clock.today_in(household.timezone))
+        activity.record(db, household.id, "member_left", None, subject_id=me.id)
+    db.delete(user)  # what else points at the account (e.g. who created a house) is cleared
+    db.commit()
+
+
 def memberships(db: Session, user: User) -> list[HouseholdMember]:
     return list(
         db.scalars(

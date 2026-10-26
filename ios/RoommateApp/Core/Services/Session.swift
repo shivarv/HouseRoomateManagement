@@ -7,6 +7,9 @@ import Observation
 final class Session {
     private(set) var user: User?
     private(set) var isRestoring = true
+    /// A website link the app was opened with (an invite or the email confirmation), until it's
+    /// handled. An invite waits here while signed out, then opens after logging in.
+    var pendingLink: AppLink?
 
     private let client: APIClient
 
@@ -48,5 +51,10 @@ final class Session {
     func signOut() {
         client.token = nil
         user = nil
+    }
+
+    /// A link the app was opened with. Anything that isn't ours opens nothing.
+    func open(_ url: URL) {
+        if let link = AppLink(url) { pendingLink = link }
     }
 }

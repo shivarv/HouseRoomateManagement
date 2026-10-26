@@ -48,13 +48,13 @@ def test_new_houses_get_four_monthly_bills_due_on_the_first(client, fake_today):
     assert "Gas" not in _bills(client, house, bea)
 
 
-def test_only_admins_set_up_bills_and_one_person_needs_a_payer(client, fake_today):
+def test_only_admins_set_up_bills_paid_by_anyone_or_split(client, fake_today):
     house, ann, bea, _ = _house(client)
     assert _create(client, house, bea, name="Cleaner").status_code == 403
-    assert _create(client, house, ann, name="Cleaner", payer_mode="one").status_code == 400
-    bea_id = _member_id(client, house, ann, "Bea")
-    res = _create(client, house, ann, name="Cleaner", payer_mode="one", payer_id=bea_id, amount_cents=2500)
-    assert res.status_code == 201 and res.json()["payer"]["display_name"] == "Bea"
+    assert _create(client, house, ann, name="Cleaner", payer_mode="one").status_code == 422
+    res = _create(client, house, ann, name="Cleaner", amount_cents=2500)
+    assert res.status_code == 201 and res.json()["payer_mode"] == "anyone"
+    assert "payer" not in res.json()
 
     cleaner = res.json()
     client.patch(f"{API}/bills/{cleaner['id']}", json={"is_active": False}, headers=ann)

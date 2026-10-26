@@ -38,3 +38,5 @@ Pods/
 
 # Personal Claude Code settings
 .claude/settings.local.json
+docs/IOS_NEXT_STEPS.md
+docs/FRONTEND_CACHING.md

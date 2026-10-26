@@ -48,20 +48,17 @@ class SetupBill(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     icon: str = Field(default="🧾", min_length=1, max_length=16)
     payer_mode: PayerMode = "anyone"
-    payer_name: str | None = None  # payer_mode "one": me or one of the roommates, by name
     frequency: BillFrequency = "monthly"
     due_day: int = Field(default=1, ge=1, le=31)
     amount_type: AmountType = "fixed"
     amount_cents: int | None = Field(default=None, ge=0, le=100_000_000)
 
-    _strip = field_validator("name", "icon", "payer_name", mode="before")(_clean)
+    _strip = field_validator("name", "icon", mode="before")(_clean)
 
     @model_validator(mode="after")
     def _check(self):
         if self.frequency == "weekly" and self.due_day > 7:
             raise ValueError(f"{self.name}: for weekly bills, due_day is 1 = Monday … 7 = Sunday")
-        if self.payer_mode == "one" and not self.payer_name:
-            raise ValueError(f"{self.name}: pick who pays it")
         return self
 
 

@@ -6,13 +6,20 @@ import SwiftUI
 struct ChipTabs<Item: Hashable & Identifiable & RawRepresentable>: View where Item.RawValue == String {
     let items: [Item]
     @Binding var selection: Item
+    /// A small count or tick beside a tab's name, like an unread badge.
+    var badge: (Item) -> ChipBadge? = { _ in nil }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
                 ForEach(items) { item in
-                    Button(item.rawValue) {
+                    Button {
                         withAnimation(.snappy(duration: 0.2)) { selection = item }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(item.rawValue)
+                            if let badge = badge(item) { badge }
+                        }
                     }
                     .buttonStyle(ChipStyle(isActive: selection == item))
                 }
@@ -23,6 +30,23 @@ struct ChipTabs<Item: Hashable & Identifiable & RawRepresentable>: View where It
             .padding(.vertical, 4)
         }
         .scrollClipDisabled()  // keep the active pill's glow from being cut off
+    }
+}
+
+/// The badge on a chip tab: white text on a coloured pill, with a thin white ring so it reads on
+/// the active tab's gradient too.
+struct ChipBadge: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.weight(.bold).monospacedDigit())
+            .foregroundStyle(.white)
+            .padding(.horizontal, 5)
+            .frame(minWidth: 18, minHeight: 18)
+            .background(color, in: Capsule())
+            .overlay(Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 1))
     }
 }
 
