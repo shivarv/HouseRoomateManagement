@@ -124,6 +124,12 @@ struct HouseholdDetailView<Header: View>: View {
     }
 }
 
+extension HouseholdDetailView where Header == EmptyView {
+    init(householdId: UUID, onDeletedThisHouse: @escaping () -> Void = {}) {
+        self.init(householdId: householdId, onDeletedThisHouse: onDeletedThisHouse) { EmptyView() }
+    }
+}
+
 // MARK: - Activity
 
 private struct ActivitySection: View {

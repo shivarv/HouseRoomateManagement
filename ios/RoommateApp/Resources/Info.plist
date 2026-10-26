@@ -2,9 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Backend base URL. The Simulator can reach the Mac's localhost; on a device use the Mac's LAN IP. -->
+	<!-- Backend base URL: production on Render. For a local backend use http://localhost:8001/api/v1
+	     (the Simulator can reach the Mac's localhost; on a device use the Mac's LAN IP). -->
 	<key>API_BASE_URL</key>
-	<string>http://localhost:8001/api/v1</string>
+	<string>https://housemate-api-rjhl.onrender.com/api/v1</string>
 	<key>WEB_BASE_URL</key>
 	<string>http://localhost:5173</string>
 	<!-- Allow plain HTTP to localhost / LAN for local development only. -->

@@ -124,7 +124,27 @@
       "Bash(grep -rn \"HouseholdsView\\\\|HouseholdDetailView\\(\\\\|AdminSettingsLinks\" --include=*.swift .)",
       "Bash(grep -n \"struct AdminSettingsLinks\" -A40 Features/Profile/ProfileView.swift)",
       "Bash(grep -rn \"HouseholdsView\\\\|HouseholdDetailView\\(\\\\|AdminSettingsLinks\\\\|onDeletedThisHouse\" .)",
-      "Bash(sed -n 88,140p Features/Households/HouseSettingsView.swift)"
+      "Bash(sed -n 88,140p Features/Households/HouseSettingsView.swift)",
+      "Bash(ls)",
+      "Bash(find . -maxdepth 3 \\\\\\( -name \"*.xcodeproj\" -o -name \"*.xcworkspace\" \\\\\\) -not -path \"*/node_modules/*\")",
+      "Bash(xcode-select -p)",
+      "Bash(xcodebuild -list -project RoommateApp.xcodeproj)",
+      "Bash(xcodebuild -project RoommateApp.xcodeproj -scheme RoommateApp -configuration Debug -destination 'id=64CCA9A8-7E85-4754-A0EF-0664FB0F9712' -derivedDataPath /private/tmp/claude-501/-Users-shiva-Desktop-git-hub-HouseRoomateManagement/6d4c17e5-b061-429b-9083-3c7df49d2dc9/scratchpad/DerivedData build)",
+      "Bash(grep -c \"FileSystemSynchronized\" RoommateApp.xcodeproj/project.pbxproj)",
+      "Bash(grep -n \"Households\\\\|HouseholdDetailView\" RoommateApp.xcodeproj/project.pbxproj)",
+      "Bash(git -C .. log --oneline -3 -- ios/RoommateApp/Features/Reminders)",
+      "Bash(git -C .. status --short)",
+      "Bash(sed -n 55,80p RoommateApp/Features/Households/HouseholdDetailView.swift)",
+      "Bash(grep -rn \"HouseholdDetailView\\(\" RoommateApp)",
+      "Bash(git -C .. show 40b4005 -- ios/RoommateApp/Features/Households/HouseholdDetailView.swift)",
+      "Read(//Applications/**)",
+      "Read(//Applications/Xcode.app/Contents/**)",
+      "Read(//Library/Developer/**)",
+      "Bash(/usr/bin/xcodebuild -version)",
+      "Bash(find /Applications/Xcode.app -name \"*.app\" -maxdepth 6 2>/dev/null | grep -v -i \"platforms/.*/Library\" | head -20)",
+      "Read(//Applications/Xcode.app/**)",
+      "Bash(curl -s -m 60 -o /dev/null -w \"%{http_code}\\\\n\" https://housemate-api.onrender.com/api/v1/health)",
+      "Bash(curl -s -m 30 -o /dev/null -w \"%{http_code}\\\\n\" https://housemate-api.onrender.com/docs)"
     ]
   }
 }

@@ -24,8 +24,6 @@ struct MainTabView: View {
         TabView {
             MyDayView()
                 .tabItem { Label("Today", systemImage: "checklist") }
-            RemindersView()
-                .tabItem { Label("Reminders", systemImage: "calendar.badge.clock") }
             ChatView(model: chat)
                 .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
                 .badge(chat.unread)
