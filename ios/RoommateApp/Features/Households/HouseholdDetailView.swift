@@ -26,7 +26,7 @@ struct HouseTabView: View {
                     ProgressView()
                 }
             }
-            .profileToolbar()
+            .profileToolbar(settings: false)
         }
         .task { await load() }
         .followsCurrentHouse($householdId)

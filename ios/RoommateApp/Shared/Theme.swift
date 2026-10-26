@@ -116,11 +116,57 @@ struct ProfileButton: View {
     }
 }
 
+/// The gear beside the avatar: the current house's Settings.
+struct SettingsButton: View {
+    let householdId: UUID
+    @State private var showing = false
+
+    var body: some View {
+        Button { showing = true } label: { Image(systemName: "gearshape") }
+            .accessibilityLabel("Settings")
+            .sheet(isPresented: $showing) {
+                NavigationStack {
+                    HouseSettingsLoader(householdId: householdId)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) { Button("Done") { showing = false } }
+                        }
+                }
+            }
+    }
+}
+
 extension View {
-    /// Puts the profile avatar in this tab's top bar.
-    func profileToolbar() -> some View {
-        toolbar {
-            ToolbarItem(placement: .topBarTrailing) { ProfileButton() }
-        }
+    /// Puts the Settings gear (admins of the current house) and the profile avatar in this tab's
+    /// top bar. The House tab has its own gear, which also closes the house's pages after it's deleted.
+    func profileToolbar(settings: Bool = true) -> some View {
+        modifier(ProfileToolbar(settings: settings))
+    }
+}
+
+private struct ProfileToolbar: ViewModifier {
+    let settings: Bool
+    @Environment(Session.self) private var session
+    @State private var households: [Household] = []
+
+    /// The current house, when I'm its admin.
+    private var adminHouse: UUID? {
+        guard settings, let id = session.preferredHousehold(in: households),
+              households.first(where: { $0.id == id })?.myRole == .admin else { return nil }
+        return id
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .toolbar {
+                if let house = adminHouse {
+                    ToolbarItem(placement: .topBarTrailing) { SettingsButton(householdId: house) }
+                }
+                ToolbarItem(placement: .topBarTrailing) { ProfileButton() }
+            }
+            // The current house can change on any tab; check which one I'm an admin of again.
+            .task(id: session.user?.lastHouseholdId) {
+                guard settings else { return }
+                households = (try? await APIClient.shared.households()) ?? households
+            }
     }
 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// ⚙ Settings: a house's admin pages, kept apart from the everyday tabs. Opened from the house
-/// screen's gear, or from Profile below Sign out. Mirrors web Settings.
+/// ⚙ Settings: a house's admin pages, kept apart from the everyday tabs. Opened from the gear at
+/// the top of every tab (admins), or from Profile below Sign out. Mirrors web Settings.
 struct HouseSettingsView: View {
     enum Section: String, CaseIterable, Identifiable {
         case groceries = "Groceries", bills = "Bills", history = "Past months", homes = "Homes"
@@ -108,8 +108,9 @@ struct AdminSettingsLinks: View {
     }
 }
 
-/// Settings needs the house's own model (people, history); this owns one for the Profile route.
-private struct HouseSettingsLoader: View {
+/// Settings needs the house's own model (people, history); this owns one for the Profile route
+/// and the gear at the top of every tab.
+struct HouseSettingsLoader: View {
     @State private var model: HouseholdViewModel
 
     init(householdId: UUID) {
