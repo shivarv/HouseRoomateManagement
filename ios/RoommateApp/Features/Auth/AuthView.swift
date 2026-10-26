@@ -147,6 +147,19 @@ struct AuthView: View {
                     }
                     .buttonStyle(.brand)
                     .disabled(!model.canSubmit || model.isLoading)
+
+                    if model.mode == .register {
+                        Text("By creating an account you agree to our [privacy policy](\(WebLink.url("/privacy").absoluteString)).")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .tint(Brand.indigo)
+                            .multilineTextAlignment(.center)
+                    }
+                    if session.pendingLink?.isInvite == true {
+                        Label("Log in or sign up to open your invite.", systemImage: "envelope.open.fill")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(Brand.indigo)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)

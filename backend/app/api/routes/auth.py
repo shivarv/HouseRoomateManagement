@@ -67,6 +67,12 @@ def me(user: CurrentUser):
     return user
 
 
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_me(user: CurrentUser, db: DbSession):
+    """Deletes my account for good (App Store rule: sign-up means in-app deletion)."""
+    households.delete_account(db, user)
+
+
 @router.patch("/me", response_model=UserOut)
 def update_profile(body: ProfileUpdate, db: DbSession, user: CurrentUser):
     """My first and last name. Houses keep the name they call me unless it was my old full name."""

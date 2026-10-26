@@ -6,8 +6,12 @@
 	     (the Simulator can reach the Mac's localhost; on a device use the Mac's LAN IP). -->
 	<key>API_BASE_URL</key>
 	<string>https://housemate-api-rjhl.onrender.com/api/v1</string>
+	<!-- The website: invite links, privacy policy and support pages. Switch to the custom domain once it's live. -->
 	<key>WEB_BASE_URL</key>
-	<string>http://localhost:5173</string>
+	<string>https://housemate-web.onrender.com</string>
+	<!-- Only HTTPS (no custom encryption): App Store Connect stops asking about export compliance. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- Allow plain HTTP to localhost / LAN for local development only. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>

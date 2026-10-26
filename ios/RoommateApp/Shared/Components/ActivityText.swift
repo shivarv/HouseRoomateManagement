@@ -81,6 +81,10 @@ enum ActivityText {
             return ("🚪", "\(actor) removed \(subject) from the house")
         case "member_joined":
             return ("🎉", "\(subject) joined the house")
+        case "member_left":
+            return ("👋", "\(subject) deleted their account and left the house")
+        case "member_made_admin":
+            return ("⭐️", "\(subject) is now an admin")
         case "invite_code_reset":
             return ("🔑", "\(actor) made a new invite link (old links no longer work)")
         default:

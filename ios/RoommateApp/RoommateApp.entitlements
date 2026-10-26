@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Universal links: invite and email-confirmation links on these sites open the app.
+	     Each site serves /.well-known/apple-app-site-association (web/public). Add the custom domain here too. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:housemate-web.onrender.com</string>
+	</array>
+</dict>
+</plist>

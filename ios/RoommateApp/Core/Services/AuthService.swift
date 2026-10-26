@@ -7,6 +7,7 @@ extension APIClient {
     private struct ProfileBody: Encodable { let firstName: String; let lastName: String }
     private struct ResendBody: Encodable { let email: String }
     private struct ResendResponse: Decodable { let emailEnabled: Bool }
+    private struct VerifyBody: Encodable { let token: String }
 
     func login(email: String, password: String) async throws -> TokenResponse {
         try await send("POST", "/auth/login", body: LoginBody(email: email, password: password))
@@ -24,6 +25,16 @@ extension APIClient {
 
     func me() async throws -> User {
         try await get("/auth/me")
+    }
+
+    /// For good: homes nobody else is in go with it; elsewhere a roommate takes over as admin.
+    func deleteAccount() async throws {
+        try await sendNoContent("DELETE", "/auth/me")
+    }
+
+    /// The link from the confirmation email (works signed out). The first open also signs me in.
+    func verifyEmail(token: String) async throws -> VerifyEmailResponse {
+        try await send("POST", "/auth/verify-email", body: VerifyBody(token: token))
     }
 
     /// Email the confirmation link again (signed out). The answer is the same whether or not the account exists.

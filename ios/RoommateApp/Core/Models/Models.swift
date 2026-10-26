@@ -34,6 +34,12 @@ struct TokenResponse: Decodable {
     let user: User
 }
 
+/// The confirmation link was opened. Only the first open signs in (`accessToken` is set).
+struct VerifyEmailResponse: Decodable {
+    let user: User
+    let accessToken: String?
+}
+
 enum Role: String, Codable {
     case admin, member
 }
@@ -92,6 +98,14 @@ struct HouseholdDetail: Decodable {
     let members: [Member]
 
     var isAdmin: Bool { myRole == .admin }
+}
+
+/// A private invite link, before joining: the house, and which email it's for.
+struct InviteLinkPreview: Decodable {
+    let householdName: String
+    let people: Int
+    let email: String
+    let invitedBy: String?
 }
 
 struct InvitePreview: Decodable {
@@ -619,11 +633,49 @@ struct MyInvite: Decodable, Identifiable, Hashable {
     var id: String { token }
 }
 
+/// Pages on the website (WEB_BASE_URL in Info.plist): invite links, privacy policy, support.
+enum WebLink {
+    static var base: String {
+        let base = (Bundle.main.object(forInfoDictionaryKey: "WEB_BASE_URL") as? String) ?? "http://localhost:5173"
+        return base.hasSuffix("/") ? String(base.dropLast()) : base
+    }
+
+    static func url(_ path: String) -> URL {
+        URL(string: base + path)!
+    }
+}
+
+/// A website link opened in the app (a universal link): an invite, or the email confirmation.
+/// The paths match the links the backend emails (services/invites.py and verification.py).
+enum AppLink: Equatable {
+    case join(code: String)  // /join/CODE (?as=MEMBER is picked again in the sheet)
+    case invite(token: String)  // /invite/TOKEN: a private, emailed invite
+    case verifyEmail(token: String)  // /verify-email?token=…
+
+    /// Invites need me signed in; the email confirmation works signed out.
+    var isInvite: Bool {
+        if case .verifyEmail = self { return false }
+        return true
+    }
+
+    init?(_ url: URL) {
+        let parts = url.pathComponents.filter { $0 != "/" }
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+        switch parts.first {
+        case "join" where parts.count == 2: self = .join(code: parts[1].uppercased())
+        case "invite" where parts.count == 2: self = .invite(token: parts[1])
+        case "verify-email":
+            guard let token = query?.first(where: { $0.name == "token" })?.value, !token.isEmpty else { return nil }
+            self = .verifyEmail(token: token)
+        default: return nil
+        }
+    }
+}
+
 enum InviteLink {
     /// The web app's join page (`/join/CODE`, or `?as=MEMBER` to match someone added by name).
     static func url(code: String, member: Member? = nil) -> String {
-        let base = (Bundle.main.object(forInfoDictionaryKey: "WEB_BASE_URL") as? String) ?? "http://localhost:5173"
-        let link = "\(base)/join/\(code)"
+        let link = "\(WebLink.base)/join/\(code)"
         return member.map { "\(link)?as=\($0.id.uuidString.lowercased())" } ?? link
     }
 

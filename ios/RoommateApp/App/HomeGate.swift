@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Signed in: the tabs once I'm in a home; until then, the welcome screen (no tabs).
 struct HomeGate: View {
+    @Environment(Session.self) private var session
     @State private var hasHome: Bool?
 
     var body: some View {
@@ -12,7 +13,8 @@ struct HomeGate: View {
             case .none: ProgressView()
             }
         }
-        .task { await check() }
+        // Joining from an invite link (outside the welcome screen) changes my current house.
+        .task(id: session.user?.lastHouseholdId) { await check() }
     }
 
     private func check() async {

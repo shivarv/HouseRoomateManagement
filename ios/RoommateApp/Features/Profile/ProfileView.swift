@@ -27,10 +27,19 @@ struct ProfileView: View {
                         }
                     }
                 }
+                Section("Help") {
+                    Link(destination: WebLink.url("/support")) {
+                        Label("Help & support", systemImage: "questionmark.circle")
+                    }
+                    Link(destination: WebLink.url("/privacy")) {
+                        Label("Privacy policy", systemImage: "hand.raised.circle")
+                    }
+                }
                 Section {
                     Button("Sign out", role: .destructive) { session.signOut() }
                 }
                 AdminSettingsLinks()
+                DeleteAccountSection()
             }
             .brandBackground()
             .navigationTitle("Profile")
@@ -38,6 +47,45 @@ struct ProfileView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
+        }
+    }
+}
+
+/// Deleting my account, for good, after a confirmation that says what happens to my homes.
+private struct DeleteAccountSection: View {
+    @Environment(Session.self) private var session
+    @State private var confirming = false
+    @State private var deleting = false
+    @State private var error: String?
+
+    var body: some View {
+        Section {
+            Button(role: .destructive) { confirming = true } label: {
+                if deleting { ProgressView() } else { Text("Delete account") }
+            }
+            .disabled(deleting)
+        } footer: {
+            VStack(alignment: .leading) {
+                Text("Removes your account and email for good. Homes where you're the only one are deleted; in shared homes your past turns and payments stay under your name.")
+                ErrorBanner(message: error)
+            }
+        }
+        .alert("Delete your account?", isPresented: $confirming) {
+            Button("Delete account", role: .destructive) { Task { await delete() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This can't be undone. If you're the only admin of a shared home, the roommate who joined first becomes its admin.")
+        }
+    }
+
+    private func delete() async {
+        deleting = true
+        defer { deleting = false }
+        do {
+            try await APIClient.shared.deleteAccount()
+            session.signOut()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

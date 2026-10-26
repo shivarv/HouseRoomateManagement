@@ -1,8 +1,32 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import { authApi } from "../api/auth";
 import { Button, Card, ErrorText, Input, PageTitle } from "../components/ui";
 import { useAuth } from "../features/auth/AuthContext";
+
+/** Deleting my account, for good, after a confirmation that says what happens to my homes. */
+function DeleteAccount() {
+  const { signOut } = useAuth();
+  const remove = useMutation({ mutationFn: authApi.deleteAccount, onSuccess: signOut });
+  const ask = () =>
+    confirm(
+      "Delete your account? This can't be undone.\n\n" +
+        "Homes where you're the only one are deleted. In shared homes your past turns and payments stay under your name, " +
+        "and if you're the only admin, the roommate who joined first becomes admin.",
+    ) && remove.mutate();
+
+  return (
+    <Card className="max-w-lg space-y-2">
+      <h2 className="font-semibold text-red-700">Delete account</h2>
+      <p className="text-sm text-slate-600">Removes your account and email for good.</p>
+      <ErrorText error={remove.error} />
+      <Button variant="danger" disabled={remove.isPending} onClick={ask}>
+        {remove.isPending ? "Deleting…" : "Delete account"}
+      </Button>
+    </Card>
+  );
+}
 
 /** My name (first, and last if I want one) and email. */
 export function ProfilePage() {
@@ -50,6 +74,14 @@ export function ProfilePage() {
           </div>
         </form>
       </Card>
+      <p className="mt-6 max-w-lg text-sm text-slate-500">
+        <Link className="font-medium text-indigo-700 hover:underline" to="/support">Help &amp; support</Link>
+        {" · "}
+        <Link className="font-medium text-indigo-700 hover:underline" to="/privacy">Privacy policy</Link>
+      </p>
+      <div className="mt-6">
+        <DeleteAccount />
+      </div>
     </>
   );
 }

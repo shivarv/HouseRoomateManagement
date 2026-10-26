@@ -58,6 +58,12 @@ extension APIClient {
         try await get("/me/invites")
     }
 
+    /// What a private (emailed) invite link is for, before joining. Works signed out; 404 once it's
+    /// cancelled, used or expired.
+    func inviteLinkPreview(token: String) async throws -> InviteLinkPreview {
+        try await get("/invite-links/\(token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token)")
+    }
+
     /// Join with a private (emailed) invite. 404 "expired or was cancelled" once it's cancelled, used or expired.
     func acceptInviteLink(token: String) async throws -> Household {
         try await send("POST", "/invite-links/\(token)/accept", body: Optional<String>.none)
