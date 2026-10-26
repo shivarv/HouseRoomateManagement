@@ -5,7 +5,7 @@ import { DueDayField, dueText as billDueText } from "../../features/bills/DueDay
 import { useBillChange, useBills } from "../../features/bills/hooks";
 import { formatMoney } from "../../lib/format";
 import { useUnsavedChangesGuard } from "../../lib/unsavedChanges";
-import type { AmountType, Bill, BillFields, BillFrequency, Member, PayerMode } from "../../types/api";
+import type { AmountType, Bill, BillFields, BillFrequency, PayerMode } from "../../types/api";
 import { useCurrentHousehold } from "./HouseholdLayout";
 
 const fieldClass =
@@ -32,9 +32,8 @@ function dueText(bill: Bill): string {
 }
 
 const MODE_LABEL: Record<PayerMode, string> = {
-  one: "One person pays",
-  anyone: "Anyone can pay (first one closes it)",
-  everyone: "Everyone pays their share",
+  anyone: "Anyone pays (one payment settles it)",
+  everyone: "Split between everyone",
 };
 
 const LEAVE_PROMPT = "You have unsaved bill changes. Leave and discard them?";
@@ -44,7 +43,6 @@ interface FormValues {
   name: string;
   icon: string;
   payer_mode: PayerMode;
-  payer_id: string;
   frequency: BillFrequency;
   due_day: string;
   amount_type: AmountType;
@@ -58,7 +56,6 @@ function valuesOf(bill?: Bill): FormValues {
     name: bill?.name ?? "",
     icon: bill?.icon ?? "🧾",
     payer_mode: bill?.payer_mode ?? "anyone",
-    payer_id: bill?.payer?.id ?? "",
     frequency: bill?.frequency ?? "monthly",
     due_day: String(bill?.due_day ?? 1),
     amount_type: bill?.amount_type ?? "fixed",
@@ -78,7 +75,6 @@ function cents(amount: string): number | null | undefined {
 
 function problem(v: FormValues): string | null {
   if (!v.name.trim()) return "Give the bill a name";
-  if (v.payer_mode === "one" && !v.payer_id) return "Pick who pays it";
   const day = Number(v.due_day);
   if (v.frequency === "monthly" && (!Number.isInteger(day) || day < 1 || day > 31)) return "Pick a due day";
   if (v.amount_type === "fixed" && cents(v.amount) === undefined) return "Amount must be a number, like 60 or 1250.50";
@@ -91,7 +87,6 @@ function fieldsOf(v: FormValues): BillFields & { name: string } {
     name: v.name.trim(),
     icon: v.icon.trim() || "🧾",
     payer_mode: v.payer_mode,
-    payer_id: v.payer_mode === "one" ? v.payer_id : null,
     frequency: v.frequency,
     due_day: v.frequency === "daily" ? 1 : Number(v.due_day),
     amount_type: v.amount_type,
@@ -161,7 +156,6 @@ export function BillSettingsPage() {
           <div className="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4">
             <BillForm
               householdId={household.id}
-              members={household.members}
               initial={starter ?? valuesOf()}
               onDirty={onDirty}
               onDone={() => (setDirty(false), setEditing(null))}
@@ -178,8 +172,7 @@ export function BillSettingsPage() {
                 <li key={bill.id} className="bg-indigo-50/40 p-4">
                   <BillForm
                     householdId={household.id}
-                    members={household.members}
-                    bill={bill}
+                          bill={bill}
                     initial={valuesOf(bill)}
                     onDirty={onDirty}
                     onDone={() => (setDirty(false), setEditing(null))}
@@ -214,7 +207,7 @@ function BillRow({ bill, onEdit }: { bill: Bill; onEdit: () => void }) {
         </div>
         <p className="text-xs text-slate-500">
           {dueText(bill)} ·{" "}
-          {bill.payer_mode === "one" ? `${bill.payer?.display_name ?? "?"} pays` : MODE_LABEL[bill.payer_mode]}
+          {MODE_LABEL[bill.payer_mode]}
         </p>
       </div>
       <Button variant="ghost" onClick={onEdit}>
@@ -240,14 +233,12 @@ function BillRow({ bill, onEdit }: { bill: Bill; onEdit: () => void }) {
 
 function BillForm({
   householdId,
-  members,
   bill,
   initial,
   onDirty,
   onDone,
 }: {
   householdId: string;
-  members: Member[];
   bill?: Bill;
   initial: FormValues;
   onDirty: (dirty: boolean) => void;
@@ -294,16 +285,6 @@ function BillForm({
             </option>
           ))}
         </select>
-        {values.payer_mode === "one" && (
-          <select className={`${fieldClass} min-w-40`} value={values.payer_id} onChange={(e) => set({ payer_id: e.target.value })} aria-label="Who pays it">
-            <option value="">Who pays it?</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.display_name}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <select
@@ -351,7 +332,9 @@ function BillForm({
       />
       <p className="text-xs text-slate-500">
         {values.frequency === "monthly" && "“Last day of month” follows each month: the 30th, 31st, or Feb 28/29."}
-        {values.payer_mode === "everyone" && " Each person taps their name once they've paid their share."}
+        {values.payer_mode === "everyone"
+          ? " Each person taps their name once they've paid their share."
+          : " Once someone pays, it's done for everyone."}
       </p>
       {touched && error && <p className="text-sm text-red-600">{error}</p>}
       <ErrorText error={save.error} />

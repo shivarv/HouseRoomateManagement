@@ -118,21 +118,29 @@ struct NotificationsView: View {
                 let shown = scope == .everyone ? model.requests : model.mine
                 let open = shown.filter { !$0.isDone }
                 let done = shown.filter(\.isDone)
-                Section(scope == .everyone ? "Favours asked" : "Waiting for someone") {
+                Section {
                     if open.isEmpty && model.hasLoaded {
                         Text(scope == .everyone ? "No favours asked right now 🎉"
                                                 : "Nothing open. Tap “Ask a favour” when you need a hand.")
                             .foregroundStyle(.secondary)
                     }
                     ForEach(open) { row($0) }
+                } header: {
+                    IconHeader(title: scope == .everyone ? "Favours asked" : "Waiting for someone",
+                               systemImage: "hand.wave.fill", color: Brand.fuchsia)
                 }
                 if !done.isEmpty {
-                    Section(scope == .everyone ? "Recently done" : "Done") {
+                    Section {
                         ForEach(done) { row($0) }
+                    } header: {
+                        IconHeader(title: scope == .everyone ? "Recently done" : "Done",
+                                   systemImage: "checkmark", color: .green)
                     }
                 }
             }
+            .brandBackground()
             .navigationTitle("Ask favours")
+            .profileToolbar()
             .toolbar {
                 if !model.households.isEmpty {
                     Button("Ask a favour", systemImage: "plus") { form = FormTarget(editing: nil) }

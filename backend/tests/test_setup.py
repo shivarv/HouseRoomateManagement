@@ -37,7 +37,7 @@ def test_setup_creates_everything_in_one_go(client, fake_today):
         groceries=[{"name": "Paneer", "category_key": "groceries"}],
         bills=[
             {"name": "Rent", "payer_mode": "everyone", "amount_cents": 300000},
-            {"name": "WiFi", "payer_mode": "one", "payer_name": "bea", "due_day": 5},
+            {"name": "WiFi", "due_day": 5},
         ],
         currency="inr",
     )
@@ -61,16 +61,16 @@ def test_setup_creates_everything_in_one_go(client, fake_today):
     bills = client.get(f"{API}/households/{hid}/bills", headers=ann).json()["bills"]
     assert [b["name"] for b in bills] == ["Rent", "WiFi"]
     assert bills[0]["currency"] == "INR" and bills[0]["current"]["share_cents"] == 100000
-    assert bills[1]["payer"]["display_name"] == "Bea"
+    assert bills[1]["payer_mode"] == "anyone"  # the default: one payment settles it
 
     assert client.get(f"{API}/auth/me", headers=ann).json()["last_household_id"] == hid
 
 
 def test_nothing_is_saved_when_something_is_wrong(client):
     ann = register(client, "ann@example.com", "Ann")
-    # A bill paid by someone who isn't in the house.
-    res = _setup(client, ann, roommates=["Bea"], bills=[{"name": "WiFi", "payer_mode": "one", "payer_name": "Zed"}])
-    assert res.status_code == 400
+    # Bills are paid by anyone or split; naming one person who pays is gone.
+    res = _setup(client, ann, roommates=["Bea"], bills=[{"name": "WiFi", "payer_mode": "one"}])
+    assert res.status_code == 422
     # A roommate with my name, duplicate chores, an unknown category.
     assert _setup(client, ann, roommates=["ann"]).status_code == 400
     assert _setup(client, ann, chores=[{"name": "Cook"}, {"name": "cook"}]).status_code == 422

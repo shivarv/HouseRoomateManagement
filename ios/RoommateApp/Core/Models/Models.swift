@@ -395,15 +395,14 @@ struct ReportMonths: Decodable {
 
 // MARK: - Reminders (bills)
 
-/// one: a named person pays · anyone: the first to pay settles it · everyone: each pays a share
+/// anyone: one payment settles it (whoever pays first) · everyone: split, each pays a share
 enum PayerMode: String, Codable, CaseIterable, Identifiable {
-    case one, anyone, everyone
+    case anyone, everyone
     var id: Self { self }
     var label: String {
         switch self {
-        case .one: "One person pays"
-        case .anyone: "Anyone can pay"
-        case .everyone: "Everyone pays their share"
+        case .anyone: "Anyone pays"
+        case .everyone: "Split between everyone"
         }
     }
 }
@@ -483,7 +482,6 @@ struct Bill: Decodable, Identifiable, Hashable {
     let name: String
     let icon: String
     let payerMode: PayerMode
-    let payer: MemberBrief?
     let frequency: BillFrequency
     let dueDay: Int  // monthly: day of the month · weekly: 1 = Mon … 7 = Sun · daily: unused
     let amountType: AmountType
@@ -519,6 +517,14 @@ enum Money {
         (Decimal(cents) / 100).formatted(.currency(code: currency))
     }
 
+    /// "USD" → "$", for the front of an amount field.
+    static func symbol(_ currency: String) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        return formatter.currencySymbol
+    }
+
     /// "1,250.50" → 125050. Empty → nil. Not a number → -1.
     static func cents(_ text: String) -> Int? {
         let cleaned = text.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
@@ -546,7 +552,6 @@ struct SetupBill: Codable, Hashable {
     var name: String
     var icon: String
     var payerMode: PayerMode
-    var payerName: String?  // payerMode .one: me or a roommate, by name
     var frequency: BillFrequency
     var dueDay: Int
     var amountType: AmountType

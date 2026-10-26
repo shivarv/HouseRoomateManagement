@@ -150,7 +150,7 @@ struct BillSettingsSection: View {
                     if bill.amountType == .variable { Badge(text: "Amount changes", color: .indigo) }
                     if !bill.isActive { Badge(text: "Paused", color: .orange) }
                 }
-                Text("\(bill.dueText) · \(bill.payerMode == .one ? "\(bill.payer?.displayName ?? "?") pays" : bill.payerMode.label)")
+                Text("\(bill.dueText) · \(bill.payerMode.label)")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
@@ -171,7 +171,6 @@ private struct BillFormView: View {
     @State private var name: String
     @State private var icon: String
     @State private var payerMode: PayerMode
-    @State private var payerId: UUID?
     @State private var frequency: BillFrequency
     @State private var dueDay: Int
     @State private var amountType: AmountType
@@ -191,7 +190,6 @@ private struct BillFormView: View {
             name: bill?.name ?? starter?.name ?? "",
             icon: bill?.icon ?? starter?.icon ?? "🧾",
             payerMode: bill?.payerMode ?? starter?.payerMode ?? .anyone,
-            payerId: bill?.payer?.id,
             frequency: bill?.frequency ?? .monthly,
             dueDay: bill?.dueDay ?? 1,
             amountType: bill?.amountType ?? starter?.amountType ?? .fixed,
@@ -200,11 +198,10 @@ private struct BillFormView: View {
             note: bill?.note ?? ""
         )
         // A starter is unsaved from the start; an edit is unchanged until touched.
-        original = bill == nil ? BillFields(name: "", icon: "", payerMode: .anyone, payerId: nil, frequency: .monthly, dueDay: 1, amountType: .fixed, amountCents: nil, currency: "USD", note: "") : fields
+        original = bill == nil ? BillFields(name: "", icon: "", payerMode: .anyone, frequency: .monthly, dueDay: 1, amountType: .fixed, amountCents: nil, currency: "USD", note: "") : fields
         _name = State(initialValue: fields.name)
         _icon = State(initialValue: fields.icon)
         _payerMode = State(initialValue: fields.payerMode)
-        _payerId = State(initialValue: fields.payerId)
         _frequency = State(initialValue: fields.frequency)
         _dueDay = State(initialValue: fields.dueDay)
         _amountType = State(initialValue: fields.amountType)
@@ -218,7 +215,6 @@ private struct BillFormView: View {
             name: name.trimmingCharacters(in: .whitespaces),
             icon: icon.trimmingCharacters(in: .whitespaces).isEmpty ? "🧾" : icon.trimmingCharacters(in: .whitespaces),
             payerMode: payerMode,
-            payerId: payerMode == .one ? payerId : nil,
             frequency: frequency,
             dueDay: frequency == .daily ? 1 : dueDay,
             amountType: amountType,
@@ -232,7 +228,6 @@ private struct BillFormView: View {
 
     private var problem: String? {
         if fields.name.isEmpty { return "Give the bill a name" }
-        if payerMode == .one && payerId == nil { return "Pick who pays it" }
         if amountType == .fixed && (Money.cents(amount) ?? 0) < 0 { return "Amount must be a number, like 60 or 1250.50" }
         if fields.currency.count != 3 || !fields.currency.allSatisfy(\.isLetter) { return "Currency is a 3-letter code, like USD or INR" }
         return nil
@@ -248,16 +243,16 @@ private struct BillFormView: View {
                     }
                     TextField("Note (optional), e.g. pay on the landlord's portal", text: $note, axis: .vertical)
                 }
-                Section("Who pays") {
+                Section {
                     Picker("Who pays", selection: $payerMode) {
                         ForEach(PayerMode.allCases) { Text($0.label).tag($0) }
                     }
-                    if payerMode == .one {
-                        Picker("Person", selection: $payerId) {
-                            Text("Pick someone").tag(UUID?.none)
-                            ForEach(members) { Text($0.displayName).tag(Optional($0.id)) }
-                        }
-                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Who pays")
+                } footer: {
+                    Text(payerMode == .anyone ? "Once someone pays, it's done for everyone."
+                                              : "Each person taps their name once they've paid their share.")
                 }
                 Section {
                     Picker("Repeats", selection: $frequency) {
@@ -329,7 +324,7 @@ private struct BillFormView: View {
     }
 
     private func same(_ a: BillFields, _ b: BillFields) -> Bool {
-        a.name == b.name && a.icon == b.icon && a.payerMode == b.payerMode && a.payerId == b.payerId
+        a.name == b.name && a.icon == b.icon && a.payerMode == b.payerMode
             && a.frequency == b.frequency && a.dueDay == b.dueDay && a.amountType == b.amountType
             && a.amountCents == b.amountCents && a.currency == b.currency && a.note == b.note
     }

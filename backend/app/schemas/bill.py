@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.household import MemberBrief
 
-PayerMode = Literal["one", "anyone", "everyone"]
+PayerMode = Literal["anyone", "everyone"]  # whoever pays first, or split between everyone
 Frequency = Literal["monthly", "weekly", "daily"]
 AmountType = Literal["fixed", "variable"]
 BillStatus = Literal["paid", "due", "overdue", "upcoming"]
@@ -32,7 +32,6 @@ class BillCreate(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     icon: str = Field(default="🧾", min_length=1, max_length=16)
     payer_mode: PayerMode = "anyone"
-    payer_id: uuid.UUID | None = None  # required when payer_mode is "one"
     frequency: Frequency = "monthly"
     # monthly: day of the month (1–31); weekly: weekday (1 = Monday … 7 = Sunday); daily: ignored
     due_day: int = Field(default=1, ge=1, le=31)
@@ -51,12 +50,11 @@ class BillCreate(BaseModel):
 
 
 class BillUpdate(BaseModel):
-    """Only the fields sent change. `amount_cents: null`, `note: ""` and `payer_id: null` clear them."""
+    """Only the fields sent change. `amount_cents: null` and `note: ""` clear them."""
 
     name: str | None = Field(default=None, min_length=1, max_length=80)
     icon: str | None = Field(default=None, min_length=1, max_length=16)
     payer_mode: PayerMode | None = None
-    payer_id: uuid.UUID | None = None
     frequency: Frequency | None = None
     due_day: int | None = Field(default=None, ge=1, le=31)
     amount_type: AmountType | None = None
@@ -111,7 +109,6 @@ class BillOut(BaseModel):
     name: str
     icon: str
     payer_mode: PayerMode
-    payer: MemberBrief | None
     frequency: Frequency
     due_day: int
     amount_type: AmountType

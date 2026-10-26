@@ -124,6 +124,9 @@ function BillCard({ bill, members, myMemberId, isAdmin }: { bill: Bill; members:
   const period = bill.current;
   const urgent = period.status === "overdue" || period.status === "due";
   const amount = amountText(bill, period);
+  // A variable bill anyone pays: the amount and "paid" are one step for the admin.
+  const payWithAmount =
+    isAdmin && bill.amount_type === "variable" && bill.payer_mode !== "everyone" && period.is_current && period.payments.length === 0;
 
   return (
     <div
@@ -160,21 +163,21 @@ function BillCard({ bill, members, myMemberId, isAdmin }: { bill: Bill; members:
           </div>
           <p className="mt-0.5 text-sm text-slate-600">
             {PERIOD_NAME[bill.frequency]} ({period.label}) · due {formatDay(period.due_date)} ·{" "}
-            {bill.payer_mode === "one"
-              ? `${bill.payer?.display_name ?? "Someone"} pays`
-              : bill.payer_mode === "anyone"
-                ? "anyone can pay"
-                : `everyone pays · ${period.paid_count} of ${period.expected_count} paid`}
+            {bill.payer_mode === "anyone" ? "anyone can pay" : `split · ${period.paid_count} of ${period.expected_count} paid`}
           </p>
           {bill.note && <p className="text-xs text-slate-500">{bill.note}</p>}
         </div>
-        {bill.payer_mode !== "everyone" && (
+        {bill.payer_mode !== "everyone" && !payWithAmount && (
           <SinglePayer bill={bill} period={period} myMemberId={myMemberId} />
         )}
       </div>
 
       {bill.payer_mode === "everyone" && <EveryonePays bill={bill} period={period} members={members} myMemberId={myMemberId} />}
-      {isAdmin && bill.amount_type === "variable" && <SetAmount bill={bill} />}
+      {payWithAmount ? (
+        <PayWithAmount bill={bill} period={period} />
+      ) : (
+        isAdmin && bill.amount_type === "variable" && <SetAmount bill={bill} />
+      )}
 
       <button className="mt-3 text-xs font-medium text-slate-500 hover:text-indigo-700" onClick={() => setShowHistory((s) => !s)}>
         {showHistory ? "Hide history ▴" : "History ▾"}
@@ -184,7 +187,7 @@ function BillCard({ bill, members, myMemberId, isAdmin }: { bill: Bill; members:
   );
 }
 
-/** One person or anyone: a single payment settles the period. */
+/** Anyone pays: a single payment settles the period for the house. */
 function SinglePayer({ bill, period, myMemberId }: { bill: Bill; period: BillPeriod; myMemberId: string }) {
   const pay = useBillChange((memberId: string | undefined) => billsApi.pay(bill.id, { member_id: memberId, period: period.period }));
   const undo = useBillChange((paymentId: string) => billsApi.undo(paymentId));
@@ -197,7 +200,7 @@ function SinglePayer({ bill, period, myMemberId }: { bill: Bill; period: BillPer
         {first ? (
           <>
             <span className="text-sm font-medium text-emerald-700">
-              ✓ {first.member.id === myMemberId ? "You" : first.member.display_name} paid ·{" "}
+              ✓ Paid by {first.member.id === myMemberId ? "you" : first.member.display_name} ·{" "}
               {formatDay(localIsoDate(new Date(first.paid_at)))}, {formatTime(first.paid_at)}
             </span>
             {first.can_undo && (
@@ -206,10 +209,6 @@ function SinglePayer({ bill, period, myMemberId }: { bill: Bill; period: BillPer
               </Button>
             )}
           </>
-        ) : bill.payer_mode === "one" && bill.payer && bill.payer.id !== myMemberId ? (
-          <Button variant="secondary" disabled={busy || !period.is_current} onClick={() => pay.mutate(bill.payer!.id)}>
-            {bill.payer.display_name} paid ✓
-          </Button>
         ) : (
           <Button disabled={busy || !period.is_current} onClick={() => pay.mutate(undefined)}>
             {pay.isPending ? "Saving…" : "I paid it ✓"}
@@ -264,6 +263,77 @@ function EveryonePays({ bill, period, members, myMemberId }: { bill: Bill; perio
       </div>
       <ErrorText error={pay.error ?? undo.error} />
     </div>
+  );
+}
+
+/** "84.50" → 8450; empty → null; not a number → NaN. */
+function toCents(value: string): number | null {
+  return value.trim() === "" ? null : Math.round(Number(value.replace(/[,\s]/g, "")) * 100);
+}
+
+function currencySymbol(currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).formatToParts(0).find((p) => p.type === "currency")?.value ?? currency;
+  } catch {
+    return currency;
+  }
+}
+
+/**
+ * Admins, for a variable bill anyone pays: type the amount, then one click saves it and marks it
+ * paid by me. "Save amount only" is for a bill that arrived but isn't paid yet.
+ */
+function PayWithAmount({ bill, period }: { bill: Bill; period: BillPeriod }) {
+  const [value, setValue] = useState(period.amount_cents != null ? (period.amount_cents / 100).toFixed(2) : "");
+  const pay = useBillChange(async (cents: number) => {
+    if (cents !== period.amount_cents) await billsApi.setAmount(bill.id, cents, period.period);
+    return billsApi.pay(bill.id, { period: period.period });
+  });
+  const save = useBillChange((cents: number) => billsApi.setAmount(bill.id, cents, period.period));
+  const cents = toCents(value);
+  const valid = cents !== null && Number.isFinite(cents) && cents >= 0;
+  const busy = pay.isPending || save.isPending;
+  const amount = valid ? ` ${formatMoney(cents, bill.currency)}` : "";
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (valid) pay.mutate(cents);
+  };
+
+  return (
+    <form onSubmit={submit} className="mt-3 space-y-2 rounded-2xl bg-indigo-50/60 p-3 ring-1 ring-indigo-100">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex min-w-40 flex-1 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-500/15">
+          <span className="text-lg font-semibold text-slate-400">{currencySymbol(bill.currency)}</span>
+          <input
+            className="w-full bg-transparent text-lg font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-slate-400"
+            inputMode="decimal"
+            placeholder={`${period.label} amount`}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            aria-label={`${bill.name} amount for ${period.label}`}
+          />
+        </label>
+        <Button type="submit" disabled={!valid || busy}>
+          {pay.isPending ? "Saving…" : `✓ Paid${amount}`}
+        </Button>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        {bill.last_amount_cents != null && (
+          <span className="text-slate-500">Last time {formatMoney(bill.last_amount_cents, bill.currency)}</span>
+        )}
+        <button
+          type="button"
+          className="font-medium text-indigo-700 hover:underline disabled:cursor-default disabled:opacity-50 disabled:no-underline"
+          disabled={!valid || cents === period.amount_cents || busy}
+          onClick={() => valid && save.mutate(cents)}
+        >
+          {save.isPending ? "Saving…" : "Save amount only"}
+        </button>
+        {value.trim() !== "" && !valid && <span className="text-red-600">Enter a number, like 84.50</span>}
+      </div>
+      <ErrorText error={pay.error ?? save.error} />
+    </form>
   );
 }
 

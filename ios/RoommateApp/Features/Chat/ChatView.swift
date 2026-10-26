@@ -216,8 +216,10 @@ struct ChatView: View {
             }
             .safeAreaInset(edge: .top, spacing: 0) { header }
             .safeAreaInset(edge: .bottom, spacing: 0) { composer }
+            .background { BrandBackground() }
             .navigationTitle("Chat")
             .navigationBarTitleDisplayMode(.inline)
+            .profileToolbar()
             .toolbar {
                 if model.households.count > 1 {
                     ToolbarItem(placement: .principal) {

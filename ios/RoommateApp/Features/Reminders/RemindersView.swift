@@ -129,48 +129,37 @@ private struct BillReminderRow: View {
                     Text(amountLine(bill, period) ?? (bill.amountType == .variable ? "Amount not set yet" : ""))
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(amountLine(bill, period) == nil ? .orange : .primary)
-                    Text("\(bill.frequency.current) (\(period.label)) · due \(DayFormat.short(period.dueDate)) · \(payerLine)")
-                        .font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text("\(bill.frequency.current) (\(period.label)) · due \(DayFormat.short(period.dueDate)) · \(payerLine)")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                        Button { showHistory = true } label: {
+                            Label("History", systemImage: "clock.arrow.circlepath").font(.caption.weight(.medium))
+                        }
+                        .buttonStyle(.borderless)
+                        .tint(Brand.indigo)
+                    }
                     if let note = bill.note { Text(note).font(.caption).foregroundStyle(.secondary) }
                 }
             }
 
-            PeriodActions(model: model, bill: bill, period: period)
-
-            if model.isAdmin && bill.amountType == .variable {
-                AmountField(model: model, bill: bill, period: period, hint: bill.lastAmountCents)
+            // A variable bill anyone pays: the amount and "paid" are one step for the admin.
+            if model.isAdmin && bill.amountType == .variable && bill.payerMode != .everyone
+                && period.isCurrent && period.payments.isEmpty {
+                PayWithAmount(model: model, bill: bill, period: period)
+            } else {
+                PeriodActions(model: model, bill: bill, period: period)
+                if model.isAdmin && bill.amountType == .variable {
+                    AmountField(model: model, bill: bill, period: period, hint: bill.lastAmountCents)
+                }
             }
             if let notice = model.notices[bill.id] {
                 Text(notice).font(.footnote).foregroundStyle(.secondary)
             }
 
-            DisclosureGroup("History", isExpanded: $showHistory) {
-                if let past = model.history[bill.id] {
-                    ForEach(past, id: \.period) { p in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(p.label).font(.subheadline.weight(.medium))
-                                StatusCapsule(status: p.status)
-                                Spacer()
-                                if let amount = amountLine(bill, p) { Text(amount).font(.caption).foregroundStyle(.secondary) }
-                            }
-                            if p.status != .paid { PeriodActions(model: model, bill: bill, period: p) }
-                            if model.isAdmin && bill.amountType == .variable && p.amountCents == nil {
-                                AmountField(model: model, bill: bill, period: p, hint: nil)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                } else {
-                    ProgressView()
-                }
-            }
-            .font(.caption)
-            .onChange(of: showHistory) { _, open in
-                if open && model.history[bill.id] == nil { Task { await model.loadHistory(bill) } }
-            }
         }
         .padding(.vertical, 6)
+        .sheet(isPresented: $showHistory) { BillHistorySheet(model: model, bill: bill) }
         // Bills on due are the loudest thing on the screen.
         .listRowBackground(
             HStack(spacing: 0) {
@@ -183,9 +172,8 @@ private struct BillReminderRow: View {
 
     private var payerLine: String {
         switch bill.payerMode {
-        case .one: "\(bill.payer?.displayName ?? "Someone") pays"
         case .anyone: "anyone can pay"
-        case .everyone: "everyone pays · \(period.paidCount) of \(period.expectedCount)"
+        case .everyone: "split · \(period.paidCount) of \(period.expectedCount) paid"
         }
     }
 }
@@ -221,7 +209,7 @@ private struct StatusCapsule: View {
     }
 }
 
-/// Paying for one period: one button (one person / anyone), or a chip per person (everyone).
+/// Paying for one period: one button (anyone: one payment settles it), or a chip per person (split).
 private struct PeriodActions: View {
     let model: RemindersModel
     let bill: Bill
@@ -240,7 +228,7 @@ private struct PeriodActions: View {
             }
         } else if let first = period.payments.first {
             HStack {
-                Label("\(first.member.id == model.myMemberId ? "You" : first.member.displayName) paid · \(DayFormat.time(first.paidAt))",
+                Label("Paid by \(first.member.id == model.myMemberId ? "you" : first.member.displayName) · \(DayFormat.time(first.paidAt))",
                       systemImage: "checkmark.circle.fill")
                     .font(.subheadline).foregroundStyle(.green)
                 Spacer()
@@ -249,10 +237,6 @@ private struct PeriodActions: View {
                         .buttonStyle(.bordered).tint(.gray)
                 }
             }
-        } else if bill.payerMode == .one, let payer = bill.payer, payer.id != model.myMemberId {
-            Button("\(payer.displayName) paid ✓") { Task { await model.pay(bill, for: payer.id, period: period) } }
-                .buttonStyle(.bordered)
-                .disabled(!period.isCurrent)
         } else {
             Button("I paid it ✓") { Task { await model.pay(bill, period: period) } }
                 .buttonStyle(.borderedProminent)
@@ -284,7 +268,79 @@ private struct PeriodActions: View {
     }
 }
 
-/// Admins: enter a variable bill's amount for a period when it arrives.
+/// The amount box: the currency symbol, then a big number.
+private struct AmountInput: View {
+    let currency: String
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(Money.symbol(currency))
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.secondary)
+            TextField(placeholder, text: $text)
+                .font(.title3.weight(.semibold).monospacedDigit())
+                .keyboardType(.decimalPad)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private func amountText(_ cents: Int?) -> String {
+    cents.map { String(format: "%.2f", Double($0) / 100) } ?? ""
+}
+
+/// Admins, for a variable bill anyone pays: type the amount, then one tap saves it and marks it
+/// paid by me. "Save amount only" is for a bill that arrived but isn't paid yet.
+private struct PayWithAmount: View {
+    let model: RemindersModel
+    let bill: Bill
+    let period: BillPeriod
+    @State private var text = ""
+    @State private var busy = false
+
+    private var cents: Int? { Money.cents(text) }
+    private var valid: Bool { (cents ?? -1) >= 0 }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            AmountInput(currency: bill.currency, placeholder: "\(period.label) amount", text: $text)
+            if let last = bill.lastAmountCents {
+                Text("Last time \(Money.format(last, bill.currency))").font(.caption).foregroundStyle(.secondary)
+            }
+            Button {
+                guard let cents, valid else { return }
+                busy = true
+                Task {
+                    await model.payWithAmount(bill, cents: cents, period: period)
+                    busy = false
+                }
+            } label: {
+                if busy { ProgressView().tint(.white) } else {
+                    let amount = valid ? " " + Money.format(cents ?? 0, bill.currency) : ""
+                    Label("Paid\(amount)", systemImage: "checkmark")
+                }
+            }
+            .buttonStyle(.brand)
+            .disabled(!valid || busy)
+            .sensoryFeedback(.success, trigger: period.payments.count)
+
+            Button("Save amount only") {
+                Task { await model.setAmount(bill, cents: cents, period: period) }
+            }
+            .font(.footnote.weight(.medium))
+            .frame(maxWidth: .infinity)
+            .disabled(!valid || cents == period.amountCents || busy)
+        }
+        .buttonStyle(.borderless)  // two buttons in one list row: each takes its own taps
+        .padding(12)
+        .background(Brand.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+        .onAppear { text = amountText(period.amountCents) }
+    }
+}
+
+/// Admins: correct a variable bill's amount, or set it for a past period or a shared bill.
 private struct AmountField: View {
     let model: RemindersModel
     let bill: Bill
@@ -293,19 +349,76 @@ private struct AmountField: View {
     @State private var text = ""
 
     var body: some View {
-        HStack {
-            TextField(hint.map { "Last time \(Money.format($0, bill.currency))" } ?? "\(period.label) amount", text: $text)
-                .keyboardType(.decimalPad)
-                .textFieldStyle(.roundedBorder)
-            Button("Save amount") {
+        HStack(spacing: 8) {
+            AmountInput(currency: bill.currency,
+                        placeholder: hint.map { "Last time \(amountText($0))" } ?? "\(period.label) amount", text: $text)
+            Button("Save") {
                 let cents = Money.cents(text)
                 Task { await model.setAmount(bill, cents: cents, period: period) }
             }
             .buttonStyle(.bordered)
+            .tint(Brand.indigo)
             .disabled((Money.cents(text) ?? 0) < 0 || Money.cents(text) == period.amountCents)
         }
-        .onAppear {
-            if let amount = period.amountCents { text = String(format: "%.2f", Double(amount) / 100) }
+        .onAppear { text = amountText(period.amountCents) }
+    }
+}
+
+/// A bill's past periods, newest first: what each one came to and who paid. A past period that
+/// was never paid can still be settled (or get its amount) from here.
+private struct BillHistorySheet: View {
+    let model: RemindersModel
+    let bill: Bill
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let past = model.history[bill.id] {
+                    if past.isEmpty {
+                        Text("No earlier \(bill.frequency == .monthly ? "months" : "periods") yet.").foregroundStyle(.secondary)
+                    }
+                    ForEach(past, id: \.period) { p in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(p.label).font(.headline)
+                                StatusCapsule(status: p.status)
+                                Spacer()
+                                if let amount = amountLine(bill, p) {
+                                    Text(amount).font(.subheadline.weight(.medium).monospacedDigit())
+                                }
+                            }
+                            if p.status == .paid || bill.payerMode == .everyone {
+                                if !p.payments.isEmpty {
+                                    Text(paidBy(p)).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            if p.status != .paid { PeriodActions(model: model, bill: bill, period: p) }
+                            if model.isAdmin && bill.amountType == .variable && p.amountCents == nil {
+                                AmountField(model: model, bill: bill, period: p, hint: nil)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } else {
+                    ProgressView().frame(maxWidth: .infinity)
+                }
+                if let notice = model.notices[bill.id] {
+                    Text(notice).font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            .brandBackground()
+            .navigationTitle("\(bill.icon) \(bill.name)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+            .task { await model.loadHistory(bill) }
         }
+    }
+
+    private func paidBy(_ p: BillPeriod) -> String {
+        let names = p.payments.map { $0.member.id == model.myMemberId ? "you" : $0.member.displayName }
+        return "Paid by " + names.joined(separator: ", ")
     }
 }

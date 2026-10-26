@@ -26,6 +26,7 @@ struct HouseTabView: View {
                     ProgressView()
                 }
             }
+            .profileToolbar()
         }
         .task { await load() }
         .followsCurrentHouse($householdId)
@@ -48,7 +49,7 @@ struct HouseTabView: View {
 
 struct HouseholdDetailView<Header: View>: View {
     enum Tab: String, CaseIterable, Identifiable {
-        case reminders = "Reminders", activity = "Activity", house = "House"
+        case activity = "Activity", reminders = "Reminders", house = "House"
         var id: Self { self }
     }
 
@@ -76,7 +77,7 @@ struct HouseholdDetailView<Header: View>: View {
     var body: some View {
         List {
             header
-            ChipTabs(items: Tab.allCases, selection: $tab)
+            ChipTabs(items: Tab.allCases, selection: $tab) { $0 == .reminders ? reminders.badge : nil }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
 
@@ -99,6 +100,7 @@ struct HouseholdDetailView<Header: View>: View {
                 }
             }
         }
+        .brandBackground()
         .navigationTitle(model.detail?.name ?? "House")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

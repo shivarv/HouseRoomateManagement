@@ -317,8 +317,8 @@ export interface Report {
   leaderboard: { member: MemberBrief; is_active: boolean; done: number; missed: number; covered_for_others: number }[];
 }
 
-/** one: a named person pays · anyone: the first to pay closes it · everyone: each pays a share */
-export type PayerMode = "one" | "anyone" | "everyone";
+/** anyone: one payment settles it (whoever pays first) · everyone: split, each pays a share */
+export type PayerMode = "anyone" | "everyone";
 export type BillFrequency = "monthly" | "weekly" | "daily";
 /** fixed: the amount repeats · variable: an admin enters each period's amount (gas, electricity) */
 export type AmountType = "fixed" | "variable";
@@ -353,7 +353,6 @@ export interface Bill {
   name: string;
   icon: string;
   payer_mode: PayerMode;
-  payer: MemberBrief | null; // payer_mode "one"
   frequency: BillFrequency;
   due_day: number; // monthly: day of the month · weekly: 1 = Mon … 7 = Sun · daily: unused
   amount_type: AmountType;
@@ -375,7 +374,6 @@ export interface BillFields {
   name?: string;
   icon?: string;
   payer_mode?: PayerMode;
-  payer_id?: string | null;
   frequency?: BillFrequency;
   due_day?: number;
   amount_type?: AmountType;
@@ -403,7 +401,6 @@ export interface SetupBill {
   name: string;
   icon: string;
   payer_mode: PayerMode;
-  payer_name: string | null; // payer_mode "one": me or a roommate, by name
   frequency: BillFrequency;
   due_day: number;
   amount_type: AmountType;

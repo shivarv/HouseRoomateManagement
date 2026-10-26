@@ -1,12 +1,24 @@
 import SwiftUI
 
+/// Opened from the avatar at the top right of every tab.
 struct ProfileView: View {
     @Environment(Session.self) private var session
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List {
                 if let user = session.user {
+                    Section {
+                        VStack(spacing: 8) {
+                            Avatar(name: user.name, size: 76)
+                            Text(user.name).font(.title2.bold())
+                            Text(user.email).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                    }
+                    .listRowBackground(Color.clear)
                     NameSection(user: user)
                     Section("Account") {
                         LabeledContent("Email", value: user.email)
@@ -15,17 +27,17 @@ struct ProfileView: View {
                         }
                     }
                 }
-                Section("Server") {
-                    Text(APIClient.shared.baseURL)
-                        .font(.footnote.monospaced())
-                        .foregroundStyle(.secondary)
-                }
                 Section {
                     Button("Sign out", role: .destructive) { session.signOut() }
                 }
                 AdminSettingsLinks()
             }
+            .brandBackground()
             .navigationTitle("Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
         }
     }
 }

@@ -136,12 +136,16 @@ struct ShoppingView: View {
                     }
                 }
                 if !model.bought.isEmpty {
-                    Section("Recently bought") {
+                    Section {
                         ForEach(model.bought) { boughtRow($0) }
+                    } header: {
+                        IconHeader(title: "Recently bought", systemImage: "bag.fill", color: Brand.teal)
                     }
                 }
             }
+            .brandBackground()
             .navigationTitle("Groceries")
+            .profileToolbar()
             .toolbar {
                 if !model.selected.isEmpty {
                     ToolbarItem(placement: .confirmationAction) {
