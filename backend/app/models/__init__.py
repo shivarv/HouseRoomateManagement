@@ -13,7 +13,7 @@ from app.models.error_log import ErrorLog
 from app.models.household import Household, HouseholdMember
 from app.models.invite import HouseholdInvite
 from app.models.shopping import GroceryCategory, GroceryPreset, ShoppingItem
-from app.models.user import User
+from app.models.user import User, UserIdentity
 
 __all__ = [
     "ActivityEvent",
@@ -36,4 +36,5 @@ __all__ = [
     "HouseholdMember",
     "ShoppingItem",
     "User",
+    "UserIdentity",
 ]

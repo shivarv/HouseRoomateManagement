@@ -5,6 +5,7 @@ import { authApi } from "../api/auth";
 import { ApiError } from "../api/client";
 import { Button, Card, ErrorText, Input } from "../components/ui";
 import { useAuth } from "../features/auth/AuthContext";
+import { SocialSignIn } from "../features/auth/SocialSignIn";
 
 /** Where to go after signing in, and (from an invite link) which house is waiting. */
 type AuthState = { from?: string; invite?: string; invitedBy?: string } | null;
@@ -82,11 +83,22 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           {tab("register", "Sign up")}
         </div>
 
+        {/* One tap, for logging in or signing up alike. */}
+        <div className="mb-5">
+          <SocialSignIn
+            onSignedIn={(res) => {
+              signIn(res);
+              navigate(from, { replace: true });
+            }}
+          />
+        </div>
+
         <form onSubmit={onSubmit} className="space-y-4">
           {mode === "register" && (
             <div className="grid grid-cols-2 gap-3">
-              <Input label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required maxLength={50} autoComplete="given-name" />
-              <Input label="Last name (optional)" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={50} autoComplete="family-name" />
+              {/* A first or last name: either is enough. */}
+              <Input label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required={!lastName.trim()} maxLength={50} autoComplete="given-name" />
+              <Input label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} required={!firstName.trim()} maxLength={50} autoComplete="family-name" />
             </div>
           )}
           <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />

@@ -4,7 +4,11 @@ import Foundation
 
 struct User: Codable, Identifiable, Hashable {
     let id: UUID
-    let email: String
+    /// nil: signed up with Google, Apple or Facebook with only a phone.
+    let email: String?
+    let phone: String?  // contact only for now
+    /// How I can sign in: "password", "google", "apple", "facebook".
+    var providers: [String]?
     let firstName: String
     let lastName: String  // may be empty: then it's left out of `name`
     let name: String  // "First Last"
@@ -32,6 +36,29 @@ struct MemberAdded: Decodable {
 struct TokenResponse: Decodable {
     let accessToken: String
     let user: User
+}
+
+enum SocialProvider: String {
+    case google, apple, facebook
+}
+
+/// Signed in (`accessToken` + `user`), or a new account that first needs `missing`: "name" (a
+/// first or last name) and/or "contact" (an email or phone). Then the same token goes again with them.
+struct OAuthResult: Decodable {
+    let accessToken: String?
+    let user: User?
+    let missing: [String]
+    let firstName: String
+    let lastName: String
+    let email: String?
+}
+
+/// Which "Continue with …" buttons to show, and the IDs each needs. Apple needs nothing on iOS.
+struct AuthProviders: Decodable {
+    struct Google: Decodable { let iosClientId: String? }
+    struct Facebook: Decodable { let appId: String }
+    let google: Google?
+    let facebook: Facebook?
 }
 
 /// The confirmation link was opened. Only the first open signs in (`accessToken` is set).

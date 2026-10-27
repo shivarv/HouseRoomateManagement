@@ -20,7 +20,8 @@ final class AuthViewModel {
 
     var canSubmit: Bool {
         !email.isEmpty && password.count >= (mode == .register ? 8 : 1)
-            && (mode == .login || !firstName.trimmingCharacters(in: .whitespaces).isEmpty)
+            // A first or last name: either is enough.
+            && (mode == .login || !(firstName + lastName).trimmingCharacters(in: .whitespaces).isEmpty)
     }
 
     func submit(session: Session) async {
@@ -89,6 +90,14 @@ struct AuthView: View {
                     .pickerStyle(.segmented)
                     .onChange(of: model.mode) { _, _ in model.error = nil }
 
+                    // One tap, for logging in or signing up alike.
+                    SocialSignInButtons()
+                    HStack(spacing: 12) {
+                        Rectangle().fill(.secondary.opacity(0.3)).frame(height: 1)
+                        Text("or").font(.footnote.weight(.medium)).foregroundStyle(.secondary)
+                        Rectangle().fill(.secondary.opacity(0.3)).frame(height: 1)
+                    }
+
                     VStack(spacing: 0) {
                         if model.mode == .register {
                             AuthField(systemImage: "person") {
@@ -96,7 +105,7 @@ struct AuthView: View {
                             }
                             Divider().padding(.leading, 48)
                             AuthField(systemImage: "person.2") {
-                                TextField("Last name (optional)", text: $model.lastName).textContentType(.familyName)
+                                TextField("Last name", text: $model.lastName).textContentType(.familyName)
                             }
                             Divider().padding(.leading, 48)
                         }

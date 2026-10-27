@@ -229,7 +229,7 @@ def add_member(
 def email_in_house(household: Household, address: str) -> bool:
     address = address.lower()
     return any(
-        m.is_active and address in {m.email, m.user.email.lower() if m.user else None}
+        m.is_active and address in {m.email, m.user.email.lower() if m.user and m.user.email else None}
         for m in household.members
     )
 
@@ -273,7 +273,7 @@ def accept_invite(
     if member_id is None:
         # An admin added me by name with this email: that's me.
         by_email = next(
-            (m for m in unclaimed_members(household) if m.email and m.email == user.email.lower()), None
+            (m for m in unclaimed_members(household) if m.email and user.email and m.email == user.email.lower()), None
         )
         member_id = by_email.id if by_email else None
     if member_id is None:
@@ -294,7 +294,7 @@ def accept_invite_link(db: Session, token: str, user: User) -> HouseholdMember:
     """Join with a private invite link. Checked when joining, not just when the page opened: the
     invite must still be pending and unexpired, and be for this (confirmed) account's email."""
     row = invites.find_open(db, token)
-    if row.email != user.email.lower():
+    if not user.email or row.email != user.email.lower():
         raise NotFound(invites.EXPIRED)  # someone else's invite: don't say whose, or that it's valid
     return accept_invite(db, row.household, user, member_id=None, display_name=None)
 
@@ -313,7 +313,7 @@ def invited_emails(db: Session, household_id: uuid.UUID) -> set[str]:
 def member_out(member: HouseholdMember, invited: set[str] | None = None) -> MemberOut:
     user = member.user
     if user is not None:
-        status = "verified" if user.email_verified_at is not None else "joined"
+        status = "verified" if user.is_confirmed else "joined"
     elif member.email and invited and member.email in invited:
         status = "invited"
     else:

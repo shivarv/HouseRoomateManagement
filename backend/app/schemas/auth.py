@@ -1,12 +1,20 @@
+import re
 import uuid
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 NEXT_PATH = r"^/([^/\\\s]\S*)?$"  # a path on our own site: no other hosts
+PHONE = r"^\+?[0-9()\-\s]{7,20}$"  # contact only for now; no SMS checks
 
 
 def _clean(value: str | None) -> str | None:
     return " ".join(value.split()) if isinstance(value, str) else value
+
+
+def _check_phone(value: str | None) -> str | None:
+    if value and not re.fullmatch(PHONE, value):
+        raise ValueError("Enter a phone number, like +1 617 555 0100")
+    return value
 
 
 class RegisterIn(BaseModel):
@@ -27,16 +35,28 @@ class RegisterIn(BaseModel):
         if not self.first_name and self.name:
             first, _, last = self.name.partition(" ")
             self.first_name, self.last_name = first[:50], (self.last_name or last)[:50]
-        if not self.first_name:
-            raise ValueError("Add your first name")
+        if not self.first_name and not self.last_name:
+            raise ValueError("Add your first or last name")
         return self
 
 
 class ProfileUpdate(BaseModel):
-    first_name: str = Field(min_length=1, max_length=50)
-    last_name: str = Field(default="", max_length=50)
+    """At least a first or last name. `phone: ""` clears it (if I still have an email)."""
 
-    _strip = field_validator("first_name", "last_name", mode="before")(_clean)
+    first_name: str = Field(default="", max_length=50)
+    last_name: str = Field(default="", max_length=50)
+    phone: str | None = Field(default=None, max_length=32)
+    # Only for accounts without one yet (some social sign-ups): changing an email isn't supported.
+    email: EmailStr | None = None
+
+    _strip = field_validator("first_name", "last_name", "phone", mode="before")(_clean)
+    _phone = field_validator("phone")(_check_phone)
+
+    @model_validator(mode="after")
+    def _names(self):
+        if not self.first_name and not self.last_name:
+            raise ValueError("Add your first or last name")
+        return self
 
 
 class LoginIn(BaseModel):
@@ -48,11 +68,13 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    email: str
+    email: str | None  # None: signed up with Google, Apple or Facebook with only a phone
+    phone: str | None = None
     first_name: str
     last_name: str
     name: str  # "First Last"
     email_verified: bool  # User.email_verified
+    providers: list[str] = []  # how I can sign in: "password", "google", "apple", "facebook"
     # May point at a house I've since left; clients fall back to my first house.
     last_household_id: uuid.UUID | None = None
 
@@ -94,3 +116,40 @@ class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+
+
+class OAuthIn(BaseModel):
+    """What the provider's sign-in screen returned, plus anything the person typed for what the
+    provider didn't share (Apple gives the name only the first time; the app passes it here)."""
+
+    token: str = Field(min_length=20, max_length=8000)  # an ID token, or a Facebook access token
+    nonce: str | None = Field(default=None, max_length=200)  # Apple / Facebook iOS: checked against the token
+    first_name: str = Field(default="", max_length=50)
+    last_name: str = Field(default="", max_length=50)
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=32)
+
+    _strip = field_validator("first_name", "last_name", "phone", mode="before")(_clean)
+    _phone = field_validator("phone")(_check_phone)
+
+
+class OAuthOut(BaseModel):
+    """Signed in (`access_token` + `user`), or a new account that needs `missing` first: "name"
+    (a first or last name) and/or "contact" (an email or phone). Send the same token again with them."""
+
+    access_token: str | None = None
+    token_type: str = "bearer"
+    user: UserOut | None = None
+    missing: list[str] = []
+    # What the provider already told us, to prefill the "finish your profile" form.
+    first_name: str = ""
+    last_name: str = ""
+    email: str | None = None
+
+
+class AuthProvidersOut(BaseModel):
+    """Which sign-in buttons to show, and the IDs each one needs."""
+
+    google: dict | None = None
+    apple: dict | None = None
+    facebook: dict | None = None

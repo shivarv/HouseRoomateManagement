@@ -5,7 +5,11 @@ export type TaskStatus = "pending" | "done";
 
 export interface User {
   id: string;
-  email: string;
+  /** null: signed up with Google, Apple or Facebook with only a phone. */
+  email: string | null;
+  phone: string | null; // contact only for now
+  /** How I can sign in: "password", "google", "apple", "facebook". */
+  providers: string[];
   first_name: string;
   last_name: string; // may be empty: then it's left out of `name`
   name: string; // "First Last"
@@ -40,6 +44,33 @@ export interface TokenResponse {
   access_token: string;
   token_type: "bearer";
   user: User;
+}
+
+export type SocialProvider = "google" | "apple" | "facebook";
+
+/** Signed in, or a new account that first needs `missing`: "name" and/or "contact" (email or phone). */
+export interface OAuthResult {
+  access_token: string | null;
+  user: User | null;
+  missing: ("name" | "contact")[];
+  first_name: string;
+  last_name: string;
+  email: string | null;
+}
+
+/** Which "Continue with …" buttons to show (a provider is missing until it's set up). */
+export interface AuthProviders {
+  google: { web_client_id: string | null; ios_client_id: string | null } | null;
+  facebook: { app_id: string } | null;
+  apple: { web_services_id: string | null } | null;
+}
+
+/** What the person typed for what the provider didn't share. */
+export interface OAuthExtras {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
 }
 
 export interface MemberBrief {

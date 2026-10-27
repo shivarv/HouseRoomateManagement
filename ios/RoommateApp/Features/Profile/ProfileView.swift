@@ -13,17 +13,19 @@ struct ProfileView: View {
                         VStack(spacing: 8) {
                             Avatar(name: user.name, size: 76)
                             Text(user.name).font(.title2.bold())
-                            Text(user.email).font(.subheadline).foregroundStyle(.secondary)
+                            if let contact = user.email ?? user.phone {
+                                Text(contact).font(.subheadline).foregroundStyle(.secondary)
+                            }
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 4)
                     }
                     .listRowBackground(Color.clear)
                     NameSection(user: user)
-                    Section("Account") {
-                        LabeledContent("Email", value: user.email)
-                        if user.emailVerified {
-                            Label("Email confirmed", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+                    ContactSection(user: user).id(user)  // fresh fields after a save
+                    if let providers = user.providers?.filter({ $0 != "password" }), !providers.isEmpty {
+                        Section("Signs in with") {
+                            ForEach(providers, id: \.self) { Label($0.capitalized, systemImage: "checkmark.shield.fill") }
                         }
                     }
                 }
@@ -90,7 +92,68 @@ private struct DeleteAccountSection: View {
     }
 }
 
-/// My first and last name (the last one is optional). Homes that use my full name follow it.
+/// My email and phone: at least one. An email can be added when I don't have one (some Google,
+/// Apple or Facebook sign-ups); changing an email isn't supported yet.
+private struct ContactSection: View {
+    let user: User
+    @Environment(Session.self) private var session
+    @State private var email = ""
+    @State private var phone: String
+    @State private var saving = false
+    @State private var error: String?
+
+    init(user: User) {
+        self.user = user
+        _phone = State(initialValue: user.phone ?? "")
+    }
+
+    private func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespaces) }
+    private var changed: Bool { trimmed(phone) != (user.phone ?? "") || !trimmed(email).isEmpty }
+    private var valid: Bool { user.email != nil || !trimmed(email).isEmpty || !trimmed(phone).isEmpty }
+
+    var body: some View {
+        Section {
+            if let address = user.email {
+                LabeledContent("Email", value: address)
+                if user.emailVerified {
+                    Label("Email confirmed", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+                }
+            } else {
+                TextField("Email (optional)", text: $email)
+                    .textContentType(.emailAddress).keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+            }
+            TextField(user.email == nil ? "Phone" : "Phone (optional)", text: $phone)
+                .textContentType(.telephoneNumber).keyboardType(.phonePad)
+            if changed {
+                Button(saving ? "Saving…" : "Save") { Task { await save() } }
+                    .disabled(saving || !valid)
+            }
+        } header: {
+            Text("Contact")
+        } footer: {
+            VStack(alignment: .leading) {
+                Text("Your housemates can see these. An email or a phone is needed.")
+                ErrorBanner(message: error)
+            }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        do {
+            session.updateUser(try await APIClient.shared.updateProfile(
+                firstName: user.firstName, lastName: user.lastName, phone: trimmed(phone),
+                email: user.email == nil && !trimmed(email).isEmpty ? trimmed(email) : nil))
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// My first and last name: a first or last name is enough. Homes that use my full name follow it.
 private struct NameSection: View {
     let user: User
     @Environment(Session.self) private var session
@@ -112,10 +175,10 @@ private struct NameSection: View {
     var body: some View {
         Section {
             TextField("First name", text: $first).textContentType(.givenName)
-            TextField("Last name (optional)", text: $last).textContentType(.familyName)
+            TextField("Last name", text: $last).textContentType(.familyName)
             if changed {
                 Button(saving ? "Saving…" : "Save name") { Task { await save() } }
-                    .disabled(saving || first.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(saving || (first + last).trimmingCharacters(in: .whitespaces).isEmpty)
             }
         } header: {
             Text("Your name")

@@ -1,4 +1,4 @@
-import type { RegisterResponse, TokenResponse, User, VerifyEmailResponse } from "../types/api";
+import type { AuthProviders, OAuthExtras, OAuthResult, RegisterResponse, SocialProvider, TokenResponse, User, VerifyEmailResponse } from "../types/api";
 import { api } from "./client";
 
 export const authApi = {
@@ -10,9 +10,14 @@ export const authApi = {
       method: "POST",
       body: { first_name: firstName, last_name: lastName, email, password, next },
     }),
-  /** My first and last name (last may be empty). */
-  updateProfile: (firstName: string, lastName: string) =>
-    api<User>("/auth/me", { method: "PATCH", body: { first_name: firstName, last_name: lastName } }),
+  /** My first and last name (one may be empty), and optionally a phone (`""` clears it) or an email (when I have none). */
+  updateProfile: (firstName: string, lastName: string, extra: { phone?: string; email?: string } = {}) =>
+    api<User>("/auth/me", { method: "PATCH", body: { first_name: firstName, last_name: lastName, ...extra } }),
+  /** Which "Continue with …" buttons to show. */
+  providers: () => api<AuthProviders>("/auth/providers"),
+  /** Sign in or up with the token the provider's sign-in returned. */
+  oauth: (provider: SocialProvider, token: string, extras: OAuthExtras = {}) =>
+    api<OAuthResult>(`/auth/oauth/${provider}`, { method: "POST", body: { token, ...extras } }),
   me: () => api<User>("/auth/me"),
   /** For good: homes nobody else is in go with it; elsewhere a roommate takes over as admin. */
   deleteAccount: () => api<void>("/auth/me", { method: "DELETE" }),

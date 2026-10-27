@@ -19,8 +19,10 @@ Status: **implemented** for health, auth, households, members, chores and tasks.
 
 | Method | Path             | Auth | Description                         |
 | ------ | ---------------- | ---- | ----------------------------------- |
-| POST   | `/auth/register` | No   | Create account `{ email, first_name, last_name?, password, next? }` → `{ email, sent, email_enabled }`. **Doesn't sign in**: we email a link (`{WEB_URL}/verify-email?token=…&next=…`) that confirms the address; `next` is a path on our site to land on afterwards (e.g. `/join/CODE`) |
-| POST   | `/auth/login`    | No   | Returns `{ access_token, token_type, user }`. **403** until the email is confirmed |
+| POST   | `/auth/register` | No   | Create account `{ email, first_name?, last_name?, password, next? }` (a first **or** last name) → `{ email, sent, email_enabled }`. **Doesn't sign in**: we email a link (`{WEB_URL}/verify-email?token=…&next=…`) that confirms the address; `next` is a path on our site to land on afterwards (e.g. `/join/CODE`) |
+| POST   | `/auth/login`    | No   | Returns `{ access_token, token_type, user }`. **403** until the email is confirmed. **401** "signs in with Google…" for accounts with no password |
+| GET    | `/auth/providers` | No  | Which "Continue with …" buttons to show: `{ google: { web_client_id, ios_client_id } \| null, facebook: { app_id } \| null, apple: { web_services_id } }` |
+| POST   | `/auth/oauth/{google\|apple\|facebook}` | No | `{ token, nonce?, first_name?, last_name?, email?, phone? }`: the provider's ID token (or a Facebook access token on the web). → `{ access_token, user, missing: [] }` when signed in. A new account without a name or contact gets `{ access_token: null, missing: ["name" \| "contact"], first_name, last_name, email }`; send the same token again with them. Links to an existing account only when the provider confirms the email (else 409). See [SOCIAL_LOGIN_SETUP.md](SOCIAL_LOGIN_SETUP.md) |
 | GET    | `/auth/me`       | Yes  | Current user, incl. `last_household_id` (house the apps open on) |
 | PUT    | `/auth/me/last-household` | Yes | `{ household_id }` — remember the house I switched to (404 if not a member). Also set automatically on create / join |
 | POST   | `/auth/verify-email` | No | `{ token }` from the emailed link (valid 3 days, tied to the address) → `{ user, access_token }`. The first open confirms and signs in; later opens return `access_token: null` (a forwarded email can't be used to get in). Bad/expired link: 400 |
@@ -205,7 +207,7 @@ The house gets exactly what was sent: the standard chores, quick-add items and b
 | GET    | `/invite-links/{token}` | none | What a private invite link shows: `{ household_name, people, email }`. Cancelled, used, expired or unknown: 404 "This invite has expired or was cancelled" |
 | POST   | `/invite-links/{token}/accept` | me | Join with it. Checked at join time: still pending and unexpired, and for my (confirmed) email — otherwise the same 404 |
 | POST   | `/households/{id}/invite-code` | admin | A new shared code: every old shared link and code stops working → the household |
-| PATCH  | `/auth/me` | me | `{ first_name, last_name? }`. Houses that called me by my old full name follow the new one |
+| PATCH  | `/auth/me` | me | `{ first_name?, last_name?, phone?, email? }`: a first or last name always. `phone: ""` clears it (400 if I'd be left with no email or phone); `email` only when I have none yet (409 if taken). Houses that called me by my old full name follow the new one |
 
 - Accounts have `first_name` and `last_name` (may be empty); `name` is "First Last" without an empty last name. Register takes `first_name` / `last_name` (older clients' single `name` is split).
 - Members have `status`: `added` (name only), `invited` (an email invite is waiting for their email), `joined` (has an account), plus optional `email` and `phone`. Admins set those with `PATCH /members/{id}` (`""` clears; a joined member's email comes from their account → 400).
