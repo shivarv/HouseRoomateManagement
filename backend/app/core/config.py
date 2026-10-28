@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     apple_web_services_id: str | None = None  # Sign in with Apple on the website (optional)
     facebook_app_id: str | None = None
     facebook_app_secret: str | None = None  # checks Facebook access tokens (web)
+    # Voice commands (docs/VOICE_COMMANDS_PLAN.md). "local": our own tiny model on this server (free).
+    # "claude": Claude understands the words instead (needs a key; about 1 cent a command).
+    voice_engine: str = "local"
+    anthropic_api_key: str | None = None
+    voice_model: str = "claude-opus-5-5"
+    voice_daily_limit: int = 60  # per person, across their houses
 
     @field_validator("database_url", "database_url_unpooled")
     @classmethod

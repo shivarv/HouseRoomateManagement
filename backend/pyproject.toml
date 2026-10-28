@@ -14,6 +14,7 @@ dependencies = [
     "pyjwt[crypto]>=2.10",  # crypto: checks Google, Apple and Facebook sign-in tokens (RS256)
     "bcrypt>=4.2",
     "tzdata>=2024.2",
+    "anthropic>=2.3",  # voice commands: Claude picks the actions (app/services/voice.py)
 ]
 
 [project.optional-dependencies]
@@ -29,6 +30,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.services" = ["voice_model.json"]  # the voice model (voice_training/train.py)
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

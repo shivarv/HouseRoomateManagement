@@ -22,3 +22,9 @@ class NotFound(ServiceError):
 
 class Conflict(ServiceError):
     status_code = 409
+
+
+class Unavailable(ServiceError):
+    """Something we depend on (e.g. the voice service) didn't answer; try again later."""
+
+    status_code = 503

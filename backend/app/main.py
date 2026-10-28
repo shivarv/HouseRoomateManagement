@@ -5,7 +5,19 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import auth, bills, chat, chores, health, help, households, reports, shopping, swaps
+from app.api.routes import (
+    auth,
+    bills,
+    chat,
+    chores,
+    health,
+    help,
+    households,
+    reports,
+    shopping,
+    swaps,
+    voice,
+)
 from app.core import logs
 from app.core.config import settings
 from app.services.errors import ServiceError
@@ -79,5 +91,6 @@ for router in (
     bills.router,
     chat.router,
     reports.router,
+    voice.router,
 ):
     app.include_router(router, prefix=API_PREFIX)

@@ -5,6 +5,7 @@ import { billsApi } from "../api/bills";
 import { chatApi } from "../api/chat";
 import { useAuth } from "../features/auth/AuthContext";
 import { useHelpRequests } from "../features/help/hooks";
+import { VoiceBob } from "../features/voice/VoiceBob";
 import { useDefaultHousehold, useSwitchHousehold } from "../features/households/hooks";
 import { avatarColor } from "../lib/avatar";
 import { mainTab, settingsButton } from "../lib/tabStyles";
@@ -30,6 +31,15 @@ const NEW_QUICK = "__new-quick";
 function houseLabel(h: Household, all: Household[]): string {
   const clash = all.some((o) => o.id !== h.id && o.name.toLowerCase() === h.name.toLowerCase());
   return clash && h.address ? `${h.name} · ${h.address}` : h.name;
+}
+
+/** Which screen the mic button is on: a hint for voice when a phrase could mean two things. */
+function voiceTab(pathname: string): string | null {
+  if (pathname.includes("/settings") || pathname.startsWith("/households/new") || pathname === "/profile") return null;
+  if (pathname === "/") return "today";
+  if (pathname === "/notifications") return "favours";
+  const tab = pathname.match(/^\/households\/[^/]+\/([a-z]+)/)?.[1];
+  return tab ?? (pathname === "/households" ? "homes" : null);
 }
 
 export function AppShell() {
@@ -234,6 +244,7 @@ export function AppShell() {
       <main className="mx-auto max-w-4xl px-4 py-8">
         {noHouse && !pathname.startsWith("/households/new") && pathname !== "/profile" ? <WelcomePage /> : <Outlet />}
       </main>
+      {house && voiceTab(pathname) && <VoiceBob householdId={house.id} tab={voiceTab(pathname)!} />}
     </div>
   );
 }

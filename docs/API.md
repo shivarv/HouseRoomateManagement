@@ -231,3 +231,15 @@ Clients poll: load the latest page, then ask every few seconds for what's new or
 | GET    | `/households/{id}/chat/unread` | member | `{ count }`: others' messages since I last read |
 
 Each message: `{ id, author, body, created_at, edited_at, changed_at, deleted, is_mine, can_edit, can_delete }`.
+
+## Voice commands (the 🎤 button)
+
+See [VOICE_COMMANDS_PLAN.md](VOICE_COMMANDS_PLAN.md). Understood on our own server by a tiny model (`VOICE_ENGINE=local`, the default, free). `VOICE_ENGINE=claude` with `ANTHROPIC_API_KEY` uses Claude instead (`VOICE_MODEL`, default `claude-opus-5-5`).
+
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| GET    | `/voice/config` | signed in | `{ enabled }`: whether to show the mic button |
+| POST   | `/households/{id}/voice/interpret` | member | `{ text, tab?, follow_up?: { question, answer } }` → `{ proposals: [{ action, summary, area }], question, options, notes }`. Changes nothing. 409 past the daily limit (`VOICE_DAILY_LIMIT`, default 60); 503 if Claude (when used) can't be reached |
+| POST   | `/households/{id}/voice/execute` | member | `{ actions: [action] }` (up to 10) → `{ results: [{ summary, ok, error, undo: [action] }] }`. Every action is checked first: if any has an `error`, none ran. Send a result's `undo` back here to take it back |
+
+An `action` is `{ type, ... }` with real ids. Types: `complete_task` / `reopen_task` (`task_id`, `member_id`), `log_open_chore` (`chore_id`, `member_id`) / `remove_log` (`log_id`), `pay_bill` (`bill_id`, `member_id`, `amount_cents`) / `undo_payment` (`payment_id`), `add_groceries` (`names`), `mark_bought` / `unbuy` / `remove_grocery` (`item_ids`), `send_chat` (`text`) / `delete_chat` (`message_id`), `ask_favour` (`title`, `details`), `favour_done` / `reopen_favour` / `withdraw_favour` (`request_id`). `member_id` null means me.
