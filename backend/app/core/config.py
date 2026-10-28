@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     # Or through Brevo (https://brevo.com); used instead of Resend when set.
     brevo_api_key: str | None = None
     email_from: str = "Roommates <onboarding@resend.dev>"
+    # Sign in with Google, Apple or Facebook (see docs/SOCIAL_LOGIN_SETUP.md). A provider is offered
+    # only once its IDs are set. Comma-separated where an app has more than one (web + iOS).
+    google_web_client_id: str | None = None  # also an accepted audience
+    google_ios_client_id: str | None = None
+    apple_client_ids: str = "com.roommatesapp.HouseRoomateManagement"  # iOS bundle ID, + web Services ID
+    apple_web_services_id: str | None = None  # Sign in with Apple on the website (optional)
+    facebook_app_id: str | None = None
+    facebook_app_secret: str | None = None  # checks Facebook access tokens (web)
 
     @field_validator("database_url", "database_url_unpooled")
     @classmethod

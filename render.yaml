@@ -30,6 +30,15 @@ services:
         sync: false
       - key: EMAIL_FROM # e.g. "Roommates <invites@yourdomain.com>" (a domain verified in Resend)
         sync: false
+      # "Continue with …" buttons appear once these are set. See docs/SOCIAL_LOGIN_SETUP.md.
+      - key: GOOGLE_WEB_CLIENT_ID # Google Cloud → OAuth client (Web application)
+        sync: false
+      - key: GOOGLE_IOS_CLIENT_ID # Google Cloud → OAuth client (iOS)
+        sync: false
+      - key: FACEBOOK_APP_ID # Meta for Developers → App ID
+        sync: false
+      - key: FACEBOOK_APP_SECRET # Meta for Developers → App secret (checks web sign-ins)
+        sync: false
 
   - type: web
     name: housemate-web

@@ -2,7 +2,7 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["TEAMID.com.shivarv.HouseRoomateManagement"],
+        "appIDs": ["TEAMID.com.roommatesapp.HouseRoomateManagement"],
         "components": [
           { "/": "/join/*", "comment": "Invite link or code" },
           { "/": "/invite/*", "comment": "Private invite from an email" },

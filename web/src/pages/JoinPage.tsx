@@ -177,7 +177,7 @@ export function InviteLinkPage() {
   if (expired) return <Frame><ExpiredInvite signedIn={!!user} /></Frame>;
   const i = invite.data!;
   const state = { from: location.pathname, invite: i.household_name, invitedBy: i.invited_by ?? undefined };
-  const wrongAccount = !!user && user.email.toLowerCase() !== i.email;
+  const wrongAccount = !!user && (user.email ?? "").toLowerCase() !== i.email;
 
   return (
     <Frame>

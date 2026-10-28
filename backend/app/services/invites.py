@@ -132,6 +132,8 @@ def cancel(db: Session, row: HouseholdInvite, me: HouseholdMember) -> None:
 
 def mine(db: Session, user: User) -> list[MyInvite]:
     """Houses that invited my email, minus the ones I'm already in."""
+    if not user.email:
+        return []
     joined = {
         m.household_id
         for m in db.scalars(
@@ -162,6 +164,8 @@ def mine(db: Session, user: User) -> list[MyInvite]:
 
 def mark_accepted(db: Session, household_id: uuid.UUID, user: User) -> None:
     """Joining a house settles any email invite it sent me. The caller commits."""
+    if not user.email:
+        return
     for row in db.scalars(
         select(HouseholdInvite).where(
             HouseholdInvite.household_id == household_id,

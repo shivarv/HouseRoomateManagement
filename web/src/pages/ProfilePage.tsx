@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { authApi } from "../api/auth";
 import { Button, Card, ErrorText, Input, PageTitle } from "../components/ui";
 import { useAuth } from "../features/auth/AuthContext";
+import { SignInMethods } from "../features/auth/SignInMethods";
 
 /** Deleting my account, for good, after a confirmation that says what happens to my homes. */
 function DeleteAccount() {
@@ -34,46 +35,65 @@ export function ProfilePage() {
   const queryClient = useQueryClient();
   const [first, setFirst] = useState(user?.first_name ?? "");
   const [last, setLast] = useState(user?.last_name ?? "");
+  const [phone, setPhone] = useState(user?.phone ?? "");
+  const [email, setEmail] = useState("");  // only for accounts without one yet
   const save = useMutation({
-    mutationFn: () => authApi.updateProfile(first.trim(), last.trim()),
+    mutationFn: () =>
+      authApi.updateProfile(first.trim(), last.trim(), {
+        phone: phone.trim(),
+        ...(user?.email == null && email.trim() ? { email: email.trim() } : {}),
+      }),
     onSuccess: (u) => {
       updateUser(u);
       queryClient.invalidateQueries(); // houses that use my name pick up the change
     },
   });
   if (!user) return null;
-  const changed = first.trim() !== user.first_name || last.trim() !== user.last_name;
+  const changed =
+    first.trim() !== user.first_name || last.trim() !== user.last_name || phone.trim() !== (user.phone ?? "") || !!email.trim();
+  // Always a first or last name, and an email or phone.
+  const valid = (first.trim() || last.trim()) && (user.email || email.trim() || phone.trim());
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (first.trim() && changed) save.mutate();
+    if (valid && changed) save.mutate();
   };
 
   return (
     <>
-      <PageTitle title="Your profile" subtitle="How you show up in your homes. The last name is optional." />
+      <PageTitle title="Your profile" subtitle="How you show up in your homes. A first or last name is enough." />
       <Card className="max-w-lg">
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <Input label="First name" value={first} maxLength={50} required onChange={(e) => setFirst(e.target.value)} autoComplete="given-name" />
-            <Input label="Last name (optional)" value={last} maxLength={50} onChange={(e) => setLast(e.target.value)} autoComplete="family-name" />
+            <Input label="First name" value={first} maxLength={50} onChange={(e) => setFirst(e.target.value)} autoComplete="given-name" />
+            <Input label="Last name" value={last} maxLength={50} onChange={(e) => setLast(e.target.value)} autoComplete="family-name" />
           </div>
-          <Input label="Email" value={user.email} disabled />
-          <p className={`text-xs font-medium ${user.email_verified ? "text-emerald-600" : "text-amber-700"}`}>
-            {user.email_verified ? "✓ Email confirmed" : "Email not confirmed yet"}
-          </p>
+          {user.email ? (
+            <>
+              <Input label="Email" value={user.email} disabled />
+              <p className={`text-xs font-medium ${user.email_verified ? "text-emerald-600" : "text-amber-700"}`}>
+                {user.email_verified ? "✓ Email confirmed" : "Email not confirmed yet"}
+              </p>
+            </>
+          ) : (
+            <Input label="Email (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+          )}
+          <Input label={user.email ? "Phone (optional)" : "Phone"} type="tel" value={phone} maxLength={32} onChange={(e) => setPhone(e.target.value)} placeholder="+1 617 555 0100" autoComplete="tel" />
           <p className="text-xs text-slate-500">
             Homes that call you by your full name update with it; if a home renamed you (e.g. a nickname), that stays.
           </p>
           <ErrorText error={save.error} />
           <div className="flex items-center gap-3">
-            <Button type="submit" disabled={!first.trim() || !changed || save.isPending}>
+            <Button type="submit" disabled={!valid || !changed || save.isPending}>
               {save.isPending ? "Saving…" : "Save"}
             </Button>
             {save.isSuccess && !changed && <span className="text-sm text-emerald-600">Saved</span>}
           </div>
         </form>
       </Card>
+      <div className="mt-6">
+        <SignInMethods />
+      </div>
       <p className="mt-6 max-w-lg text-sm text-slate-500">
         <Link className="font-medium text-indigo-700 hover:underline" to="/support">Help &amp; support</Link>
         {" · "}

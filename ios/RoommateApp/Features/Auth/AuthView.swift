@@ -8,8 +8,10 @@ final class AuthViewModel {
     var mode: Mode = .login
     var firstName = ""
     var lastName = ""  // optional
-    var email = ""
+    var email = LastSignIn.method == "email" ? LastSignIn.email ?? "" : ""
     var password = ""
+    /// Google / Facebook found their password account: once they log in, it's linked.
+    var linking: ExistingAccount?
     var error: String?
     var isLoading = false
     /// Signed up: waiting for them to open the link we emailed.
@@ -20,7 +22,8 @@ final class AuthViewModel {
 
     var canSubmit: Bool {
         !email.isEmpty && password.count >= (mode == .register ? 8 : 1)
-            && (mode == .login || !firstName.trimmingCharacters(in: .whitespaces).isEmpty)
+            // A first or last name: either is enough.
+            && (mode == .login || !(firstName + lastName).trimmingCharacters(in: .whitespaces).isEmpty)
     }
 
     func submit(session: Session) async {
@@ -32,7 +35,19 @@ final class AuthViewModel {
         do {
             let client = APIClient.shared
             if mode == .login {
-                session.signIn(try await client.login(email: email, password: password))
+                var signedIn = try await client.login(email: email, password: password)
+                LastSignIn.method = "email"
+                LastSignIn.email = email
+                if let linking {
+                    // Signed in already; if linking fails they can still use the password next time.
+                    client.token = signedIn.accessToken
+                    if let user = try? await client.linkSignIn(linking.provider, token: linking.token, nonce: linking.nonce) {
+                        signedIn = TokenResponse(accessToken: signedIn.accessToken, user: user)
+                        LastSignIn.method = linking.provider.rawValue
+                    }
+                    self.linking = nil
+                }
+                session.signIn(signedIn)
             } else {
                 // Not signed in yet: the emailed link confirms the address, then they log in.
                 checkEmail = try await client.register(firstName: firstName.trimmingCharacters(in: .whitespaces),
@@ -52,6 +67,15 @@ final class AuthViewModel {
         } catch {
             resendNote = error.localizedDescription
         }
+    }
+
+    /// Google / Facebook gave an email that has a password account: log in with it here.
+    func existingAccount(_ account: ExistingAccount) {
+        linking = account
+        mode = .login
+        email = account.email
+        password = ""
+        error = nil
     }
 
     /// Back to logging in once they've confirmed.
@@ -83,80 +107,25 @@ struct AuthView: View {
                     }
                     .padding(.top, 36)
 
-                    Picker("", selection: $model.mode.animation(.snappy)) {
-                        ForEach(AuthViewModel.Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: model.mode) { _, _ in model.error = nil }
+                    emailForm
 
-                    VStack(spacing: 0) {
-                        if model.mode == .register {
-                            AuthField(systemImage: "person") {
-                                TextField("First name", text: $model.firstName).textContentType(.givenName)
-                            }
-                            Divider().padding(.leading, 48)
-                            AuthField(systemImage: "person.2") {
-                                TextField("Last name (optional)", text: $model.lastName).textContentType(.familyName)
-                            }
-                            Divider().padding(.leading, 48)
-                        }
-                        AuthField(systemImage: "envelope") {
-                            TextField("Email", text: $model.email)
-                                .textContentType(.emailAddress)
-                                .keyboardType(.emailAddress)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                        }
-                        Divider().padding(.leading, 48)
-                        AuthField(systemImage: "lock") {
-                            SecureField(model.mode == .register ? "Password (8+ characters)" : "Password", text: $model.password)
-                                .textContentType(model.mode == .login ? .password : .newPassword)
-                                .onSubmit { if model.canSubmit { Task { await model.submit(session: session) } } }
-                        }
+                    HStack(spacing: 12) {
+                        Rectangle().fill(.secondary.opacity(0.3)).frame(height: 1)
+                        Text("or continue with").font(.footnote.weight(.medium)).foregroundStyle(.secondary).fixedSize()
+                        Rectangle().fill(.secondary.opacity(0.3)).frame(height: 1)
                     }
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
-                    .shadow(color: Brand.indigo.opacity(0.08), radius: 16, y: 6)
+                    // One tap, for logging in or signing up alike.
+                    SocialSignInButtons { account in
+                        withAnimation(.snappy) { model.existingAccount(account) }
+                    }
 
-                    if model.mode == .register || model.error != nil || model.resendNote != nil {
-                        VStack(alignment: .leading, spacing: 6) {
-                            if model.mode == .register {
-                                Label("Use an email you'll remember — it's how you log in on any device.", systemImage: "checkmark.circle.fill")
-                                Label("We'll email you a link to confirm it, then you log in.", systemImage: "checkmark.circle.fill")
-                                Label("Then you'll create your home, or join one with a code or link.", systemImage: "checkmark.circle.fill")
-                            }
-                            ErrorBanner(message: model.error)
-                            if model.unconfirmed {
-                                Button("Send the confirmation link again") { Task { await model.resend() } }
-                                    .font(.footnote.bold())
-                            }
-                            if let note = model.resendNote { Text(note) }
-                        }
-                        .font(.footnote)
+                    Text("By continuing you agree to our [privacy policy](\(WebLink.url("/privacy").absoluteString)).")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                        .symbolRenderingMode(.hierarchical)
                         .tint(Brand.indigo)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    Button {
-                        Task { await model.submit(session: session) }
-                    } label: {
-                        if model.isLoading { ProgressView().tint(.white) } else {
-                            Text(model.mode == .login ? "Log in" : "Create account")
-                        }
-                    }
-                    .buttonStyle(.brand)
-                    .disabled(!model.canSubmit || model.isLoading)
-
-                    if model.mode == .register {
-                        Text("By creating an account you agree to our [privacy policy](\(WebLink.url("/privacy").absoluteString)).")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .tint(Brand.indigo)
-                            .multilineTextAlignment(.center)
-                    }
+                        .multilineTextAlignment(.center)
                     if session.pendingLink?.isInvite == true {
-                        Label("Log in or sign up to open your invite.", systemImage: "envelope.open.fill")
+                        Label("Continue to open your invite.", systemImage: "envelope.open.fill")
                             .font(.footnote.weight(.medium))
                             .foregroundStyle(Brand.indigo)
                     }
@@ -171,6 +140,89 @@ struct AuthView: View {
                 CheckEmailView(sent: sent, model: model)
             }
         }
+    }
+
+    /// Log in or sign up with an email and password.
+    @ViewBuilder private var emailForm: some View {
+        if let linking = model.linking {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("You already have an account", systemImage: "person.crop.circle.badge.checkmark")
+                    .font(.subheadline.bold())
+                Text("\(linking.email) signs in with a password. Log in once and we'll connect \(linking.provider.title) to it, so next time it's one tap.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Button("Not now") { withAnimation(.snappy) { model.linking = nil } }
+                    .font(.footnote.bold())
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Brand.indigo.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+            .tint(Brand.indigo)
+        } else {
+            Picker("", selection: $model.mode.animation(.snappy)) {
+                ForEach(AuthViewModel.Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: model.mode) { _, _ in model.error = nil }
+        }
+
+        VStack(spacing: 0) {
+            if model.mode == .register {
+                AuthField(systemImage: "person") {
+                    TextField("First name", text: $model.firstName).textContentType(.givenName)
+                }
+                Divider().padding(.leading, 48)
+                AuthField(systemImage: "person.2") {
+                    TextField("Last name", text: $model.lastName).textContentType(.familyName)
+                }
+                Divider().padding(.leading, 48)
+            }
+            AuthField(systemImage: "envelope") {
+                TextField("Email", text: $model.email)
+                    .textContentType(.emailAddress)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }
+            Divider().padding(.leading, 48)
+            AuthField(systemImage: "lock") {
+                SecureField(model.mode == .register ? "Password (8+ characters)" : "Password", text: $model.password)
+                    .textContentType(model.mode == .login ? .password : .newPassword)
+                    .onSubmit { if model.canSubmit { Task { await model.submit(session: session) } } }
+            }
+        }
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
+        .shadow(color: Brand.indigo.opacity(0.08), radius: 16, y: 6)
+
+        if model.mode == .register || model.error != nil || model.resendNote != nil {
+            VStack(alignment: .leading, spacing: 6) {
+                if model.mode == .register {
+                    Label("We'll email you a link to confirm your email, then you log in.", systemImage: "checkmark.circle.fill")
+                    Label("Then you'll create your home, or join one with a code or link.", systemImage: "checkmark.circle.fill")
+                }
+                ErrorBanner(message: model.error)
+                if model.unconfirmed {
+                    Button("Send the confirmation link again") { Task { await model.resend() } }
+                        .font(.footnote.bold())
+                }
+                if let note = model.resendNote { Text(note) }
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .symbolRenderingMode(.hierarchical)
+            .tint(Brand.indigo)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+
+        Button {
+            Task { await model.submit(session: session) }
+        } label: {
+            if model.isLoading { ProgressView().tint(.white) } else {
+                Text(model.mode == .login ? (model.linking.map { "Log in and connect \($0.provider.title)" } ?? "Log in") : "Create account")
+            }
+        }
+        .buttonStyle(.brand)
+        .disabled(!model.canSubmit || model.isLoading)
     }
 }
 

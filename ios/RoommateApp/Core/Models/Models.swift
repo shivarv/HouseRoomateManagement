@@ -4,7 +4,13 @@ import Foundation
 
 struct User: Codable, Identifiable, Hashable {
     let id: UUID
-    let email: String
+    /// nil: signed up with Google, Apple or Facebook with only a phone.
+    let email: String?
+    let phone: String?  // contact only for now
+    /// How I can sign in: "password", "google", "apple", "facebook".
+    var providers: [String]?
+    /// The connected Google, Apple and Facebook accounts, with the email each one uses.
+    var identities: [Identity]?
     let firstName: String
     let lastName: String  // may be empty: then it's left out of `name`
     let name: String  // "First Last"
@@ -12,6 +18,13 @@ struct User: Codable, Identifiable, Hashable {
     let emailVerified: Bool
     /// The house the app opens on. May be one I've since left; then fall back to my first.
     var lastHouseholdId: UUID?
+
+    struct Identity: Codable, Hashable {
+        let provider: String
+        let email: String?
+    }
+
+    var hasPassword: Bool { providers?.contains("password") ?? false }
 }
 
 /// Signed up, not signed in: the emailed link confirms the address and signs them in (on the web).
@@ -32,6 +45,35 @@ struct MemberAdded: Decodable {
 struct TokenResponse: Decodable {
     let accessToken: String
     let user: User
+}
+
+enum SocialProvider: String {
+    case google, apple, facebook
+
+    var title: String { rawValue.capitalized }
+}
+
+/// Signed in (`accessToken` + `user`; `created` for a brand-new account), or a new account that
+/// first needs `missing`: "name" (a first or last name) and/or "contact" (an email or phone). Then
+/// the same token goes again with them. `existingEmail`: that email already has a password account,
+/// so they log in with it and the app links this provider (`linkSignIn`).
+struct OAuthResult: Decodable {
+    let accessToken: String?
+    let user: User?
+    let created: Bool
+    let missing: [String]
+    let firstName: String
+    let lastName: String
+    let email: String?
+    let existingEmail: String?
+}
+
+/// Which "Continue with …" buttons to show, and the IDs each needs. Apple needs nothing on iOS.
+struct AuthProviders: Decodable {
+    struct Google: Decodable { let iosClientId: String? }
+    struct Facebook: Decodable { let appId: String }
+    let google: Google?
+    let facebook: Facebook?
 }
 
 /// The confirmation link was opened. Only the first open signs in (`accessToken` is set).

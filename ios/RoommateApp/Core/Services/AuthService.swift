@@ -4,10 +4,18 @@ extension APIClient {
     private struct LoginBody: Encodable { let email: String; let password: String }
     private struct LastHouseholdBody: Encodable { let householdId: UUID }
     private struct RegisterBody: Encodable { let firstName: String; let lastName: String; let email: String; let password: String }
-    private struct ProfileBody: Encodable { let firstName: String; let lastName: String }
+    private struct ProfileBody: Encodable { let firstName: String; let lastName: String; let phone: String?; let email: String? }
     private struct ResendBody: Encodable { let email: String }
     private struct ResendResponse: Decodable { let emailEnabled: Bool }
     private struct VerifyBody: Encodable { let token: String }
+    private struct OAuthBody: Encodable {
+        let token: String
+        let nonce: String?
+        let firstName: String
+        let lastName: String
+        let email: String?
+        let phone: String?
+    }
 
     func login(email: String, password: String) async throws -> TokenResponse {
         try await send("POST", "/auth/login", body: LoginBody(email: email, password: password))
@@ -19,12 +27,47 @@ extension APIClient {
     }
 
     /// My first and last name (last may be empty).
-    func updateProfile(firstName: String, lastName: String) async throws -> User {
-        try await send("PATCH", "/auth/me", body: ProfileBody(firstName: firstName, lastName: lastName))
+    /// My name (one part may be empty), and optionally my phone (`""` clears it) or an email (only
+    /// when I don't have one yet). nil leaves them as they are.
+    func updateProfile(firstName: String, lastName: String, phone: String? = nil, email: String? = nil) async throws -> User {
+        try await send("PATCH", "/auth/me", body: ProfileBody(firstName: firstName, lastName: lastName, phone: phone, email: email))
     }
 
     func me() async throws -> User {
         try await get("/auth/me")
+    }
+
+    func authProviders() async throws -> AuthProviders {
+        try await get("/auth/providers")
+    }
+
+    /// Sign in or up with what the provider's sign-in returned, plus what I typed for anything it
+    /// didn't share. `nonce`: the one given to Apple / Facebook, checked against the token.
+    func oauth(_ provider: SocialProvider, token: String, nonce: String? = nil, firstName: String = "",
+               lastName: String = "", email: String? = nil, phone: String? = nil) async throws -> OAuthResult {
+        try await send("POST", "/auth/oauth/\(provider.rawValue)",
+                       body: OAuthBody(token: token, nonce: nonce, firstName: firstName, lastName: lastName, email: email, phone: phone))
+    }
+
+    /// One more way to sign in to my account: the same token the provider gave, after logging in with my password.
+    func linkSignIn(_ provider: SocialProvider, token: String, nonce: String? = nil) async throws -> User {
+        try await send("POST", "/auth/me/identities/\(provider.rawValue)",
+                       body: OAuthBody(token: token, nonce: nonce, firstName: "", lastName: "", email: nil, phone: nil))
+    }
+
+    /// Not the last way I can sign in (the server refuses that).
+    func unlinkSignIn(_ provider: SocialProvider) async throws -> User {
+        try await send("DELETE", "/auth/me/identities/\(provider.rawValue)", body: Optional<String>.none)
+    }
+
+    /// A first password (`current` nil), or a new one.
+    func setPassword(current: String?, new: String) async throws -> User {
+        try await send("PUT", "/auth/me/password", body: PasswordBody(currentPassword: current, newPassword: new))
+    }
+
+    private struct PasswordBody: Encodable {
+        let currentPassword: String?
+        let newPassword: String
     }
 
     /// For good: homes nobody else is in go with it; elsewhere a roommate takes over as admin.

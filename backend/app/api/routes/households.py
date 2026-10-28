@@ -120,9 +120,10 @@ def update_member(member_id: uuid.UUID, body: MemberUpdate, db: DbSession, user:
     if body.display_name is not None:
         member.display_name = body.display_name.strip()
     if body.role is not None and member.id != me.id:
-        if body.role == "admin" and member.role != "admin" and not (member.user and member.user.email_verified):
+        if body.role == "admin" and member.role != "admin" and not (member.user and member.user.is_confirmed):
             raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, "Only people with a confirmed email can be admins"
+                status.HTTP_400_BAD_REQUEST,
+                "Only people with a confirmed email (or who signed up with Google, Apple or Facebook) can be admins",
             )
         member.role = body.role
     if body.email and member.user_id is not None:
