@@ -7,7 +7,7 @@ Environment). Nothing else needs changing in the code, and the apps read the IDs
 
 | Provider | iOS | Website | Backend env |
 |---|---|---|---|
-| Apple | ✅ always shown | — (optional, not built) | none (checks tokens for the bundle ID `com.shivarv.HouseRoomateManagement`) |
+| Apple | ✅ always shown | — (optional, not built) | none (checks tokens for the bundle ID `com.roommatesapp.HouseRoomateManagement`) |
 | Google | ✅ | ✅ | `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID` |
 | Facebook | ✅ | ✅ | `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` |
 
@@ -42,7 +42,7 @@ Accounts made this way have no password. Logging in with a password on such an a
    - **Publish** the app. In "Testing" mode only listed test users can sign in.
 3. **Credentials → Create credentials → OAuth client ID**, twice:
    - **Web application.** Authorised JavaScript origins: `https://housemate-web.onrender.com`, your domain, and `http://localhost:5173` for local work. No redirect URIs are needed. Copy the client ID into `GOOGLE_WEB_CLIENT_ID`.
-   - **iOS.** Bundle ID: `com.shivarv.HouseRoomateManagement`. Copy the client ID into `GOOGLE_IOS_CLIENT_ID`.
+   - **iOS.** Bundle ID: `com.roommatesapp.HouseRoomateManagement`. Copy the client ID into `GOOGLE_IOS_CLIENT_ID`.
 4. Set both on Render and redeploy the API.
 
 ## Facebook (≈20 minutes, free)
@@ -56,7 +56,7 @@ Accounts made this way have no password. Logging in with a password on such an a
    - Valid OAuth redirect URIs: `https://housemate-web.onrender.com/` (and your domain).
    - Allowed domains for the JavaScript SDK: the same sites.
 4. **Add platform:**
-   - **iOS:** Bundle ID `com.shivarv.HouseRoomateManagement`.
+   - **iOS:** Bundle ID `com.roommatesapp.HouseRoomateManagement`.
    - **Website:** Site URL `https://housemate-web.onrender.com`.
 5. Copy the **App ID** into `FACEBOOK_APP_ID` and the **App secret** into `FACEBOOK_APP_SECRET`, on Render only. The secret must never go in the apps.
 6. Switch the app from **Development** to **Live**. In Development, only people with a role on the app can sign in.

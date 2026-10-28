@@ -30,15 +30,14 @@ struct SocialSignInButtons: View {
             .clipShape(Capsule())
             .id(colorScheme)  // the style only applies when the button is made
 
-            if let clientId = providers?.google?.iosClientId {
-                ProviderButton(title: "Continue with Google", busy: busy == .google, style: .google) {
-                    Task { await google(clientId: clientId) }
-                }
+            // Always shown; until the server has the provider's IDs, a tap just says so.
+            ProviderButton(title: "Continue with Google", busy: busy == .google, style: .google) {
+                guard let clientId = providers?.google?.iosClientId else { return notReady("Google") }
+                Task { await google(clientId: clientId) }
             }
-            if let appId = providers?.facebook?.appId {
-                ProviderButton(title: "Continue with Facebook", busy: busy == .facebook, style: .facebook) {
-                    Task { await facebook(appId: appId) }
-                }
+            ProviderButton(title: "Continue with Facebook", busy: busy == .facebook, style: .facebook) {
+                guard let appId = providers?.facebook?.appId else { return notReady("Facebook") }
+                Task { await facebook(appId: appId) }
             }
             ErrorBanner(message: error)
         }
@@ -50,6 +49,10 @@ struct SocialSignInButtons: View {
     }
 
     // MARK: Providers
+
+    private func notReady(_ name: String) {
+        error = "Sign in with \(name) is coming soon. Use Apple or your email for now."
+    }
 
     private func apple(_ result: Result<ASAuthorization, Error>) async {
         switch result {

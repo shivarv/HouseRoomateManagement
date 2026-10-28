@@ -63,7 +63,7 @@ def test_a_verified_provider_email_links_to_the_existing_account(client, provide
     provider.next = _profile("apple", "apple-1", email="ANN@example.com", first="", last="")
     res = _oauth(client, "apple").json()
     assert res["user"]["id"] == signed_up["user"]["id"]
-    assert res["user"]["providers"] == ["apple", "password"]
+    assert res["user"]["providers"] == ["password", "apple"]
     # The password still works too.
     login = client.post(f"{API}/auth/login", json={"email": "ann@example.com", "password": "password123"})
     assert login.status_code == 200
@@ -115,9 +115,9 @@ def test_id_tokens_are_checked_for_signature_audience_and_nonce(monkeypatch):
             return type("K", (), {"key": key.public_key()})()
 
     monkeypatch.setitem(oauth._jwks, oauth.APPLE_JWKS, Keys())
-    monkeypatch.setattr(settings, "apple_client_ids", "com.shivarv.HouseRoomateManagement")
+    monkeypatch.setattr(settings, "apple_client_ids", "com.roommatesapp.HouseRoomateManagement")
 
-    def token(aud="com.shivarv.HouseRoomateManagement", nonce="n1", signer=key):
+    def token(aud="com.roommatesapp.HouseRoomateManagement", nonce="n1", signer=key):
         claims = {"iss": oauth.APPLE_ISSUER, "aud": aud, "sub": "apple-7", "email": "a@privaterelay.appleid.com",
                   "email_verified": "true", "nonce": nonce, "exp": int(time.time()) + 300}
         return jwt.encode(claims, signer, algorithm="RS256")

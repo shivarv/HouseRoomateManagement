@@ -181,4 +181,5 @@ def find_or_create(db: Session, profile: Profile, *, first_name: str, last_name:
 
 
 def _link(db: Session, user: User, profile: Profile, email: str | None) -> None:
-    db.add(UserIdentity(user_id=user.id, provider=profile.provider, subject=profile.subject, email=email))
+    # Through the relationship, so `user.providers` includes it straight away.
+    user.identities.append(UserIdentity(provider=profile.provider, subject=profile.subject, email=email))
