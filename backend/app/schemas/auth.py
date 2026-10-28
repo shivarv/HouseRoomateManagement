@@ -140,7 +140,10 @@ class OAuthOut(BaseModel):
     access_token: str | None = None
     token_type: str = "bearer"
     user: UserOut | None = None
+    created: bool = False  # a brand-new account: the apps say welcome
     missing: list[str] = []
+    # This email already has a password account: log in with it, then link (POST /auth/me/identities).
+    existing_email: str | None = None
     # What the provider already told us, to prefill the "finish your profile" form.
     first_name: str = ""
     last_name: str = ""

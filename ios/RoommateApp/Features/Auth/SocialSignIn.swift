@@ -2,71 +2,106 @@ import AuthenticationServices
 import CryptoKit
 import SwiftUI
 
+/// How they signed in last time on this phone: that button goes first, marked "Last used", so
+/// they don't make a second account with another one by mistake.
+enum LastSignIn {
+    private static let methodKey = "lastSignIn.method"
+    private static let emailKey = "lastSignIn.email"
+
+    /// "apple", "google", "facebook" or "email".
+    static var method: String? {
+        get { UserDefaults.standard.string(forKey: methodKey) }
+        set { UserDefaults.standard.set(newValue, forKey: methodKey) }
+    }
+
+    /// The email they logged in with, to fill in next time.
+    static var email: String? {
+        get { UserDefaults.standard.string(forKey: emailKey) }
+        set { UserDefaults.standard.set(newValue, forKey: emailKey) }
+    }
+}
+
+/// Google or Facebook gave an email that already has a password account (and didn't vouch for
+/// it): they log in with the password, then this provider is linked to that account.
+struct ExistingAccount: Equatable {
+    let provider: SocialProvider
+    let token: String
+    let nonce: String?
+    let email: String
+}
+
 /// "Continue with Apple / Google / Facebook" on the start screen: for logging in and signing up
 /// alike. Apple is the system sheet; Google and Facebook run their own sign-in page in a secure
-/// browser sheet (no SDKs). The backend checks what they return. A new account the provider didn't
-/// give enough for (a name, and an email or phone) gets a short form first. Mirrors web SocialSignIn.
+/// browser sheet (no SDKs). The backend checks what they return. A new account gets a welcome step
+/// (and anything the provider didn't give: a name, an email or phone). Mirrors web SocialSignIn.
 struct SocialSignInButtons: View {
+    /// The email already has a password account: AuthView asks for the password.
+    var onExistingAccount: (ExistingAccount) -> Void = { _ in }
+
     @Environment(Session.self) private var session
     @Environment(\.webAuthenticationSession) private var webAuth
-    @Environment(\.colorScheme) private var colorScheme
     @State private var providers: AuthProviders?
-    @State private var appleNonce = ""
+    @State private var appleSignIn = AppleSignIn()
     @State private var busy: SocialProvider?
     @State private var error: String?
-    @State private var finishing: PendingSignUp?
+    @State private var welcome: WelcomeStep?
 
     var body: some View {
         VStack(spacing: 10) {
-            SignInWithAppleButton(.continue) { request in
-                appleNonce = Nonce.random()
-                request.requestedScopes = [.fullName, .email]
-                request.nonce = Nonce.sha256(appleNonce)
-            } onCompletion: { result in
-                Task { await apple(result) }
-            }
-            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-            .frame(height: 50)
-            .clipShape(Capsule())
-            .id(colorScheme)  // the style only applies when the button is made
-
-            // Always shown; until the server has the provider's IDs, a tap just says so.
-            ProviderButton(title: "Continue with Google", busy: busy == .google, style: .google) {
-                guard let clientId = providers?.google?.iosClientId else { return notReady("Google") }
-                Task { await google(clientId: clientId) }
-            }
-            ProviderButton(title: "Continue with Facebook", busy: busy == .facebook, style: .facebook) {
-                guard let appId = providers?.facebook?.appId else { return notReady("Facebook") }
-                Task { await facebook(appId: appId) }
+            HStack(spacing: 28) {
+                ForEach([SocialProvider.apple, .google, .facebook], id: \.self) { provider in
+                    ProviderIcon(provider: provider, busy: busy == provider,
+                                 lastUsed: provider.rawValue == LastSignIn.method) {
+                        Task { await start(provider) }
+                    }
+                }
             }
             ErrorBanner(message: error)
         }
         .disabled(busy != nil)
         .task { providers = try? await APIClient.shared.authProviders() }
-        .sheet(item: $finishing) { pending in
-            FinishProfileSheet(pending: pending)
+        .sheet(item: $welcome) { step in
+            WelcomeSheet(step: step)
         }
     }
 
     // MARK: Providers
 
+    private func start(_ provider: SocialProvider) async {
+        error = nil
+        switch provider {
+        case .apple:
+            await apple()
+        case .google:
+            // Always shown; until the server has the provider's IDs, a tap just says so.
+            guard let clientId = providers?.google?.iosClientId else { return notReady("Google") }
+            await google(clientId: clientId)
+        case .facebook:
+            guard let appId = providers?.facebook?.appId else { return notReady("Facebook") }
+            await facebook(appId: appId)
+        }
+    }
+
     private func notReady(_ name: String) {
         error = "Sign in with \(name) is coming soon. Use Apple or your email for now."
     }
 
-    private func apple(_ result: Result<ASAuthorization, Error>) async {
-        switch result {
-        case .failure(let e):
-            if (e as? ASAuthorizationError)?.code != .canceled { error = "Sign in with Apple didn't finish. Try again." }
-        case .success(let auth):
+    private func apple() async {
+        busy = .apple
+        defer { busy = nil }
+        let nonce = Nonce.random()
+        do {
+            let auth = try await appleSignIn.start(nonce: Nonce.sha256(nonce))
             guard let credential = auth.credential as? ASAuthorizationAppleIDCredential,
                   let data = credential.identityToken, let token = String(data: data, encoding: .utf8) else {
                 error = "Sign in with Apple didn't finish. Try again."
                 return
             }
             // Apple shares the name only on the very first sign-in.
-            await finish(.apple, token: token, nonce: Nonce.sha256(appleNonce),
+            await finish(.apple, token: token, nonce: Nonce.sha256(nonce),
                          firstName: credential.fullName?.givenName ?? "", lastName: credential.fullName?.familyName ?? "")
+        } catch {
+            if (error as? ASAuthorizationError)?.code != .canceled { self.error = "Sign in with Apple didn't finish. Try again." }
         }
     }
 
@@ -152,13 +187,17 @@ struct SocialSignInButtons: View {
                         firstName: String = "", lastName: String = "") async {
         do {
             let result = try await APIClient.shared.oauth(provider, token: token, nonce: nonce, firstName: firstName, lastName: lastName)
+            error = nil
             if let access = result.accessToken, let user = result.user {
-                error = nil
-                session.signIn(TokenResponse(accessToken: access, user: user))
+                LastSignIn.method = provider.rawValue
+                let signedIn = TokenResponse(accessToken: access, user: user)
+                if result.created { welcome = .created(signedIn) } else { session.signIn(signedIn) }
+            } else if let email = result.existingEmail {
+                onExistingAccount(ExistingAccount(provider: provider, token: token, nonce: nonce, email: email))
             } else {
-                finishing = PendingSignUp(provider: provider, token: token, nonce: nonce, result: result,
-                                          firstName: firstName.isEmpty ? result.firstName : firstName,
-                                          lastName: lastName.isEmpty ? result.lastName : lastName)
+                welcome = .finish(PendingSignUp(provider: provider, token: token, nonce: nonce, result: result,
+                                                firstName: firstName.isEmpty ? result.firstName : firstName,
+                                                lastName: lastName.isEmpty ? result.lastName : lastName))
             }
         } catch {
             self.error = error.localizedDescription
@@ -167,19 +206,33 @@ struct SocialSignInButtons: View {
 }
 
 /// A provider sign-in that still needs a name and/or a contact before the account is made.
-struct PendingSignUp: Identifiable {
+struct PendingSignUp {
     let provider: SocialProvider
     let token: String
     let nonce: String?
     let result: OAuthResult
     let firstName: String
     let lastName: String
-    var id: String { token }
 }
 
-/// "Finish your profile": only what the provider didn't give. Sends the same token again.
-private struct FinishProfileSheet: View {
-    let pending: PendingSignUp
+/// The first moment of a new account: made already (`created`: check the name, maybe add a phone),
+/// or still needing what the provider didn't give (`finish`: the same token goes again with it).
+enum WelcomeStep: Identifiable {
+    case created(TokenResponse)
+    case finish(PendingSignUp)
+
+    var id: String {
+        switch self {
+        case .created(let signedIn): signedIn.accessToken
+        case .finish(let pending): pending.token
+        }
+    }
+}
+
+/// "Welcome, Ann!": the name to check (it's what roommates see), and an email or phone when the
+/// provider gave neither. Then on to making or joining a home.
+private struct WelcomeSheet: View {
+    let step: WelcomeStep
     @Environment(Session.self) private var session
     @Environment(\.dismiss) private var dismiss
     @State private var first: String
@@ -189,47 +242,71 @@ private struct FinishProfileSheet: View {
     @State private var saving = false
     @State private var error: String?
 
-    init(pending: PendingSignUp) {
-        self.pending = pending
-        _first = State(initialValue: pending.firstName)
-        _last = State(initialValue: pending.lastName)
-        _email = State(initialValue: pending.result.email ?? "")
+    init(step: WelcomeStep) {
+        self.step = step
+        switch step {
+        case .created(let signedIn):
+            _first = State(initialValue: signedIn.user.firstName)
+            _last = State(initialValue: signedIn.user.lastName)
+            _email = State(initialValue: "")
+        case .finish(let pending):
+            _first = State(initialValue: pending.firstName)
+            _last = State(initialValue: pending.lastName)
+            _email = State(initialValue: pending.result.email ?? "")
+        }
     }
 
-    private var askName: Bool { pending.result.missing.contains("name") }
-    private var askContact: Bool { pending.result.missing.contains("contact") }
+    private var pending: PendingSignUp? {
+        if case .finish(let pending) = step { pending } else { nil }
+    }
+    /// Needs an email or phone before the account can be made.
+    private var askContact: Bool { pending?.result.missing.contains("contact") ?? false }
     private func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespaces) }
     private var ok: Bool {
-        (!askName || !trimmed(first).isEmpty || !trimmed(last).isEmpty)
-            && (!askContact || !trimmed(email).isEmpty || !trimmed(phone).isEmpty)
+        !(trimmed(first) + trimmed(last)).isEmpty && (!askContact || !trimmed(email).isEmpty || !trimmed(phone).isEmpty)
+    }
+    private var greeting: String {
+        trimmed(first).isEmpty ? "Welcome to Roommates" : "Welcome, \(trimmed(first))!"
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Your roommates need to know who you are and how to reach you.")
-                        .font(.subheadline).foregroundStyle(.secondary)
+                    VStack(spacing: 10) {
+                        AppMark(size: 56)
+                        Text(greeting)
+                            .font(.title2.bold())
+                            .multilineTextAlignment(.center)
+                        Text(askContact
+                             ? "Your roommates need to know who you are and how to reach you."
+                             : "This is the name your roommates will see.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
                 .listRowBackground(Color.clear)
-                if askName {
-                    Section {
-                        TextField("First name", text: $first).textContentType(.givenName)
-                        TextField("Last name", text: $last).textContentType(.familyName)
-                    } footer: {
-                        Text("A first or last name is enough.")
-                    }
+                Section {
+                    TextField("First name", text: $first).textContentType(.givenName)
+                    TextField("Last name", text: $last).textContentType(.familyName)
+                } header: {
+                    Text("Your name")
+                } footer: {
+                    Text("A first or last name is enough.")
                 }
-                if askContact {
-                    Section {
+                Section {
+                    if askContact {
                         TextField("Email", text: $email)
                             .textContentType(.emailAddress).keyboardType(.emailAddress)
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
-                        TextField("or phone, e.g. +1 617 555 0100", text: $phone)
-                            .textContentType(.telephoneNumber).keyboardType(.phonePad)
-                    } footer: {
-                        Text("One of the two is enough.")
                     }
+                    TextField(askContact ? "or phone, e.g. +1 617 555 0100" : "Phone (optional)", text: $phone)
+                        .textContentType(.telephoneNumber).keyboardType(.phonePad)
+                } header: {
+                    Text(askContact ? "How to reach you" : "Phone")
+                } footer: {
+                    Text(askContact ? "One of the two is enough." : "Only your roommates see it. You can add it later in Profile.")
                 }
                 Section {
                     Button {
@@ -246,29 +323,55 @@ private struct FinishProfileSheet: View {
                 .listRowInsets(EdgeInsets())
             }
             .brandBackground()
-            .navigationTitle("Finish your profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Back") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    // A made account is theirs either way: skipping just keeps the provider's name.
+                    if case .created(let signedIn) = step {
+                        Button("Skip") { done(signedIn) }
+                    } else {
+                        Button("Back") { dismiss() }
+                    }
+                }
             }
+            .interactiveDismissDisabled(pending == nil)
         }
+    }
+
+    private func done(_ signedIn: TokenResponse) {
+        dismiss()
+        session.signIn(signedIn)
     }
 
     private func submit() async {
         saving = true
         defer { saving = false }
         do {
-            let result = try await APIClient.shared.oauth(
-                pending.provider, token: pending.token, nonce: pending.nonce,
-                firstName: trimmed(first), lastName: trimmed(last),
-                email: askContact && !trimmed(email).isEmpty ? trimmed(email) : nil,
-                phone: askContact && !trimmed(phone).isEmpty ? trimmed(phone) : nil
-            )
-            if let access = result.accessToken, let user = result.user {
-                dismiss()
-                session.signIn(TokenResponse(accessToken: access, user: user))
-            } else {
-                error = "Add a name and an email or phone to continue."
+            switch step {
+            case .created(let signedIn):
+                let user = signedIn.user
+                let newPhone = trimmed(phone).isEmpty ? nil : trimmed(phone)
+                guard trimmed(first) != user.firstName || trimmed(last) != user.lastName || newPhone != nil else {
+                    return done(signedIn)
+                }
+                APIClient.shared.token = signedIn.accessToken  // signed in already; the screen changes after
+                let updated = try await APIClient.shared.updateProfile(firstName: trimmed(first), lastName: trimmed(last), phone: newPhone)
+                done(TokenResponse(accessToken: signedIn.accessToken, user: updated))
+            case .finish(let pending):
+                let result = try await APIClient.shared.oauth(
+                    pending.provider, token: pending.token, nonce: pending.nonce,
+                    firstName: trimmed(first), lastName: trimmed(last),
+                    email: askContact && !trimmed(email).isEmpty ? trimmed(email) : nil,
+                    phone: !trimmed(phone).isEmpty ? trimmed(phone) : nil
+                )
+                if let access = result.accessToken, let user = result.user {
+                    LastSignIn.method = pending.provider.rawValue
+                    done(TokenResponse(accessToken: access, user: user))
+                } else if let existing = result.existingEmail {
+                    error = "\(existing) already has an account. Go back and log in with its password."
+                } else {
+                    error = "Add a name and an email or phone to continue."
+                }
             }
         } catch {
             self.error = error.localizedDescription
@@ -276,38 +379,113 @@ private struct FinishProfileSheet: View {
     }
 }
 
-/// Google's and Facebook's buttons, in their own colours.
-private struct ProviderButton: View {
-    enum Style { case google, facebook }
-    let title: String
+/// A round Apple / Google / Facebook icon in its own colours, its name underneath, and a
+/// "Last used" tag on the one they signed in with last time.
+private struct ProviderIcon: View {
+    let provider: SocialProvider
     let busy: Bool
-    let style: Style
+    let lastUsed: Bool
     let action: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
-                if busy { ProgressView().tint(style == .google ? .primary : .white) } else {
-                    Text(style == .google ? "G" : "f")
-                        .font(.system(size: 20, weight: .bold, design: style == .google ? .default : .rounded))
-                        .foregroundStyle(style == .google ? AnyShapeStyle(Self.googleGradient) : AnyShapeStyle(.white))
+            VStack(spacing: 6) {
+                ZStack {
+                    Circle().fill(background)
+                    Circle().strokeBorder(provider == .google ? Color.primary.opacity(0.15) : .clear)
+                    if busy { ProgressView().tint(provider == .google ? .primary : foreground) } else { logo }
                 }
-                Text(title).font(.headline)
+                .frame(width: 58, height: 58)
+                .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
+                .overlay(alignment: .top) {
+                    if lastUsed {
+                        Text("Last used")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Brand.indigo, in: Capsule())
+                            .fixedSize()
+                            .offset(y: -9)
+                    }
+                }
+                Text(provider.title)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .foregroundStyle(style == .google ? Color.primary : Color.white)
-            .background(style == .google ? AnyShapeStyle(Color(.systemBackground)) : AnyShapeStyle(Color(red: 0.09, green: 0.47, blue: 0.95)),
-                        in: Capsule())
-            .overlay(Capsule().strokeBorder(style == .google ? Color.primary.opacity(0.15) : .clear))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Continue with \(provider.title)")
     }
+
+    @ViewBuilder private var logo: some View {
+        switch provider {
+        case .apple:
+            Image(systemName: "apple.logo").font(.system(size: 24, weight: .medium)).foregroundStyle(foreground)
+        case .google:
+            Text("G").font(.system(size: 26, weight: .bold)).foregroundStyle(Self.googleGradient)
+        case .facebook:
+            Text("f").font(.system(size: 32, weight: .bold, design: .rounded)).foregroundStyle(.white).offset(y: 2)
+        }
+    }
+
+    // Apple's is black (white in dark mode), as Apple's guidelines ask.
+    private var background: Color {
+        switch provider {
+        case .apple: colorScheme == .dark ? .white : .black
+        case .google: Color(.systemBackground)
+        case .facebook: Color(red: 0.09, green: 0.47, blue: 0.95)
+        }
+    }
+
+    private var foreground: Color { colorScheme == .dark ? .black : .white }
 
     private static let googleGradient = LinearGradient(
         colors: [Color(red: 0.26, green: 0.52, blue: 0.96), Color(red: 0.92, green: 0.26, blue: 0.21),
                  Color(red: 0.98, green: 0.74, blue: 0.02), Color(red: 0.2, green: 0.66, blue: 0.33)],
         startPoint: .topLeading, endPoint: .bottomTrailing)
+}
+
+/// Sign in with Apple from our own (icon) button: the system sheet, awaited.
+@MainActor
+final class AppleSignIn: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    private var continuation: CheckedContinuation<ASAuthorization, Error>?
+
+    /// `nonce` is the SHA-256 of the one we keep, as Apple asks.
+    func start(nonce: String) async throws -> ASAuthorization {
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = nonce
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        return try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+            controller.performRequests()
+        }
+    }
+
+    nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        MainActor.assumeIsolated {
+            continuation?.resume(returning: authorization)
+            continuation = nil
+        }
+    }
+
+    nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        MainActor.assumeIsolated {
+            continuation?.resume(throwing: error)
+            continuation = nil
+        }
+    }
+
+    nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        MainActor.assumeIsolated {
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            return scenes.flatMap(\.windows).first(where: \.isKeyWindow) ?? ASPresentationAnchor()
+        }
+    }
 }
 
 /// Random strings for nonces and PKCE, and their SHA-256.

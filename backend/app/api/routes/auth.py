@@ -92,12 +92,24 @@ def oauth_sign_in(provider: str, body: OAuthIn, db: DbSession):
     if provider not in oauth.PROVIDERS:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown sign-in option")
     profile = oauth.verify(provider, body.token, body.nonce)
-    user, missing = oauth.find_or_create(
-        db, profile, first_name=body.first_name, last_name=body.last_name, email=body.email, phone=body.phone
-    )
+    try:
+        user, missing, created = oauth.find_or_create(
+            db, profile, first_name=body.first_name, last_name=body.last_name, email=body.email, phone=body.phone
+        )
+    except oauth.AccountExists as e:
+        return OAuthOut(existing_email=e.email)
     if user is None:
         return OAuthOut(missing=missing, first_name=profile.first_name, last_name=profile.last_name, email=profile.email)
-    return OAuthOut(access_token=create_access_token(user.id), user=UserOut.model_validate(user))
+    return OAuthOut(access_token=create_access_token(user.id), user=UserOut.model_validate(user), created=created)
+
+
+@router.post("/me/identities/{provider}", response_model=UserOut)
+def link_sign_in(provider: str, body: OAuthIn, db: DbSession, user: CurrentUser):
+    """Adds Google, Apple or Facebook as a way to sign in to my account: after logging in with my
+    password because that provider's email matched it."""
+    if provider not in oauth.PROVIDERS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown sign-in option")
+    return oauth.link(db, user, oauth.verify(provider, body.token, body.nonce))
 
 
 @router.patch("/me", response_model=UserOut)

@@ -34,12 +34,12 @@ def _oauth(client, name, **body):
 def test_google_signs_up_then_signs_in_as_the_same_person(client, provider):
     provider.next = _profile()
     first = _oauth(client, "google").json()
-    assert first["access_token"] and first["missing"] == []
+    assert first["access_token"] and first["missing"] == [] and first["created"] is True
     user = first["user"]
     assert (user["email"], user["first_name"], user["email_verified"], user["providers"]) == ("ann@example.com", "Ann", True, ["google"])
 
     again = _oauth(client, "google").json()
-    assert again["user"]["id"] == user["id"]
+    assert again["user"]["id"] == user["id"] and again["created"] is False
     me = client.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {again['access_token']}"})
     assert me.status_code == 200
 
@@ -72,8 +72,28 @@ def test_a_verified_provider_email_links_to_the_existing_account(client, provide
 def test_an_unverified_provider_email_never_takes_over_an_account(client, provider):
     sign_up(client, {"email": "ann@example.com", "first_name": "Ann"})
     provider.next = _profile("facebook", "fb-2", email="ann@example.com", verified=False)
-    res = _oauth(client, "facebook")
-    assert res.status_code == 409 and "already exists" in res.text
+    res = _oauth(client, "facebook").json()
+    assert res["access_token"] is None and res["existing_email"] == "ann@example.com"
+    # Typing that email into "finish your profile" doesn't get round it either.
+    provider.next = _profile("facebook", "fb-2", email=None, verified=False)
+    assert _oauth(client, "facebook", email="ann@example.com").json()["existing_email"] == "ann@example.com"
+
+
+def test_after_the_password_login_the_provider_is_linked(client, provider):
+    signed_up = sign_up(client, {"email": "ann@example.com", "first_name": "Ann"})
+    headers = {"Authorization": f"Bearer {signed_up['access_token']}"}
+    provider.next = _profile("facebook", "fb-4", email="ann@example.com", verified=False)
+    linked = client.post(f"{API}/auth/me/identities/facebook", json={"token": "x" * 40}, headers=headers)
+    assert linked.status_code == 200 and linked.json()["providers"] == ["password", "facebook"]
+    # Next time Facebook signs straight in, as the same person.
+    again = _oauth(client, "facebook").json()
+    assert again["user"]["id"] == signed_up["user"]["id"] and again["created"] is False
+
+    # That Facebook account can't then be linked to someone else.
+    other = sign_up(client, {"email": "bo@example.com", "first_name": "Bo"})
+    taken = client.post(f"{API}/auth/me/identities/facebook", json={"token": "x" * 40},
+                        headers={"Authorization": f"Bearer {other['access_token']}"})
+    assert taken.status_code == 409
 
 
 def test_social_only_accounts_get_a_helpful_password_error_and_keep_a_contact(client, provider):

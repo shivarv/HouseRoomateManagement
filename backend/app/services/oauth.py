@@ -126,18 +126,27 @@ def _facebook_access_token(token: str) -> Profile:
     return Profile("facebook", me["id"], me.get("email"), bool(me.get("email")), me.get("first_name", ""), me.get("last_name", ""))
 
 
+class AccountExists(Conflict):
+    """The email the provider gave (but didn't vouch for) already has an account: the person logs
+    in with its password, then the app links this provider to it (`link`)."""
+
+    def __init__(self, email: str):
+        super().__init__("An account with this email already exists. Log in with your password first.")
+        self.email = email
+
+
 def find_or_create(db: Session, profile: Profile, *, first_name: str, last_name: str,
-                   email: str | None, phone: str | None) -> tuple[User | None, list[str]]:
+                   email: str | None, phone: str | None) -> tuple[User | None, list[str], bool]:
     """The user this provider account signs in as, made or linked if need be.
 
     `first_name` etc. are what the person typed in the app, for what the provider didn't give.
-    Returns (user, []) when signed in, or (None, missing) when a new account still needs
-    "name" and/or "contact".
+    Returns (user, [], created) when signed in, or (None, missing, False) when a new account still
+    needs "name" and/or "contact".
     """
     identity = db.scalar(select(UserIdentity).where(UserIdentity.provider == profile.provider,
                                                     UserIdentity.subject == profile.subject))
     if identity is not None:
-        return identity.user, []
+        return identity.user, [], False
 
     provider_email = profile.email.lower() if profile.email else None
     if provider_email and profile.email_verified:
@@ -148,17 +157,17 @@ def find_or_create(db: Session, profile: Profile, *, first_name: str, last_name:
             if user.email_verified_at is None:
                 user.email_verified_at = datetime.now(UTC)
             db.commit()
-            return user, []
+            return user, [], False
 
     first = (profile.first_name or first_name).strip()[:50]
     last = (profile.last_name or last_name).strip()[:50]
     address = provider_email or (email.lower().strip() if email else None)
     phone = phone.strip() if phone else None
+    if address and db.scalar(select(User.id).where(User.email == address)):
+        raise AccountExists(address)
     missing = ([] if first or last else ["name"]) + ([] if address or phone else ["contact"])
     if missing:
-        return None, missing
-    if address and db.scalar(select(User.id).where(User.email == address)):
-        raise Conflict("An account with this email already exists. Log in with your password first.")
+        return None, missing, False
     if phone and db.scalar(select(User.id).where(User.phone == phone)):
         raise Conflict("An account with this phone number already exists.")
 
@@ -177,7 +186,19 @@ def find_or_create(db: Session, profile: Profile, *, first_name: str, last_name:
     _link(db, user, profile, provider_email)
     db.commit()
     db.refresh(user)
-    return user, []
+    return user, [], True
+
+
+def link(db: Session, user: User, profile: Profile) -> User:
+    """Adds this provider account as one more way for a signed-in user to sign in."""
+    identity = db.scalar(select(UserIdentity).where(UserIdentity.provider == profile.provider,
+                                                    UserIdentity.subject == profile.subject))
+    if identity is not None and identity.user_id != user.id:
+        raise Conflict(f"This {profile.provider.title()} account already signs in to another Roommates account.")
+    if identity is None:
+        _link(db, user, profile, profile.email.lower() if profile.email else None)
+        db.commit()
+    return user
 
 
 def _link(db: Session, user: User, profile: Profile, email: str | None) -> None:

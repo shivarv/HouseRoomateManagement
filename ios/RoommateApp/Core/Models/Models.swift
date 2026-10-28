@@ -40,17 +40,23 @@ struct TokenResponse: Decodable {
 
 enum SocialProvider: String {
     case google, apple, facebook
+
+    var title: String { rawValue.capitalized }
 }
 
-/// Signed in (`accessToken` + `user`), or a new account that first needs `missing`: "name" (a
-/// first or last name) and/or "contact" (an email or phone). Then the same token goes again with them.
+/// Signed in (`accessToken` + `user`; `created` for a brand-new account), or a new account that
+/// first needs `missing`: "name" (a first or last name) and/or "contact" (an email or phone). Then
+/// the same token goes again with them. `existingEmail`: that email already has a password account,
+/// so they log in with it and the app links this provider (`linkSignIn`).
 struct OAuthResult: Decodable {
     let accessToken: String?
     let user: User?
+    let created: Bool
     let missing: [String]
     let firstName: String
     let lastName: String
     let email: String?
+    let existingEmail: String?
 }
 
 /// Which "Continue with …" buttons to show, and the IDs each needs. Apple needs nothing on iOS.

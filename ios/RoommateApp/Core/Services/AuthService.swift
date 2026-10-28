@@ -49,6 +49,12 @@ extension APIClient {
                        body: OAuthBody(token: token, nonce: nonce, firstName: firstName, lastName: lastName, email: email, phone: phone))
     }
 
+    /// One more way to sign in to my account: the same token the provider gave, after logging in with my password.
+    func linkSignIn(_ provider: SocialProvider, token: String, nonce: String? = nil) async throws -> User {
+        try await send("POST", "/auth/me/identities/\(provider.rawValue)",
+                       body: OAuthBody(token: token, nonce: nonce, firstName: "", lastName: "", email: nil, phone: nil))
+    }
+
     /// For good: homes nobody else is in go with it; elsewhere a roommate takes over as admin.
     func deleteAccount() async throws {
         try await sendNoContent("DELETE", "/auth/me")
