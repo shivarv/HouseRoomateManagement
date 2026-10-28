@@ -55,6 +55,21 @@ extension APIClient {
                        body: OAuthBody(token: token, nonce: nonce, firstName: "", lastName: "", email: nil, phone: nil))
     }
 
+    /// Not the last way I can sign in (the server refuses that).
+    func unlinkSignIn(_ provider: SocialProvider) async throws -> User {
+        try await send("DELETE", "/auth/me/identities/\(provider.rawValue)", body: Optional<String>.none)
+    }
+
+    /// A first password (`current` nil), or a new one.
+    func setPassword(current: String?, new: String) async throws -> User {
+        try await send("PUT", "/auth/me/password", body: PasswordBody(currentPassword: current, newPassword: new))
+    }
+
+    private struct PasswordBody: Encodable {
+        let currentPassword: String?
+        let newPassword: String
+    }
+
     /// For good: homes nobody else is in go with it; elsewhere a roommate takes over as admin.
     func deleteAccount() async throws {
         try await sendNoContent("DELETE", "/auth/me")

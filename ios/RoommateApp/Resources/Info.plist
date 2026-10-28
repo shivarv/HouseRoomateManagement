@@ -5,7 +5,7 @@
 	<!-- Backend base URL: production on Render. For a local backend use http://localhost:8001/api/v1
 	     (the Simulator can reach the Mac's localhost; on a device use the Mac's LAN IP). -->
 	<key>API_BASE_URL</key>
-	<string>http://localhost:8001/api/v1</string>
+	<string>https://housemate-api-rjhl.onrender.com/api/v1</string>
 	<!-- The website: invite links, privacy policy and support pages. Switch to the custom domain once it's live. -->
 	<key>WEB_BASE_URL</key>
 	<string>https://housemate-web.onrender.com</string>

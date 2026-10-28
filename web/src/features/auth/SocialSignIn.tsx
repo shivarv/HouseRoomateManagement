@@ -52,10 +52,14 @@ export function SocialSignIn({ onSignedIn }: { onSignedIn: (res: TokenResponse) 
     mutationFn: ({ provider, token }: { provider: SocialProvider; token: string }) =>
       authApi.oauth(provider, token).then((result) => ({ provider, token, result })),
     onSuccess: ({ provider, token, result }) => {
+      setExisting(null);
       if (result.access_token && result.user) onSignedIn({ access_token: result.access_token, token_type: "bearer", user: result.user });
+      else if (result.existing_email) setExisting({ provider, email: result.existing_email });
       else setPending({ provider, token, result });
     },
   });
+  // Their email has a password account: log in with it, then connect this provider in Profile.
+  const [existing, setExisting] = useState<{ provider: SocialProvider; email: string } | null>(null);
 
   const google = config.data?.google?.web_client_id;
   const facebook = config.data?.facebook?.app_id;
@@ -69,6 +73,12 @@ export function SocialSignIn({ onSignedIn }: { onSignedIn: (res: TokenResponse) 
       {google && <GoogleButton clientId={google} onToken={(token) => signIn.mutate({ provider: "google", token })} />}
       {facebook && <FacebookButton appId={facebook} busy={signIn.isPending} onToken={(token) => signIn.mutate({ provider: "facebook", token })} />}
       <ErrorText error={signIn.error} />
+      {existing && (
+        <p className="rounded-xl bg-indigo-50 p-3 text-sm text-indigo-900">
+          <b>{existing.email}</b> already has an account. Log in with its password below, then connect{" "}
+          {existing.provider === "google" ? "Google" : "Facebook"} in Profile → Ways to sign in.
+        </p>
+      )}
       <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-slate-400">
         <span className="h-px flex-1 bg-slate-200" /> or <span className="h-px flex-1 bg-slate-200" />
       </div>
@@ -77,7 +87,17 @@ export function SocialSignIn({ onSignedIn }: { onSignedIn: (res: TokenResponse) 
 }
 
 /** Google draws its own button (its branding rules); we size it to the card. */
-function GoogleButton({ clientId, onToken }: { clientId: string; onToken: (idToken: string) => void }) {
+export function GoogleButton({
+  clientId,
+  onToken,
+  text = "continue_with",
+  width,
+}: {
+  clientId: string;
+  onToken: (idToken: string) => void;
+  text?: "continue_with" | "signin_with";
+  width?: number;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const latest = useRef(onToken);
   latest.current = onToken;
@@ -90,15 +110,15 @@ function GoogleButton({ clientId, onToken }: { clientId: string; onToken: (idTok
         if (!live || !box.current || !window.google) return;
         window.google.accounts.id.initialize({ client_id: clientId, callback: (res) => latest.current(res.credential) });
         window.google.accounts.id.renderButton(box.current, {
-          type: "standard", theme: "outline", size: "large", text: "continue_with", shape: "pill",
-          width: Math.min(400, box.current.clientWidth || 320),
+          type: "standard", theme: "outline", size: "large", text, shape: "pill",
+          width: width ?? Math.min(400, box.current.clientWidth || 320),
         });
       })
       .catch((e: Error) => live && setError(e));
     return () => {
       live = false;
     };
-  }, [clientId]);
+  }, [clientId, text, width]);
 
   return (
     <>
@@ -108,7 +128,17 @@ function GoogleButton({ clientId, onToken }: { clientId: string; onToken: (idTok
   );
 }
 
-function FacebookButton({ appId, busy, onToken }: { appId: string; busy: boolean; onToken: (accessToken: string) => void }) {
+export function FacebookButton({
+  appId,
+  busy,
+  onToken,
+  label = "Continue with Facebook",
+}: {
+  appId: string;
+  busy: boolean;
+  onToken: (accessToken: string) => void;
+  label?: string;
+}) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -135,7 +165,7 @@ function FacebookButton({ appId, busy, onToken }: { appId: string; busy: boolean
         <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden="true">
           <path d="M24 12.07C24 5.41 18.63 0 12 0S0 5.41 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.8-4.7 4.54-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.95.93-1.95 1.88v2.26h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07Z" />
         </svg>
-        Continue with Facebook
+        {label}
       </button>
       <ErrorText error={error} />
     </>

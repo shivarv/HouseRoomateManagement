@@ -19,6 +19,14 @@ export const authApi = {
   oauth: (provider: SocialProvider, token: string, extras: OAuthExtras = {}) =>
     api<OAuthResult>(`/auth/oauth/${provider}`, { method: "POST", body: { token, ...extras } }),
   me: () => api<User>("/auth/me"),
+  /** One more way to sign in to my account: the token the provider's sign-in returned. */
+  linkSignIn: (provider: SocialProvider, token: string) =>
+    api<User>(`/auth/me/identities/${provider}`, { method: "POST", body: { token } }),
+  /** Not the last way I can sign in (the server refuses that). */
+  unlinkSignIn: (provider: SocialProvider) => api<User>(`/auth/me/identities/${provider}`, { method: "DELETE" }),
+  /** A first password (no `current`), or a new one. */
+  setPassword: (newPassword: string, current?: string) =>
+    api<User>("/auth/me/password", { method: "PUT", body: { new_password: newPassword, current_password: current } }),
   /** For good: homes nobody else is in go with it; elsewhere a roommate takes over as admin. */
   deleteAccount: () => api<void>("/auth/me", { method: "DELETE" }),
   /** The link from the email; works signed out. */

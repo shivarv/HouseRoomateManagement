@@ -151,3 +151,66 @@ def test_id_tokens_are_checked_for_signature_audience_and_nonce(monkeypatch):
     stranger = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     with pytest.raises(BadRequest):
         oauth.verify("apple", token(signer=stranger), nonce="n1")
+
+
+def _bearer(res: dict) -> dict:
+    return {"Authorization": f"Bearer {res['access_token']}"}
+
+
+def test_password_google_facebook_and_apple_all_sign_in_as_one_person(client, provider):
+    me = sign_up(client, {"email": "ann@example.com", "first_name": "Ann"})
+    headers = _bearer(me)
+    # Facebook and Apple use other emails: connected from Profile.
+    for name, subject, address in [("google", "g-1", "ann@example.com"), ("facebook", "fb-1", "ann@yahoo.com"),
+                                   ("apple", "ap-1", "x@privaterelay.appleid.com")]:
+        provider.next = _profile(name, subject, email=address)
+        res = client.post(f"{API}/auth/me/identities/{name}", json={"token": "x" * 40}, headers=headers)
+        assert res.status_code == 200
+    user = res.json()
+    assert user["providers"] == ["password", "apple", "facebook", "google"]
+    assert {i["provider"]: i["email"] for i in user["identities"]}["facebook"] == "ann@yahoo.com"
+
+    for name, subject in [("google", "g-1"), ("facebook", "fb-1"), ("apple", "ap-1")]:
+        provider.next = _profile(name, subject, email=None, verified=False, first="", last="")
+        assert _oauth(client, name).json()["user"]["id"] == me["user"]["id"]
+    login = client.post(f"{API}/auth/login", json={"email": "ann@example.com", "password": "password123"})
+    assert login.json()["user"]["id"] == me["user"]["id"]
+
+
+def test_one_of_each_provider_and_disconnecting_keeps_a_way_in(client, provider):
+    provider.next = _profile("google", "g-1", email="cy@example.com", first="Cy")
+    headers = _bearer(_oauth(client, "google").json())
+    # A second Google account on the same person: disconnect the first one first.
+    provider.next = _profile("google", "g-2", email="cy2@example.com")
+    assert client.post(f"{API}/auth/me/identities/google", json={"token": "x" * 40}, headers=headers).status_code == 409
+    # Google is the only way in: it stays.
+    assert client.delete(f"{API}/auth/me/identities/google", headers=headers).status_code == 400
+    assert client.delete(f"{API}/auth/me/identities/facebook", headers=headers).status_code == 404
+
+    provider.next = _profile("facebook", "fb-1", email="cy@example.com")
+    client.post(f"{API}/auth/me/identities/facebook", json={"token": "x" * 40}, headers=headers)
+    res = client.delete(f"{API}/auth/me/identities/google", headers=headers)
+    assert res.status_code == 200 and res.json()["providers"] == ["facebook"]
+
+
+def test_set_then_change_a_password(client, provider):
+    provider.next = _profile("google", "g-5", email="dee@example.com", first="Dee")
+    headers = _bearer(_oauth(client, "google").json())
+    res = client.put(f"{API}/auth/me/password", json={"new_password": "first-pass1"}, headers=headers)
+    assert res.status_code == 200 and res.json()["providers"] == ["password", "google"]
+    assert client.post(f"{API}/auth/login", json={"email": "dee@example.com", "password": "first-pass1"}).status_code == 200
+
+    # Changing it needs the current one.
+    wrong = client.put(f"{API}/auth/me/password", json={"current_password": "nope", "new_password": "second-pass2"}, headers=headers)
+    assert wrong.status_code == 400
+    ok = client.put(f"{API}/auth/me/password", json={"current_password": "first-pass1", "new_password": "second-pass2"},
+                    headers=headers)
+    assert ok.status_code == 200
+    # Now the password counts as a way in, so Google can go.
+    assert client.delete(f"{API}/auth/me/identities/google", headers=headers).json()["providers"] == ["password"]
+
+
+def test_a_phone_only_account_adds_an_email_before_a_password(client, provider):
+    provider.next = _profile("facebook", "fb-9", email=None, verified=False)
+    headers = _bearer(_oauth(client, "facebook", phone="+1 617 555 0142").json())
+    assert client.put(f"{API}/auth/me/password", json={"new_password": "first-pass1"}, headers=headers).status_code == 400

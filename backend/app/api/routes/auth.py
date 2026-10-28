@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -10,6 +10,7 @@ from app.schemas.auth import (
     LoginIn,
     OAuthIn,
     OAuthOut,
+    PasswordIn,
     ProfileUpdate,
     RegisterIn,
     RegisterOut,
@@ -103,13 +104,53 @@ def oauth_sign_in(provider: str, body: OAuthIn, db: DbSession):
     return OAuthOut(access_token=create_access_token(user.id), user=UserOut.model_validate(user), created=created)
 
 
-@router.post("/me/identities/{provider}", response_model=UserOut)
-def link_sign_in(provider: str, body: OAuthIn, db: DbSession, user: CurrentUser):
-    """Adds Google, Apple or Facebook as a way to sign in to my account: after logging in with my
-    password because that provider's email matched it."""
+def _check_provider(provider: str) -> None:
     if provider not in oauth.PROVIDERS:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown sign-in option")
-    return oauth.link(db, user, oauth.verify(provider, body.token, body.nonce))
+
+
+def _tell(tasks: BackgroundTasks, user: User, change: str) -> None:
+    """Emails me when a way to sign in changes, so I'd notice if it wasn't me."""
+    if user.email and email.enabled():
+        text = (f"Hi {user.first_name or user.name},\n\n{change}\n\n"
+                "If this wasn't you, set a new password in Roommates → Profile, or reply to this email.")
+        tasks.add_task(email.send, user.email, "A sign-in change on your Roommates account", text)
+
+
+@router.post("/me/identities/{provider}", response_model=UserOut)
+def link_sign_in(provider: str, body: OAuthIn, db: DbSession, user: CurrentUser, tasks: BackgroundTasks):
+    """Connects Google, Apple or Facebook to my account (Profile → Ways to sign in, or after
+    logging in with my password because that provider's email matched it). Then any of them signs
+    in as me."""
+    _check_provider(provider)
+    user, linked = oauth.link(db, user, oauth.verify(provider, body.token, body.nonce))
+    if linked:
+        _tell(tasks, user, f"{provider.title()} was connected: you can now sign in with it.")
+    return user
+
+
+@router.delete("/me/identities/{provider}", response_model=UserOut)
+def unlink_sign_in(provider: str, db: DbSession, user: CurrentUser, tasks: BackgroundTasks):
+    """Disconnects Google, Apple or Facebook. Not the last way I can sign in."""
+    _check_provider(provider)
+    user = oauth.unlink(db, user, provider)
+    _tell(tasks, user, f"{provider.title()} was disconnected: it no longer signs in to your account.")
+    return user
+
+
+@router.put("/me/password", response_model=UserOut)
+def set_password(body: PasswordIn, db: DbSession, user: CurrentUser, tasks: BackgroundTasks):
+    """Sets a first password (accounts made with Google, Apple or Facebook), or changes mine (it
+    asks for the current one). Logging in with it uses my email."""
+    if user.email is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Add an email first: it's what you log in with.")
+    had_password = user.password_hash is not None
+    if had_password and not (body.current_password and verify_password(body.current_password, user.password_hash)):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Your current password isn't right")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+    _tell(tasks, user, "Your password was changed." if had_password else "A password was set: you can now log in with your email too.")
+    return user
 
 
 @router.patch("/me", response_model=UserOut)

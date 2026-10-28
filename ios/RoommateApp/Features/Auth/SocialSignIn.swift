@@ -41,7 +41,7 @@ struct SocialSignInButtons: View {
     @Environment(Session.self) private var session
     @Environment(\.webAuthenticationSession) private var webAuth
     @State private var providers: AuthProviders?
-    @State private var appleSignIn = AppleSignIn()
+    @State private var apple = AppleSignIn()
     @State private var busy: SocialProvider?
     @State private var error: String?
     @State private var welcome: WelcomeStep?
@@ -65,51 +65,106 @@ struct SocialSignInButtons: View {
         }
     }
 
-    // MARK: Providers
-
     private func start(_ provider: SocialProvider) async {
+        busy = provider
+        defer { busy = nil }
         error = nil
+        do {
+            let auth = ProviderAuth(webAuth: webAuth, apple: apple, config: providers)
+            guard let signedIn = try await auth.run(provider) else { return }  // they backed out
+            await finish(provider, signedIn)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    // MARK: Our backend
+
+    private func finish(_ provider: SocialProvider, _ got: ProviderToken) async {
+        do {
+            let result = try await APIClient.shared.oauth(provider, token: got.token, nonce: got.nonce,
+                                                          firstName: got.firstName, lastName: got.lastName)
+            if let access = result.accessToken, let user = result.user {
+                LastSignIn.method = provider.rawValue
+                let signedIn = TokenResponse(accessToken: access, user: user)
+                if result.created { welcome = .created(signedIn) } else { session.signIn(signedIn) }
+            } else if let email = result.existingEmail {
+                onExistingAccount(ExistingAccount(provider: provider, token: got.token, nonce: got.nonce, email: email))
+            } else {
+                welcome = .finish(PendingSignUp(provider: provider, token: got.token, nonce: got.nonce, result: result,
+                                                firstName: got.firstName.isEmpty ? result.firstName : got.firstName,
+                                                lastName: got.lastName.isEmpty ? result.lastName : got.lastName))
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// What a provider's sign-in gave back, for our backend to check. Apple adds the name, the first time.
+struct ProviderToken {
+    let token: String
+    var nonce: String?
+    var firstName = ""
+    var lastName = ""
+}
+
+/// Runs Apple's, Google's or Facebook's own sign-in. Used to sign in (start screen) and to connect
+/// one more way to sign in (Profile).
+@MainActor
+struct ProviderAuth {
+    let webAuth: WebAuthenticationSession
+    let apple: AppleSignIn
+    let config: AuthProviders?
+
+    struct Failure: LocalizedError {
+        let errorDescription: String?
+    }
+
+    /// nil: they backed out.
+    func run(_ provider: SocialProvider) async throws -> ProviderToken? {
         switch provider {
         case .apple:
-            await apple()
+            return try await signInWithApple()
         case .google:
             // Always shown; until the server has the provider's IDs, a tap just says so.
-            guard let clientId = providers?.google?.iosClientId else { return notReady("Google") }
-            await google(clientId: clientId)
+            guard let clientId = config?.google?.iosClientId else { throw notReady("Google") }
+            return try await google(clientId: clientId)
         case .facebook:
-            guard let appId = providers?.facebook?.appId else { return notReady("Facebook") }
-            await facebook(appId: appId)
+            guard let appId = config?.facebook?.appId else { throw notReady("Facebook") }
+            return try await facebook(appId: appId)
         }
     }
 
-    private func notReady(_ name: String) {
-        error = "Sign in with \(name) is coming soon. Use Apple or your email for now."
+    private func notReady(_ name: String) -> Failure {
+        Failure(errorDescription: "Sign in with \(name) is coming soon. Use Apple or your email for now.")
     }
 
-    private func apple() async {
-        busy = .apple
-        defer { busy = nil }
+    private func didntFinish(_ name: String) -> Failure {
+        Failure(errorDescription: "Sign in with \(name) didn't finish. Try again.")
+    }
+
+    private func signInWithApple() async throws -> ProviderToken? {
         let nonce = Nonce.random()
+        let auth: ASAuthorization
         do {
-            let auth = try await appleSignIn.start(nonce: Nonce.sha256(nonce))
-            guard let credential = auth.credential as? ASAuthorizationAppleIDCredential,
-                  let data = credential.identityToken, let token = String(data: data, encoding: .utf8) else {
-                error = "Sign in with Apple didn't finish. Try again."
-                return
-            }
-            // Apple shares the name only on the very first sign-in.
-            await finish(.apple, token: token, nonce: Nonce.sha256(nonce),
-                         firstName: credential.fullName?.givenName ?? "", lastName: credential.fullName?.familyName ?? "")
+            auth = try await apple.start(nonce: Nonce.sha256(nonce))
         } catch {
-            if (error as? ASAuthorizationError)?.code != .canceled { self.error = "Sign in with Apple didn't finish. Try again." }
+            if (error as? ASAuthorizationError)?.code == .canceled { return nil }
+            throw didntFinish("Apple")
         }
+        guard let credential = auth.credential as? ASAuthorizationAppleIDCredential,
+              let data = credential.identityToken, let token = String(data: data, encoding: .utf8) else {
+            throw didntFinish("Apple")
+        }
+        // Apple shares the name only on the very first sign-in.
+        return ProviderToken(token: token, nonce: Nonce.sha256(nonce),
+                             firstName: credential.fullName?.givenName ?? "", lastName: credential.fullName?.familyName ?? "")
     }
 
     /// Google's sign-in page with PKCE, then the code is swapped for an ID token (iOS clients have
     /// no secret). The redirect is the reversed client ID, as Google requires for iOS apps.
-    private func google(clientId: String) async {
-        busy = .google
-        defer { busy = nil }
+    private func google(clientId: String) async throws -> ProviderToken? {
         let scheme = clientId.split(separator: ".").reversed().joined(separator: ".")
         let redirect = "\(scheme):/oauth2redirect"
         let verifier = Nonce.random(length: 64)
@@ -128,12 +183,13 @@ struct SocialSignInButtons: View {
         do {
             let callback = try await webAuth.authenticate(using: url.url!, callbackURLScheme: scheme, preferredBrowserSession: .ephemeral)
             guard let code = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "code" })?.value else {
-                return  // they backed out on Google's page
+                return nil  // they backed out on Google's page
             }
             let idToken = try await googleIDToken(code: code, clientId: clientId, redirect: redirect, verifier: verifier)
-            await finish(.google, token: idToken, nonce: nonce)
+            return ProviderToken(token: idToken, nonce: nonce)
         } catch {
-            if !Self.cancelled(error) { self.error = "Sign in with Google didn't finish. Try again." }
+            if Self.cancelled(error) { return nil }
+            throw didntFinish("Google")
         }
     }
 
@@ -154,9 +210,7 @@ struct SocialSignInButtons: View {
     }
 
     /// Facebook's login dialog; it hands the access token back to fb<app id>://authorize/.
-    private func facebook(appId: String) async {
-        busy = .facebook
-        defer { busy = nil }
+    private func facebook(appId: String) async throws -> ProviderToken? {
         let scheme = "fb\(appId)"
         var url = URLComponents(string: "https://www.facebook.com/v19.0/dialog/oauth")!
         url.queryItems = [
@@ -170,38 +224,16 @@ struct SocialSignInButtons: View {
             let callback = try await webAuth.authenticate(using: url.url!, callbackURLScheme: scheme, preferredBrowserSession: .ephemeral)
             // The token comes after "#", like a query.
             let fields = URLComponents(string: "x:?" + (callback.fragment ?? ""))?.queryItems
-            guard let token = fields?.first(where: { $0.name == "access_token" })?.value else { return }
-            await finish(.facebook, token: token)
+            guard let token = fields?.first(where: { $0.name == "access_token" })?.value else { return nil }
+            return ProviderToken(token: token)
         } catch {
-            if !Self.cancelled(error) { self.error = "Sign in with Facebook didn't finish. Try again." }
+            if Self.cancelled(error) { return nil }
+            throw didntFinish("Facebook")
         }
     }
 
     private static func cancelled(_ error: Error) -> Bool {
         (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
-    }
-
-    // MARK: Our backend
-
-    private func finish(_ provider: SocialProvider, token: String, nonce: String? = nil,
-                        firstName: String = "", lastName: String = "") async {
-        do {
-            let result = try await APIClient.shared.oauth(provider, token: token, nonce: nonce, firstName: firstName, lastName: lastName)
-            error = nil
-            if let access = result.accessToken, let user = result.user {
-                LastSignIn.method = provider.rawValue
-                let signedIn = TokenResponse(accessToken: access, user: user)
-                if result.created { welcome = .created(signedIn) } else { session.signIn(signedIn) }
-            } else if let email = result.existingEmail {
-                onExistingAccount(ExistingAccount(provider: provider, token: token, nonce: nonce, email: email))
-            } else {
-                welcome = .finish(PendingSignUp(provider: provider, token: token, nonce: nonce, result: result,
-                                                firstName: firstName.isEmpty ? result.firstName : firstName,
-                                                lastName: lastName.isEmpty ? result.lastName : lastName))
-            }
-        } catch {
-            self.error = error.localizedDescription
-        }
     }
 }
 

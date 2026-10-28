@@ -10,6 +10,8 @@ export interface User {
   phone: string | null; // contact only for now
   /** How I can sign in: "password", "google", "apple", "facebook". */
   providers: string[];
+  /** The connected Google, Apple and Facebook accounts, with the email each one uses. */
+  identities: { provider: SocialProvider; email: string | null }[];
   first_name: string;
   last_name: string; // may be empty: then it's left out of `name`
   name: string; // "First Last"
@@ -52,7 +54,11 @@ export type SocialProvider = "google" | "apple" | "facebook";
 export interface OAuthResult {
   access_token: string | null;
   user: User | null;
+  /** A brand-new account. */
+  created: boolean;
   missing: ("name" | "contact")[];
+  /** This email already has a password account: log in with it, then connect the provider. */
+  existing_email: string | null;
   first_name: string;
   last_name: string;
   email: string | null;

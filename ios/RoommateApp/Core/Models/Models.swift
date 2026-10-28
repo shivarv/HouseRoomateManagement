@@ -9,6 +9,8 @@ struct User: Codable, Identifiable, Hashable {
     let phone: String?  // contact only for now
     /// How I can sign in: "password", "google", "apple", "facebook".
     var providers: [String]?
+    /// The connected Google, Apple and Facebook accounts, with the email each one uses.
+    var identities: [Identity]?
     let firstName: String
     let lastName: String  // may be empty: then it's left out of `name`
     let name: String  // "First Last"
@@ -16,6 +18,13 @@ struct User: Codable, Identifiable, Hashable {
     let emailVerified: Bool
     /// The house the app opens on. May be one I've since left; then fall back to my first.
     var lastHouseholdId: UUID?
+
+    struct Identity: Codable, Hashable {
+        let provider: String
+        let email: String?
+    }
+
+    var hasPassword: Bool { providers?.contains("password") ?? false }
 }
 
 /// Signed up, not signed in: the emailed link confirms the address and signs them in (on the web).

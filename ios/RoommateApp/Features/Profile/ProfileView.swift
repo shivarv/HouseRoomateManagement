@@ -23,11 +23,7 @@ struct ProfileView: View {
                     .listRowBackground(Color.clear)
                     NameSection(user: user)
                     ContactSection(user: user).id(user)  // fresh fields after a save
-                    if let providers = user.providers?.filter({ $0 != "password" }), !providers.isEmpty {
-                        Section("Signs in with") {
-                            ForEach(providers, id: \.self) { Label($0.capitalized, systemImage: "checkmark.shield.fill") }
-                        }
-                    }
+                    SignInMethodsSection(user: user)
                 }
                 Section("Help") {
                     Link(destination: WebLink.url("/support")) {
@@ -49,6 +45,202 @@ struct ProfileView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
+        }
+    }
+}
+
+/// Password, Google, Facebook and Apple: connect any of them and each signs in to this same
+/// account. Disconnecting is refused for the last way in (the server checks too).
+private struct SignInMethodsSection: View {
+    let user: User
+    @Environment(Session.self) private var session
+    @Environment(\.webAuthenticationSession) private var webAuth
+    @State private var config: AuthProviders?
+    @State private var apple = AppleSignIn()
+    @State private var busy: SocialProvider?
+    @State private var disconnecting: SocialProvider?
+    @State private var editingPassword = false
+    @State private var error: String?
+    @State private var note: String?
+
+    private var ways: Int { (user.identities?.count ?? 0) + (user.hasPassword ? 1 : 0) }
+
+    private func identity(_ provider: SocialProvider) -> User.Identity? {
+        user.identities?.first { $0.provider == provider.rawValue }
+    }
+
+    var body: some View {
+        Section {
+            HStack {
+                MethodLabel(title: "Password", systemImage: "key.fill", tint: Brand.indigo,
+                            detail: user.hasPassword ? user.email : "Not set")
+                Spacer()
+                Button(user.hasPassword ? "Change" : "Set") { editingPassword = true }
+                    .buttonStyle(.borderless)
+            }
+            ForEach([SocialProvider.google, .facebook, .apple], id: \.self) { provider in
+                HStack {
+                    MethodLabel(provider: provider, detail: identity(provider).map { $0.email ?? "Connected" } ?? "Not connected")
+                    Spacer()
+                    if busy == provider {
+                        ProgressView()
+                    } else if identity(provider) != nil {
+                        Button("Disconnect", role: .destructive) { disconnecting = provider }
+                            .buttonStyle(.borderless)
+                            .disabled(ways <= 1)
+                    } else {
+                        Button("Connect") { Task { await connect(provider) } }
+                            .buttonStyle(.borderless)
+                    }
+                }
+            }
+        } header: {
+            Text("Ways to sign in")
+        } footer: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Any of these signs in to this same account. You always keep at least one.")
+                if let note { Text(note).foregroundStyle(.green) }
+                ErrorBanner(message: error)
+            }
+        }
+        .disabled(busy != nil)
+        .task { config = try? await APIClient.shared.authProviders() }
+        .alert("Disconnect \(disconnecting?.title ?? "")?",
+               isPresented: Binding(get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }),
+               presenting: disconnecting) { provider in
+            Button("Disconnect", role: .destructive) { Task { await disconnect(provider) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { provider in
+            Text("You won't be able to sign in with \(provider.title) any more. You can connect it again later.")
+        }
+        .sheet(isPresented: $editingPassword) {
+            PasswordSheet(user: user) { updated in
+                session.updateUser(updated)
+                note = user.hasPassword ? "Password changed." : "Password set. You can log in with your email too."
+            }
+        }
+    }
+
+    private func connect(_ provider: SocialProvider) async {
+        busy = provider
+        defer { busy = nil }
+        error = nil
+        note = nil
+        do {
+            let auth = ProviderAuth(webAuth: webAuth, apple: apple, config: config)
+            guard let got = try await auth.run(provider) else { return }  // they backed out
+            session.updateUser(try await APIClient.shared.linkSignIn(provider, token: got.token, nonce: got.nonce))
+            note = "\(provider.title) connected. You can sign in with it now."
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func disconnect(_ provider: SocialProvider) async {
+        busy = provider
+        defer { busy = nil }
+        error = nil
+        note = nil
+        do {
+            session.updateUser(try await APIClient.shared.unlinkSignIn(provider))
+            if LastSignIn.method == provider.rawValue { LastSignIn.method = nil }
+            note = "\(provider.title) disconnected."
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// One row's icon, name and email.
+private struct MethodLabel: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+    let detail: String?
+
+    init(title: String, systemImage: String, tint: Color, detail: String?) {
+        self.title = title
+        self.systemImage = systemImage
+        self.tint = tint
+        self.detail = detail
+    }
+
+    init(provider: SocialProvider, detail: String?) {
+        switch provider {
+        case .google: self.init(title: "Google", systemImage: "g.circle.fill", tint: Color(red: 0.26, green: 0.52, blue: 0.96), detail: detail)
+        case .facebook: self.init(title: "Facebook", systemImage: "f.circle.fill", tint: Color(red: 0.09, green: 0.47, blue: 0.95), detail: detail)
+        case .apple: self.init(title: "Apple", systemImage: "apple.logo", tint: .primary, detail: detail)
+        }
+    }
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                if let detail { Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+            }
+        } icon: {
+            Image(systemName: systemImage).foregroundStyle(tint)
+        }
+    }
+}
+
+/// Set a first password (accounts made with Google, Apple or Facebook), or change mine.
+private struct PasswordSheet: View {
+    let user: User
+    let onSaved: (User) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var current = ""
+    @State private var new = ""
+    @State private var saving = false
+    @State private var error: String?
+
+    private var ok: Bool { new.count >= 8 && (!user.hasPassword || !current.isEmpty) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if user.email == nil {
+                    Section {
+                        Text("Add an email in Contact first. It's what you'll log in with.")
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Section {
+                        if user.hasPassword {
+                            SecureField("Current password", text: $current).textContentType(.password)
+                        }
+                        SecureField("New password (8+ characters)", text: $new).textContentType(.newPassword)
+                    } footer: {
+                        VStack(alignment: .leading) {
+                            Text("You'll log in with \(user.email ?? "") and this password.")
+                            ErrorBanner(message: error)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(user.hasPassword ? "Change password" : "Set a password")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    if saving { ProgressView() } else {
+                        Button("Save") { Task { await save() } }.disabled(!ok || user.email == nil)
+                    }
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        do {
+            let updated = try await APIClient.shared.setPassword(current: user.hasPassword ? current : nil, new: new)
+            onSaved(updated)
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

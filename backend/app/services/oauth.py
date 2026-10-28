@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import User, UserIdentity
-from app.services.errors import BadRequest, Conflict
+from app.services.errors import BadRequest, Conflict, NotFound
 
 PROVIDERS = ("google", "apple", "facebook")
 
@@ -189,15 +189,34 @@ def find_or_create(db: Session, profile: Profile, *, first_name: str, last_name:
     return user, [], True
 
 
-def link(db: Session, user: User, profile: Profile) -> User:
-    """Adds this provider account as one more way for a signed-in user to sign in."""
+def link(db: Session, user: User, profile: Profile) -> tuple[User, bool]:
+    """Adds this provider account as one more way for a signed-in user to sign in: password,
+    Google, Facebook and Apple can all lead to the same person. Returns (user, newly linked)."""
+    name = profile.provider.title()
     identity = db.scalar(select(UserIdentity).where(UserIdentity.provider == profile.provider,
                                                     UserIdentity.subject == profile.subject))
     if identity is not None and identity.user_id != user.id:
-        raise Conflict(f"This {profile.provider.title()} account already signs in to another Roommates account.")
+        raise Conflict(f"This {name} account already signs in to another Roommates account. "
+                       f"Sign in with {name}, delete that account in Profile, then connect it here.")
+    if identity is not None:
+        return user, False
+    # One of each, so Profile has a single Google, Facebook and Apple row.
+    if any(i.provider == profile.provider for i in user.identities):
+        raise Conflict(f"Another {name} account is already connected. Disconnect it first.")
+    _link(db, user, profile, profile.email.lower() if profile.email else None)
+    db.commit()
+    return user, True
+
+
+def unlink(db: Session, user: User, provider: str) -> User:
+    """Takes a provider off as a way to sign in, unless it's the only way left."""
+    identity = next((i for i in user.identities if i.provider == provider), None)
     if identity is None:
-        _link(db, user, profile, profile.email.lower() if profile.email else None)
-        db.commit()
+        raise NotFound(f"{provider.title()} isn't connected")
+    if len(user.identities) == 1 and user.password_hash is None:
+        raise BadRequest("This is your only way to sign in. Set a password or connect another account first.")
+    user.identities.remove(identity)
+    db.commit()
     return user
 
 

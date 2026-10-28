@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { authApi } from "../api/auth";
 import { Button, Card, ErrorText, Input, PageTitle } from "../components/ui";
 import { useAuth } from "../features/auth/AuthContext";
+import { SignInMethods } from "../features/auth/SignInMethods";
 
 /** Deleting my account, for good, after a confirmation that says what happens to my homes. */
 function DeleteAccount() {
@@ -90,6 +91,9 @@ export function ProfilePage() {
           </div>
         </form>
       </Card>
+      <div className="mt-6">
+        <SignInMethods />
+      </div>
       <p className="mt-6 max-w-lg text-sm text-slate-500">
         <Link className="font-medium text-indigo-700 hover:underline" to="/support">Help &amp; support</Link>
         {" · "}

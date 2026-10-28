@@ -64,6 +64,22 @@ class LoginIn(BaseModel):
     password: str
 
 
+class PasswordIn(BaseModel):
+    """A first password (`current_password` left out), or a new one (it's required then)."""
+
+    current_password: str | None = None
+    new_password: str = Field(min_length=8, max_length=64)
+
+
+class IdentityOut(BaseModel):
+    """A connected Google, Apple or Facebook account."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    provider: str
+    email: str | None  # what that provider says (Apple may give a private relay address)
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,6 +91,7 @@ class UserOut(BaseModel):
     name: str  # "First Last"
     email_verified: bool  # User.email_verified
     providers: list[str] = []  # how I can sign in: "password", "google", "apple", "facebook"
+    identities: list[IdentityOut] = []  # the connected providers, with their emails
     # May point at a house I've since left; clients fall back to my first house.
     last_household_id: uuid.UUID | None = None
 
