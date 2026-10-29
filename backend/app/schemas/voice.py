@@ -68,6 +68,7 @@ class VoiceInterpretIn(BaseModel):
     text: str = Field(min_length=1, max_length=500)
     tab: str | None = Field(default=None, max_length=32)  # where they were: a hint, not a limit
     follow_up: VoiceFollowUp | None = None
+    input: Literal["voice", "typed"] = "voice"  # spoken, or typed to the assistant (for activity)
 
     _strip = field_validator("text", mode="before")(_clean)
 
@@ -80,10 +81,13 @@ class VoiceInterpretOut(BaseModel):
     question: str | None = None
     options: list[str] = []
     notes: list[str] = []
+    command_id: uuid.UUID | None = None  # send back with Confirm (and Undo): each runs only once
 
 
 class VoiceExecuteIn(BaseModel):
     actions: list[VoiceAction] = Field(min_length=1, max_length=10)
+    command_id: uuid.UUID  # from interpret: Confirm and Undo each run once per command
+    undo: bool = False  # these are the undos a Confirm of `command_id` returned
 
 
 class VoiceResult(BaseModel):

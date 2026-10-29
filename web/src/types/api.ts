@@ -322,6 +322,8 @@ export interface ActivityEvent {
   chore_name: string | null;
   due_date: string | null;
   detail: string | null;
+  /** Done through the assistant: spoken ("voice") or typed ("typed"). Null for the buttons. */
+  via?: "voice" | "typed" | null;
 }
 
 export interface ReportRow {
@@ -544,6 +546,8 @@ export interface VoiceInterpretation {
   question: string | null;
   options: string[];
   notes: string[];
+  /** Send back with Confirm and Undo: each runs only once per command. */
+  command_id: string;
 }
 
 /** If any action has an `error`, none ran: the others (no error) can be sent again on their own. */

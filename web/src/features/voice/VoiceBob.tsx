@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { voiceApi } from "../../api/voice";
+import { voiceApi, type VoiceInput } from "../../api/voice";
 import { Button, ErrorText } from "../../components/ui";
 import type { VoiceAction, VoiceInterpretation, VoiceProposal, VoiceResult } from "../../types/api";
 
@@ -42,7 +42,7 @@ type Step = "listening" | "typing" | "thinking" | "review";
 export function VoiceBob({ householdId, tab }: { householdId: string; tab: string }) {
   const config = useQuery({ queryKey: ["voice-config"], queryFn: voiceApi.config, staleTime: 60 * 60_000 });
   const [open, setOpen] = useState(false);
-  const [toast, setToast] = useState<{ text: string; undo: VoiceAction[] } | null>(null);
+  const [toast, setToast] = useState<{ text: string; undo: VoiceAction[]; commandId: string } | null>(null);
   if (!config.data?.enabled) return null;
 
   return (
@@ -61,9 +61,9 @@ export function VoiceBob({ householdId, tab }: { householdId: string; tab: strin
           householdId={householdId}
           tab={tab}
           onClose={() => setOpen(false)}
-          onDone={(text, undo) => {
+          onDone={(text, undo, commandId) => {
             setOpen(false);
-            setToast({ text, undo });
+            setToast({ text, undo, commandId });
           }}
         />
       )}
@@ -81,7 +81,7 @@ function VoiceSheet({
   householdId: string;
   tab: string;
   onClose: () => void;
-  onDone: (text: string, undo: VoiceAction[]) => void;
+  onDone: (text: string, undo: VoiceAction[], commandId: string) => void;
 }) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>(Speech ? "listening" : "typing");
@@ -92,10 +92,16 @@ function VoiceSheet({
   // After a Confirm where something couldn't be done: what was sent, and each one's result.
   const [checked, setChecked] = useState<{ sent: VoiceProposal[]; results: VoiceResult[] } | null>(null);
   const recognition = useRef<Recognition | null>(null);
+  // Spoken or typed: the activity feed says which.
+  const input = useRef<VoiceInput>("voice");
+  // Set on the first tap, before React re-renders the button as disabled: extra taps do nothing.
+  const confirming = useRef(false);
 
   const interpret = useMutation({
-    mutationFn: (args: { said: string; followUp?: { question: string; answer: string } }) =>
-      voiceApi.interpret(householdId, args.said, tab, args.followUp),
+    mutationFn: (args: { said: string; input: VoiceInput; followUp?: { question: string; answer: string } }) => {
+      input.current = args.input;
+      return voiceApi.interpret(householdId, args.said, args.input, tab, args.followUp);
+    },
     onMutate: () => setStep("thinking"),
     onSuccess: (res) => {
       setAnswer(res);
@@ -107,7 +113,10 @@ function VoiceSheet({
   });
 
   const run = useMutation({
-    mutationFn: (sent: VoiceProposal[]) => voiceApi.execute(householdId, sent.map((p) => p.action)),
+    mutationFn: (sent: VoiceProposal[]) => voiceApi.execute(householdId, answer!.command_id, sent.map((p) => p.action)),
+    onSettled: () => {
+      confirming.current = false;
+    },
     onSuccess: (res, sent) => {
       if (res.some((r) => r.error)) {
         // Nothing ran: show which one can't be done, and offer the rest.
@@ -120,9 +129,16 @@ function VoiceSheet({
       onDone(
         failed.length ? `Done ${done.length} of ${sent.length}. ${failed[0].error ?? ""}` : done.length === 1 ? `Done: ${done[0].summary}` : `Done: ${done.length} things`,
         done.flatMap((r) => r.undo),
+        answer!.command_id,
       );
     },
   });
+
+  const confirm = (sent: VoiceProposal[]) => {
+    if (confirming.current) return;
+    confirming.current = true;
+    run.mutate(sent);
+  };
 
   // Listen while the sheet is on "listening"; stop after a pause, then work out what was said.
   useEffect(() => {
@@ -148,7 +164,7 @@ function VoiceSheet({
     rec.onend = () => {
       recognition.current = null;
       if (cancelled) return;
-      if (heard.trim()) interpret.mutate({ said: heard.trim() });
+      if (heard.trim()) interpret.mutate({ said: heard.trim(), input: "voice" });
       else setStep((s) => (s === "listening" ? "typing" : s));
     };
     recognition.current = rec;
@@ -168,7 +184,7 @@ function VoiceSheet({
 
   const submitTyped = (e: FormEvent) => {
     e.preventDefault();
-    if (text.trim()) interpret.mutate({ said: text.trim() });
+    if (text.trim()) interpret.mutate({ said: text.trim(), input: "typed" });
   };
 
   const chosen = answer?.proposals.filter((_, i) => picked[i]) ?? [];
@@ -256,7 +272,9 @@ function VoiceSheet({
                     <Button
                       key={o}
                       variant="secondary"
-                      onClick={() => interpret.mutate({ said: text, followUp: { question: answer.question!, answer: o } })}
+                      onClick={() =>
+                        interpret.mutate({ said: text, input: input.current, followUp: { question: answer.question!, answer: o } })
+                      }
                     >
                       {o}
                     </Button>
@@ -295,7 +313,7 @@ function VoiceSheet({
                 <Button
                   className="flex-1"
                   disabled={run.isPending || (checked ? ready.length === 0 : chosen.length === 0)}
-                  onClick={() => run.mutate(checked ? ready : chosen)}
+                  onClick={() => confirm(checked ? ready : chosen)}
                 >
                   {run.isPending ? "Doing it…" : checked ? `Do the other ${ready.length}` : chosen.length > 1 ? `Confirm all ${chosen.length}` : "Confirm"}
                 </Button>
@@ -311,30 +329,73 @@ function VoiceSheet({
   );
 }
 
-/** "Done · Undo" for a few seconds after voice did something. */
-function UndoToast({ householdId, text, undo, onClose }: { householdId: string; text: string; undo: VoiceAction[]; onClose: () => void }) {
+/** "Done · Undo" for a few seconds after voice did something. Undo asks first. */
+function UndoToast({
+  householdId,
+  text,
+  undo,
+  commandId,
+  onClose,
+}: {
+  householdId: string;
+  text: string;
+  undo: VoiceAction[];
+  commandId: string;
+  onClose: () => void;
+}) {
   const queryClient = useQueryClient();
+  const [asking, setAsking] = useState(false);
+  const undoing = useRef(false); // same as Confirm: extra taps before the re-render do nothing
   const revert = useMutation({
-    mutationFn: () => voiceApi.execute(householdId, undo),
-    onSuccess: () => {
+    mutationFn: () =>
+      voiceApi.execute(householdId, commandId, undo, true).then((res) => {
+        const failed = res.find((r) => r.error);
+        if (failed) throw new Error(`Couldn't undo: ${failed.error}`);
+      }),
+    onSettled: () => {
+      undoing.current = false;
       queryClient.invalidateQueries();
-      onClose();
     },
+    onSuccess: onClose,
   });
+  // Stays up while they're deciding, undoing, or reading why it couldn't.
   useEffect(() => {
-    if (revert.isPending) return;
+    if (asking || revert.isPending) return;
     const timer = setTimeout(onClose, 8000);
     return () => clearTimeout(timer);
-  }, [onClose, revert.isPending]);
+  }, [onClose, asking, revert.isPending]);
+
+  const yes = () => {
+    if (undoing.current) return;
+    undoing.current = true;
+    setAsking(false);
+    revert.mutate();
+  };
 
   return (
     <div className="fixed bottom-24 right-6 z-40 flex max-w-sm items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-sm text-white shadow-xl">
-      <span className="flex-1">{revert.error ? (revert.error as Error).message : text}</span>
-      {undo.length > 0 && !revert.error && (
-        <button type="button" onClick={() => revert.mutate()} disabled={revert.isPending} className="font-semibold text-fuchsia-300 hover:text-fuchsia-200">
-          {revert.isPending ? "Undoing…" : "Undo"}
-        </button>
-      )}
+      <span className="flex-1">{revert.error ? (revert.error as Error).message : asking ? "Undo this? Are you sure?" : text}</span>
+      {undo.length > 0 &&
+        !revert.error &&
+        (asking ? (
+          <>
+            <button type="button" onClick={yes} className="font-semibold text-fuchsia-300 hover:text-fuchsia-200">
+              Yes, undo
+            </button>
+            <button type="button" onClick={() => setAsking(false)} className="text-slate-300 hover:text-white">
+              Keep it
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAsking(true)}
+            disabled={revert.isPending}
+            className="font-semibold text-fuchsia-300 hover:text-fuchsia-200"
+          >
+            {revert.isPending ? "Undoing…" : "Undo"}
+          </button>
+        ))}
     </div>
   );
 }

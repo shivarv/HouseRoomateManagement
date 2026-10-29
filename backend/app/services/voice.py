@@ -7,7 +7,9 @@
    becomes a card. Nothing changes yet.
 2. `execute`: the confirmed actions are checked again (things may have changed), then each runs
    through the existing service, so permissions and the activity feed work as usual. Each result
-   carries its undo, which is itself a list of actions for `execute`.
+   carries its undo, which is itself a list of actions for `execute`. A command is confirmed once
+   and undone once (`_claim`), however many times the button is tapped; the activity it writes
+   says it came through the assistant, spoken or typed.
 
 The interpreter only matches words to the house: names, nicknames, "trash" vs "garbage", several
 things in one sentence. Which method runs, with which ids, and whether it's allowed is decided here.
@@ -20,7 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -785,28 +787,55 @@ def interpret(
     if not out.proposals and not out.question and not out.notes:
         out.notes.append(DIDNT_CATCH)
 
-    db.add(
-        VoiceCommand(
-            user_id=user.id,
-            household_id=me.household_id,
-            text=body.text,
-            tab=body.tab,
-            outcome={
-                "calls": [n for n, _ in answer.calls],
-                "proposals": [p.action.type for p in out.proposals],
-                "refused": answer.refused,
-            },
-            input_tokens=answer.input_tokens,
-            output_tokens=answer.output_tokens,
-        )
+    command = VoiceCommand(
+        user_id=user.id,
+        household_id=me.household_id,
+        text=body.text,
+        tab=body.tab,
+        input=body.input,
+        outcome={
+            "calls": [n for n, _ in answer.calls],
+            "proposals": [p.action.type for p in out.proposals],
+            "refused": answer.refused,
+        },
+        input_tokens=answer.input_tokens,
+        output_tokens=answer.output_tokens,
     )
+    db.add(command)
     db.commit()
+    out.command_id = command.id
     return out
 
 
-def execute(db: Session, me: HouseholdMember, actions: list[VoiceAction]) -> list[VoiceResult]:
-    """Runs confirmed actions. Every one is checked first: if any fails, none run, and the results
-    say which (the others have no error: send them again to run just those)."""
+def _claim(db: Session, me: HouseholdMember, command_id: uuid.UUID, undo: bool) -> str:
+    """Marks this command confirmed (or undone) in one statement, so of two taps that arrive
+    together only one gets through. Returns how it was given: "voice" or "typed"."""
+    column = VoiceCommand.undone_at if undo else VoiceCommand.executed_at
+    query = update(VoiceCommand).where(
+        VoiceCommand.id == command_id,
+        VoiceCommand.user_id == me.user_id,
+        VoiceCommand.household_id == me.household_id,
+        column.is_(None),
+    )
+    if undo:
+        query = query.where(VoiceCommand.executed_at.is_not(None))
+    via = db.scalar(query.values({column: func.now()}).returning(VoiceCommand.input))
+    db.commit()
+    if via is None:
+        raise Conflict("Already undone." if undo else "Already done.")
+    return via
+
+
+def execute(
+    db: Session,
+    me: HouseholdMember,
+    actions: list[VoiceAction],
+    command_id: uuid.UUID,
+    undo: bool = False,
+) -> list[VoiceResult]:
+    """Runs confirmed actions (or, with `undo`, the undos their Confirm returned). Every one is
+    checked first: if any fails, none run, and the results say which (the others have no error:
+    send them again to run just those). Then the command is claimed, so it runs only once."""
     today = clock.today_in(me.household.timezone)
     checked: list[VoiceResult] = []
     for action in actions:
@@ -820,11 +849,15 @@ def execute(db: Session, me: HouseholdMember, actions: list[VoiceAction]) -> lis
     if any(r.error for r in checked):
         return checked
 
-    for action, result in zip(actions, checked, strict=True):
-        try:
-            result.undo = ACTIONS[action.type][1](db, me, action, today)
-            result.ok = True
-        except ServiceError as e:  # someone got there in the moment between check and run
-            db.rollback()
-            result.error = e.detail
+    db.info["via"] = _claim(db, me, command_id, undo)  # activity.record reads it
+    try:
+        for action, result in zip(actions, checked, strict=True):
+            try:
+                result.undo = ACTIONS[action.type][1](db, me, action, today)
+                result.ok = True
+            except ServiceError as e:  # someone got there in the moment between check and run
+                db.rollback()
+                result.error = e.detail
+    finally:
+        db.info.pop("via", None)
     return checked

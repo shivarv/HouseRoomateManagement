@@ -13,7 +13,16 @@ export interface ActivityLine {
 
 const who = (m: MemberBrief | null): Segment => (m ? { person: m } : "Someone");
 
+// Done through the assistant rather than the buttons.
+const VIA: Record<string, string> = { voice: " · 🎤 via voice", typed: " · ⌨️ via AI chat" };
+
 export function activityText(e: ActivityEvent): ActivityLine {
+  const line = describe(e);
+  const via = e.via ? VIA[e.via] : undefined;
+  return via ? { ...line, parts: [...line.parts, via] } : line;
+}
+
+function describe(e: ActivityEvent): ActivityLine {
   const chore: Segment = { chore: e.chore_name ?? "a chore" };
   const actorIsSubject = !e.actor || !e.subject || e.actor.id === e.subject.id;
   // Only mention the day when the chore was for a different day than when it was marked.

@@ -32,6 +32,9 @@ def interpret(household_id: uuid.UUID, body: VoiceInterpretIn, db: DbSession, us
 @router.post("/households/{household_id}/voice/execute", response_model=VoiceExecuteOut)
 def execute(household_id: uuid.UUID, body: VoiceExecuteIn, db: DbSession, user: CurrentUser):
     """Runs confirmed actions (or their undos) through the usual services. All are checked first:
-    if any can't be done, none run and that one has an `error`."""
+    if any can't be done, none run and that one has an `error`. Each command runs once, and is
+    undone once: a repeat gets 409."""
     me = household_svc.require_membership(db, household_id, user)
-    return VoiceExecuteOut(results=voice.execute(db, me, body.actions))
+    return VoiceExecuteOut(
+        results=voice.execute(db, me, body.actions, body.command_id, body.undo)
+    )

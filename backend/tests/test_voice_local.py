@@ -138,7 +138,7 @@ def test_works_through_the_api_with_no_key(client, fake_today):
     assert card["summary"] == "Clean hall · done by Bea"
     run = client.post(
         f"{API}/households/{house['id']}/voice/execute",
-        json={"actions": [card["action"]]},
+        json={"actions": [card["action"]], "command_id": res.json()["command_id"]},
         headers=ann,
     )
     assert run.json()["results"][0]["ok"]
