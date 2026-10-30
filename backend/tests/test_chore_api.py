@@ -194,3 +194,33 @@ def test_unexpected_crash_is_a_readable_500_with_cors(client, fake_today, monkey
     assert ref.startswith("req_") and res.json()["detail"] == f"Something went wrong on the server (ref {ref})"
     assert res.headers["x-request-id"] == ref
     assert res.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+def test_double_taps_on_done_and_open_chores_count_once(client, fake_today):
+    from tests.test_help import _house
+
+    house, ann, bea, _ = _house(client)
+    hid = house["id"]
+    tasks = client.get(f"{API}/households/{hid}/tasks/today", headers=ann).json()["tasks"]
+    hall = next(t for t in tasks if t["chore"]["name"] == "Clean hall")
+    for _ in range(3):
+        assert client.post(f"{API}/tasks/{hall['id']}/complete", headers=ann).status_code == 200
+    # Saying someone else did it still changes who.
+    res = client.post(
+        f"{API}/tasks/{hall['id']}/complete",
+        json={"completed_by_member_id": hall["member"]["id"]},
+        headers=ann,
+    )
+    assert res.json()["completed_by"]["id"] == hall["member"]["id"]
+    for _ in range(2):
+        client.post(f"{API}/tasks/{hall['id']}/reopen", headers=ann)
+
+    chores = client.get(f"{API}/households/{hid}/chores", headers=ann).json()
+    garbage = next(c for c in chores if c["name"] == "Dispose garbage")
+    first = client.post(f"{API}/chores/{garbage['id']}/logs", headers=bea).json()
+    again = client.post(f"{API}/chores/{garbage['id']}/logs", headers=bea).json()
+    assert again["id"] == first["id"]
+
+    feed = client.get(f"{API}/households/{hid}/activity", headers=ann).json()
+    actions = [e["action"] for e in feed if e["chore_name"] in ("Clean hall", "Dispose garbage")]
+    assert sorted(actions) == ["completed", "completed", "logged", "reopened"]
