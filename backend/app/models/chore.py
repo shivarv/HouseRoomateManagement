@@ -190,6 +190,7 @@ class ActivityEvent(UUIDPrimaryKey, Base):
     )
     due_date: Mapped[date | None] = mapped_column(Date)
     detail: Mapped[str | None] = mapped_column(String(200))
+    via: Mapped[str | None] = mapped_column(String(8))  # "voice" / "typed" (assistant), else None
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     actor: Mapped[HouseholdMember | None] = relationship(foreign_keys=[actor_id], lazy="joined")

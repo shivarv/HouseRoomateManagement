@@ -322,6 +322,8 @@ export interface ActivityEvent {
   chore_name: string | null;
   due_date: string | null;
   detail: string | null;
+  /** Done through the assistant: spoken ("voice") or typed ("typed"). Null for the buttons. */
+  via?: "voice" | "typed" | null;
 }
 
 export interface ReportRow {
@@ -521,4 +523,37 @@ export interface InviteLinkPublic {
   people: number;
   email: string; // who it's for
   invited_by: string | null; // who sent it
+}
+
+// --- Voice commands (docs/VOICE_COMMANDS_PLAN.md) ---
+
+/** One action with real ids; only the fields its `type` uses are set. Undos have the same shape. */
+export interface VoiceAction {
+  type: string;
+  [field: string]: unknown;
+}
+
+/** A card to confirm. `summary` comes from our own data, e.g. "Take out trash · done by Raj". */
+export interface VoiceProposal {
+  action: VoiceAction;
+  summary: string;
+  area: "chores" | "bills" | "groceries" | "chat" | "favours";
+}
+
+/** Cards, and/or a question with options to tap, and/or notes on why something couldn't be done. */
+export interface VoiceInterpretation {
+  proposals: VoiceProposal[];
+  question: string | null;
+  options: string[];
+  notes: string[];
+  /** Send back with Confirm and Undo: each runs only once per command. */
+  command_id: string;
+}
+
+/** If any action has an `error`, none ran: the others (no error) can be sent again on their own. */
+export interface VoiceResult {
+  summary: string;
+  ok: boolean;
+  error: string | null;
+  undo: VoiceAction[];
 }

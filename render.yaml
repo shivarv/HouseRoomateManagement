@@ -39,6 +39,10 @@ services:
         sync: false
       - key: FACEBOOK_APP_SECRET # Meta for Developers → App secret (checks web sign-ins)
         sync: false
+      # Voice commands use our own free model by default. Only for Claude instead (paid):
+      # VOICE_ENGINE=claude plus ANTHROPIC_API_KEY (and optionally VOICE_MODEL).
+      - key: VOICE_ENGINE
+        value: local
 
   - type: web
     name: housemate-web

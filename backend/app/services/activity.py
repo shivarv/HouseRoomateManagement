@@ -25,7 +25,8 @@ def record(
     due_date: date | None = None,
     detail: str | None = None,
 ) -> None:
-    """Append an event to the household's activity feed. The caller commits."""
+    """Append an event to the household's activity feed. The caller commits. Voice sets
+    `db.info["via"]` while it runs actions, so those events say they came from the assistant."""
     db.add(
         ActivityEvent(
             household_id=household_id,
@@ -37,6 +38,7 @@ def record(
             assignee_id=assignee_id,
             due_date=due_date,
             detail=detail[:200] if detail else None,
+            via=db.info.get("via"),
         )
     )
 
@@ -88,4 +90,5 @@ def event_out(event: ActivityEvent) -> ActivityOut:
         chore_name=event.chore_name,
         due_date=event.due_date,
         detail=event.detail,
+        via=event.via,
     )

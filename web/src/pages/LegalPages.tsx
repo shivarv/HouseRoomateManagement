@@ -35,6 +35,7 @@ export function PrivacyPage() {
         <ul>
           <li><b>Your account:</b> your name, your email address, and your password, stored only as a secure hash.</li>
           <li><b>What you and your roommates add:</b> houses, chores and turns, grocery lists, bills and who paid them, favours, and chat messages.</li>
+          <li><b>Voice commands:</b> if you use the 🎤 button, the words you said (turned into text on your device; the audio never leaves it). Our own server works out what they mean, so they aren't sent to any other company. We keep them to count them and to improve voice. Never shown to your roommates.</li>
           <li><b>Error reports:</b> when something breaks, the time, the screen and the error, with your account and house IDs, so we can fix it. Kept for 30 days.</li>
         </ul>
         <p>We don't use ads, analytics or tracking, and we don't sell or share your data with anyone.</p>

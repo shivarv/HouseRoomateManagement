@@ -14,6 +14,7 @@ from app.models.household import Household, HouseholdMember
 from app.models.invite import HouseholdInvite
 from app.models.shopping import GroceryCategory, GroceryPreset, ShoppingItem
 from app.models.user import User, UserIdentity
+from app.models.voice import VoiceCommand
 
 __all__ = [
     "ActivityEvent",
@@ -37,4 +38,5 @@ __all__ = [
     "ShoppingItem",
     "User",
     "UserIdentity",
+    "VoiceCommand",
 ]

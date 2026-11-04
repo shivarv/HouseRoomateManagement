@@ -25,6 +25,7 @@ from app.services.errors import BadRequest, NotFound
 OVERDUE_LOOKBACK_DAYS = 7
 MAX_SCHEDULE_DAYS = 31
 MAX_BACKFILL_DAYS = 31
+DOUBLE_TAP = timedelta(seconds=10)  # the same open chore logged again this soon is one tap
 
 
 # --- Generating turns -------------------------------------------------------------------------
@@ -173,11 +174,23 @@ def _household_member(
 def complete(
     db: Session, task: ChoreTask, actor: HouseholdMember, completed_by_id: uuid.UUID | None
 ) -> ChoreTask:
-    """Anyone in the house can mark a turn done, for themselves or on behalf of someone else."""
+    """Anyone in the house can mark a turn done, for themselves or on behalf of someone else.
+    Already done by that person (a double tap, two at once): nothing changes, nothing is logged."""
     doer = _household_member(db, actor.household_id, completed_by_id or actor.id)
-    task.status = "done"
-    task.completed_at = datetime.now(UTC)
-    task.completed_by_id = doer.id
+    # One statement, so of two taps that arrive together only one gets through.
+    changed = db.execute(
+        update(ChoreTask)
+        .where(
+            ChoreTask.id == task.id,
+            or_(ChoreTask.status != "done", ChoreTask.completed_by_id.is_distinct_from(doer.id)),
+        )
+        .values(status="done", completed_at=datetime.now(UTC), completed_by_id=doer.id)
+        .execution_options(synchronize_session=False)
+    ).rowcount
+    if not changed:
+        db.commit()
+        db.refresh(task)
+        return task
     activity.record(
         db,
         actor.household_id,
@@ -194,12 +207,17 @@ def complete(
 
 
 def reopen(db: Session, task: ChoreTask, actor: HouseholdMember) -> ChoreTask:
-    if task.status != "done":
-        return task
     previous = task.completed_by_id
-    task.status = "pending"
-    task.completed_at = None
-    task.completed_by_id = None
+    reopened = db.execute(  # as in complete: a second tap finds it already reopened
+        update(ChoreTask)
+        .where(ChoreTask.id == task.id, ChoreTask.status == "done")
+        .values(status="pending", completed_at=None, completed_by_id=None)
+        .execution_options(synchronize_session=False)
+    ).rowcount
+    if not reopened:
+        db.commit()
+        db.refresh(task)
+        return task
     activity.record(
         db,
         actor.household_id,
@@ -226,6 +244,22 @@ def add_log(
     if not chore.is_active:
         raise BadRequest("This chore is paused")
     doer = _household_member(db, chore.household_id, member_id or actor.id)
+    # An open chore can be done many times a day, but not twice by the same person within
+    # seconds: that's a double tap, so it gets the first entry back. The chore's row is locked so
+    # two taps arriving together take turns.
+    db.execute(select(Chore.id).where(Chore.id == chore.id).with_for_update())
+    recent = db.scalar(
+        select(ChoreLog).where(
+            ChoreLog.chore_id == chore.id,
+            ChoreLog.member_id == doer.id,
+            ChoreLog.logged_by_id == actor.id,
+            ChoreLog.done_on == today,
+            ChoreLog.created_at >= func.now() - DOUBLE_TAP,
+        )
+    )
+    if recent:
+        db.commit()
+        return recent
     log = ChoreLog(chore_id=chore.id, member_id=doer.id, logged_by_id=actor.id, done_on=today)
     db.add(log)
     activity.record(

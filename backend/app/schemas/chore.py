@@ -189,6 +189,7 @@ class ActivityOut(BaseModel):
     chore_name: str | None
     due_date: date | None
     detail: str | None
+    via: str | None = None  # "voice" / "typed": done through the assistant
 
 
 class ReportRow(BaseModel):

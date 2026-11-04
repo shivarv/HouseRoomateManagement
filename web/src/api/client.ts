@@ -36,7 +36,22 @@ function serverTrouble(status: number): string | null {
   return null;
 }
 
-export async function api<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
+// Changes on their way to the server, by method + path + body. A second tap on any button before
+// the first request is back gets that same request's answer instead of sending it again.
+const inFlight = new Map<string, Promise<unknown>>();
+
+export function api<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
+  const method = options.method ?? "GET";
+  if (method === "GET") return send<T>(path, options);
+  const key = `${method} ${path} ${JSON.stringify(options.body ?? null)}`;
+  const pending = inFlight.get(key);
+  if (pending) return pending as Promise<T>;
+  const request = send<T>(path, options).finally(() => inFlight.delete(key));
+  inFlight.set(key, request);
+  return request;
+}
+
+async function send<T>(path: string, options: { method?: string; body?: unknown }): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   const token = tokenStore.get();
   if (token) headers.Authorization = `Bearer ${token}`;
