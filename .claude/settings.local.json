@@ -33,7 +33,13 @@
       "Bash(sed -n 41,55p Features/Shopping/ShoppingView.swift)",
       "Bash(grep -n \"func poll\" Features/Chat/ChatView.swift)",
       "Bash(grep -n \"reminders\" Features/Households/HouseholdDetailView.swift)",
-      "Bash(xcodebuild -project RoommateApp.xcodeproj -scheme RoommateApp -destination 'generic/platform=iOS Simulator' -derivedDataPath build build)"
+      "Bash(xcodebuild -project RoommateApp.xcodeproj -scheme RoommateApp -destination 'generic/platform=iOS Simulator' -derivedDataPath build build)",
+      "Bash(curl -s -m 60 -o /dev/null -w \"%{http_code}\\\\n\" https://housemate-api-rjhl.onrender.com/api/v1/voice/config)",
+      "Bash(curl -s -m 60 -o /dev/null -w \"%{http_code}\\\\n\" https://housemate-api-rjhl.onrender.com/api/v1/households)",
+      "Bash(gh pr *)",
+      "Bash(curl -s -m 60 https://housemate-api-rjhl.onrender.com/openapi.json)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); p=d['paths']; print\\(len\\(p\\),'paths'\\); print\\([k for k in p if 'voice' in k or 'help' in k][:6]\\); print\\(d.get\\('info'\\)\\)\")",
+      "Bash(curl -s -m 30 https://housemate-api-rjhl.onrender.com/api/v1/health -w \" %{http_code}\\\\n\")"
     ],
     "deny": [
       "Read(//Users/shiva/Downloads/**)",
