@@ -233,6 +233,7 @@ struct ChatView: View {
                 unseen = 0
                 Task { await model.load(preferred: session.preferredHousehold) }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .voiceChangedThings)) { _ in Task { await model.poll() } }
             // While the chat is on screen: check for new messages every few seconds.
             .task {
                 if !model.hasLoaded { await model.load(preferred: session.preferredHousehold) }

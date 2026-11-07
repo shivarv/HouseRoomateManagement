@@ -120,6 +120,9 @@ struct HouseholdDetailView<Header: View>: View {
             if tab == .reminders { await reminders.load() } else { await model.load() }
         }
         .task { if tab != .reminders { await model.load() } }  // Reminders loads the house itself
+        .onReceive(NotificationCenter.default.publisher(for: .voiceChangedThings)) { _ in
+            Task { if tab == .reminders { await reminders.load() } else { await model.load() } }
+        }
         .onChange(of: tab) { _, next in
             if next != .reminders && model.detail == nil { Task { await model.load() } }
         }

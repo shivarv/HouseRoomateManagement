@@ -40,26 +40,48 @@ struct MainTabView: View {
     @State private var chat = ChatModel()
     /// Bills of the current house that are overdue or due soon, on the House tab.
     @State private var billsDue = 0
+    /// Which tab is showing: the mic sends it to voice as a hint ("today", "groceries", …).
+    @State private var tab = "today"
     @Environment(Session.self) private var session
 
     var body: some View {
         // Five tabs, so iOS never folds one into "More". Profile is the avatar at the top right.
-        TabView {
+        TabView(selection: $tab) {
             MyDayView()
                 .tabItem { TabIcon(title: "Today", systemImage: "sun.max.fill", color: .systemOrange) }
+                .tag("today")
             HouseTabView()
                 .tabItem { TabIcon(title: "House", systemImage: "house.fill", color: UIColor(Brand.indigo)) }
                 .badge(billsDue)
+                .tag("house")
             ChatView(model: chat)
                 .tabItem { TabIcon(title: "Chat", systemImage: "bubble.left.and.bubble.right.fill", color: .systemTeal) }
                 .badge(chat.unread)
+                .tag("chat")
             ShoppingView()
                 .tabItem { TabIcon(title: "Groceries", systemImage: "cart.fill", color: .systemGreen) }
+                .tag("groceries")
             NotificationsView(model: notifications)
                 .tabItem { TabIcon(title: "Favours", systemImage: "hand.wave.fill", color: UIColor(Brand.fuchsia)) }
                 .badge(notifications.waitingCount)
+                .tag("favours")
         }
         .tint(Brand.indigo)
+        // 🎤 on every tab, for the house I'm in. Above Chat's message box there.
+        .overlay(alignment: .bottomTrailing) {
+            if let house = session.user?.lastHouseholdId ?? chat.householdId {
+                VoiceBob(householdId: house, tab: tab, lifted: tab == "chat")
+                    .id(house)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .voiceChangedThings)) { _ in
+            Task {
+                await notifications.load()
+                if let house = chat.householdId, let list = try? await APIClient.shared.bills(householdId: house) {
+                    billsDue = BillsBadge.needingPayment(list.bills)
+                }
+            }
+        }
         // New requests show up in the badge without visiting the tab.
         .task {
             while !Task.isCancelled {

@@ -143,6 +143,7 @@ struct MyDayView: View {
             .overlay { if model.isLoading && !model.hasLoaded { ProgressView() } }
             .refreshable { await model.load() }
             .task { await model.load() }
+            .onReceive(NotificationCenter.default.publisher(for: .voiceChangedThings)) { _ in Task { await model.load() } }
             // "Today" changes at midnight; refresh whenever the app comes back to the foreground.
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { Task { await model.load() } }

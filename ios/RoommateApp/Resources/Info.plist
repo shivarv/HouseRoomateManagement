@@ -12,6 +12,11 @@
 	<!-- Only HTTPS (no custom encryption): App Store Connect stops asking about export compliance. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Voice commands (the 🎤 button): say what you did, check the cards, Confirm. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Roommates listens when you tap the mic, so you can say what you did, like "I took out the trash" or "add milk".</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Roommates turns what you say into text, so you can tick off chores, add groceries and ask favours by voice.</string>
 	<!-- Allow plain HTTP to localhost / LAN for local development only. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
