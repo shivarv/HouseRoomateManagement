@@ -177,6 +177,7 @@ struct ShoppingView: View {
             }
             .refreshable { await model.load() }
             .task { await model.load(preferred: session.preferredHousehold) }
+            .onReceive(NotificationCenter.default.publisher(for: .voiceChangedThings)) { _ in Task { await model.load() } }
             .followsCurrentHouse($model.householdId)
             .onChange(of: model.householdId) { _, _ in Task { await model.load(preferred: session.preferredHousehold) } }
             .onChange(of: scenePhase) { _, phase in
